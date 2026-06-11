@@ -94,6 +94,13 @@ Exposes the assistant layer to the chat panel. Same shape as the CLI `ask` comma
 
 Missing/empty `question` → HTTP 400 `{error}`. The dashboard path runs without mailbox context (`messages: []`), so latest-deadline/amount questions answer `uncertain` by design unless portal fallback or local evidence applies; policy questions use the local RAG index.
 
+When a local model provider is configured (`[model] provider = "ollama"` in `config.toml`), verified answers may be rephrased by the model before returning. The facts stay deterministic: uncertain answers and confirmation boundaries are never sent to the model, every date/amount in the deterministic answer must survive the rewrite (otherwise the deterministic text is returned unchanged), and `metadata` gains two optional keys the UI may surface but must not require:
+
+- `metadata.model_call`: `{created_at, provider, model, stage, intent, status, prompt_tokens, completion_tokens, duration_ms, detail}` — `status: "ok"` means the rewrite was used; any `skipped_*`/`fallback_*` status means the deterministic text was returned.
+- `metadata.deterministic_answer`: the original deterministic text when a rewrite was applied.
+
+`GET /api/model/calls` returns `{summary, calls}` for the cost/latency attribution view: totals, per-status counts, per-model token/latency aggregates, and the most recent call rows (no question or answer text is persisted).
+
 ## Design Mapping Rules
 
 How backend fields drive the B′ visual spec:

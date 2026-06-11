@@ -103,6 +103,14 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/connectors/state":
             self.send_json(db.list_connector_states(self.paths, limit=100))
             return
+        if path == "/api/model/calls":
+            self.send_json(
+                {
+                    "summary": db.model_calls_summary(self.paths),
+                    "calls": db.list_model_calls(self.paths, limit=100),
+                }
+            )
+            return
         if path == "/api/integrations/verifications":
             self.send_json(db.list_integration_verifications(self.paths, limit=50))
             return
@@ -208,6 +216,7 @@ class Handler(BaseHTTPRequestHandler):
                     provider=load_model_provider(self.paths),
                     messages=[],
                     registry=default_tool_registry(self.paths),
+                    paths=self.paths,
                 )
                 self.send_json(
                     {

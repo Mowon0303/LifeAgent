@@ -243,7 +243,7 @@ def cmd_plan_status(args: argparse.Namespace) -> int:
 def cmd_ask(args: argparse.Namespace) -> int:
     paths = paths_from_args(args)
     messages = load_email_messages(args.email_json) if args.email_json else []
-    answer = answer_with_workflow(args.question, provider=load_model_provider(paths), messages=messages, registry=default_tool_registry(paths))
+    answer = answer_with_workflow(args.question, provider=load_model_provider(paths), messages=messages, registry=default_tool_registry(paths), paths=paths)
     print_json(
         {
             "intent": answer.intent.value,
@@ -379,6 +379,18 @@ def cmd_rag_docs(args: argparse.Namespace) -> int:
     paths = paths_from_args(args)
     db.init_db(paths)
     print_json(db.list_rag_documents(paths, limit=args.limit))
+    return 0
+
+
+def cmd_model_calls(args: argparse.Namespace) -> int:
+    paths = paths_from_args(args)
+    db.init_db(paths)
+    print_json(
+        {
+            "summary": db.model_calls_summary(paths),
+            "calls": db.list_model_calls(paths, limit=args.limit),
+        }
+    )
     return 0
 
 
@@ -850,6 +862,9 @@ def build_parser() -> argparse.ArgumentParser:
     model_sub = model.add_subparsers(dest="model_command", required=True)
     model_status = model_sub.add_parser("status", help="Show active model provider and optional dependency availability")
     model_status.set_defaults(func=cmd_model_status)
+    model_calls = model_sub.add_parser("calls", help="Show model call cost/latency attribution (tokens, duration, outcomes)")
+    model_calls.add_argument("--limit", type=int, default=50)
+    model_calls.set_defaults(func=cmd_model_calls)
 
     evals = sub.add_parser("eval", help="Run golden-set evals against extraction layers")
     evals_sub = evals.add_subparsers(dest="eval_command", required=True)

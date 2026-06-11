@@ -32,9 +32,11 @@ meaningful_change_level = "critical"
 text_change_level = "info"
 
 [model]
-provider = "ollama"
+# Default to the deterministic rule path. To enable local model refinement,
+# set provider = "ollama" and model to an installed model (e.g. "qwen2.5:7b").
+provider = "local"
 base_url = "http://127.0.0.1:11434"
-model = "llama3.2:latest"
+model = "rule-router"
 privacy = "local-first"
 structured_output = true
 """

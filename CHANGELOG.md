@@ -6,6 +6,11 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Added
 
+- Added `sentineldesk/agent/llm.py`: a stdlib `OllamaChatClient` plus a guard-railed `refine_answer` stage so a user-approved local model can rephrase verified assistant answers. Hard boundaries: uncertain answers and confirmation boundaries are never sent to the model; every date/amount anchor in the deterministic answer must survive the rewrite; model-introduced dates/amounts are rejected; errors/timeouts/overlong rewrites fall back silently to the deterministic text; the original text is preserved in `metadata.deterministic_answer`.
+- Added a `refine` workflow stage to `answer_with_workflow` with `metadata.model_call` exposure and `workflow_trace` coverage; CLI `ask` and dashboard `/api/ask` pass `paths` so every model call is attributed.
+- Added the `model_calls` table for per-call cost/latency attribution (provider, model, stage, intent, status, prompt/completion tokens, duration; question and answer text are never persisted), with `sentineldesk model calls` and `GET /api/model/calls` returning totals, per-status counts, and per-model aggregates.
+- Added `tests/test_model_loop.py` with 11 cases covering fact-anchor extraction, successful rewrite with token recording, anchor-loss fallback, invented-fact fallback, model-error fallback, uncertain/confirmation skip boundaries, local-provider no-op, workflow persistence, and attribution summaries.
+
 - Added `sentineldesk/static/calendar.html`, served at `/calendar`: the Calendar + AI assistant page implemented from the user-provided design package (`design_handoff_calendar_ai/`, selected direction B′). Warm-paper Bento month grid, week/day time grids with a live now-line, agenda view with relative dates and a trailing undated group, and a Discord-style assistant panel with summary embed, pending-suggestion cards, confirmation-gated "确认加入日历" (local ICS export with single-use confirmation IDs), "忽略" (task review `ignored`), and a composer wired to `/api/ask` with uncertainty styling and citation chips. No build step and no external script dependencies.
 - Added `POST /api/ask` to the dashboard server, exposing the assistant workflow to the UI with the same answer shape as CLI `ask` (intent, answer, confidence, uncertain, requires_confirmation, tool_calls, citations, metadata).
 - Added `docs/UI_CONTRACT.md`, the stable backend↔UI handoff contract: documented response shapes for calendar events, tasks, task review, calendar sync, draft update, and ask, plus design-mapping rules (pending=dashed/`approval_state: draft`, confirmed=solid/`approved`, source-trust captions, undated-deadline placement, confirm/ignore semantics).
@@ -107,6 +112,7 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Changed
 
+- Default `[model]` config now ships `provider = "local"` (deterministic rule path); enabling the local Ollama refinement path is an explicit opt-in via `config.toml`, keeping fresh homes and test environments from issuing model calls.
 - Promoted the calendar assistant page to the main dashboard entry after user acceptance: `/` now serves `calendar.html` (with `/calendar` kept as an alias), the legacy monitor ops dashboard moved to `/ops`, the assistant panel header gained an ops-dashboard link, `demo record-prep` prints the `/ops` dashboard URL, and the recording docs point at `/ops`.
 - Reframed the next product direction from portal-first monitoring to email-first LifeAgent: email and attachments are primary sources, portal/CDP capture becomes a verification tool, and calendar becomes the action layer.
 - Added the planned calendar workflow: verified deadlines become draft events, reminders, dashboard calendar entries, and optional external calendar sync after confirmation.
@@ -161,6 +167,8 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Verified
 
+- `cd sentinel-desk && python3 -B -m unittest discover -s tests` passed with 230 tests after adding the model-in-the-loop guardrail suite.
+- Real user-approved local Ollama dry-run (`qwen2.5:7b`, server 0.15.2): an English latest-deadline question returned a natural rewrite that preserved the `07/01/2026` anchor (199 prompt + 22 completion tokens, 22.8s cold start); a Chinese question returned a Chinese rewrite preserving the same anchor (201+35 tokens, 4.2s warm); a four-way conflicting-deadline question stayed `uncertain` and skipped the model with 0 tokens; `sentineldesk model calls` reported the attribution summary (3 calls, 457 total tokens, refine success rate 0.67, per-status and per-model breakdowns).
 - `cd sentinel-desk && python3 -B -m unittest discover -s tests` passed with 219 tests after the root-route swap, including new assertions that `/` serves the calendar page, `/ops` serves the legacy dashboard, and the assistant header links to `/ops`.
 - Browser verification after the swap: `/` renders the calendar assistant with the previously confirmed 6/21 deadline still solid (state persisted), `/ops` serves the scenario/evidence dashboard, and `/calendar` still works as an alias.
 - `cd sentinel-desk && python3 -B -m unittest discover -s tests` passed with 217 tests after adding the UI contract gates and the calendar page.

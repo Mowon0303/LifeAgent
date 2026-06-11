@@ -3,9 +3,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from sentineldesk import db
+from sentineldesk.config import Paths
 from sentineldesk.email.models import EmailMessage
 
 from .graph import answer_question
+from .llm import ChatClient, refine_answer
 from .model import ModelProvider
 from .router import classify_intent
 from .schemas import AgentAnswer
@@ -30,19 +33,44 @@ def answer_with_workflow(
     provider: ModelProvider,
     messages: list[EmailMessage] | None = None,
     registry: ToolRegistry | None = None,
+    paths: Paths | None = None,
+    chat_client: ChatClient | None = None,
 ) -> AgentAnswer:
     runtime = runtime_for(provider)
     initial_state = {"question": question, "messages": messages or [], "registry": registry}
+    answer: AgentAnswer | None = None
     if runtime.engine == "langgraph":
         runnable = build_langgraph_workflow()
         if runnable is not None:
             result = runnable.invoke(initial_state)
-            answer = result.get("answer") if isinstance(result, dict) else None
-            if isinstance(answer, AgentAnswer):
-                return _annotate_answer(answer, runtime=runtime, provider=provider, state=result if isinstance(result, dict) else {})
-    state = _run_rule_workflow(initial_state)
-    answer = state["answer"]
-    return _annotate_answer(answer, runtime=runtime, provider=provider, state=state)
+            candidate = result.get("answer") if isinstance(result, dict) else None
+            if isinstance(candidate, AgentAnswer):
+                answer = _annotate_answer(candidate, runtime=runtime, provider=provider, state=result if isinstance(result, dict) else {})
+    if answer is None:
+        state = _run_rule_workflow(initial_state)
+        answer = _annotate_answer(state["answer"], runtime=runtime, provider=provider, state=state)
+    return _refine_stage(answer, question=question, provider=provider, paths=paths, chat_client=chat_client)
+
+
+def _refine_stage(
+    answer: AgentAnswer,
+    *,
+    question: str,
+    provider: ModelProvider,
+    paths: Paths | None,
+    chat_client: ChatClient | None,
+) -> AgentAnswer:
+    refined, call_record = refine_answer(answer, question=question, provider=provider, client=chat_client)
+    if call_record is None:
+        return refined
+    refined.metadata["model_call"] = call_record.to_dict()
+    trace = list(refined.metadata.get("workflow_trace") or [])
+    trace.append({"stage": "refine", "status": call_record.status, "model": call_record.model})
+    refined.metadata["workflow_trace"] = trace
+    if paths is not None:
+        db.init_db(paths)
+        db.insert_model_call(paths, **call_record.to_dict())
+    return refined
 
 
 def _annotate_answer(
