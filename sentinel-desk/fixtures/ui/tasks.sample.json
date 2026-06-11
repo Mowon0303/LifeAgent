@@ -178,30 +178,6 @@
     "reviewed_at": ""
   },
   {
-    "task_id": "calendar:5b7aa19bdfef9041",
-    "kind": "deadline",
-    "title": "Deadline: This week in tech",
-    "value": "June 21, 2026",
-    "due_date": "June 21, 2026",
-    "severity": "medium",
-    "confidence": 0.5,
-    "source_type": "calendar_draft",
-    "source_refs": [
-      "email:ui-sample-news-001"
-    ],
-    "primary_source": "email:ui-sample-news-001",
-    "evidence": "email:ui-sample-news-001",
-    "calendar_event_id": "5b7aa19bdfef9041",
-    "sync_state": "local_draft",
-    "created_at": "2026-06-25T10:00:00+00:00",
-    "updated_at": "2026-06-25T10:00:00+00:00",
-    "needs_verification": true,
-    "status": "new",
-    "review_note": "",
-    "review_actor": "",
-    "reviewed_at": ""
-  },
-  {
     "task_id": "calendar:c2eaaa22af3f4fdb",
     "kind": "deadline",
     "title": "Deadline: Request for Evidence issued",

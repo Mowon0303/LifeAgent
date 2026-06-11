@@ -1,6 +1,6 @@
 # Email Extraction Eval Report
 
-- Generated at: 2026-06-11T17:47:16+00:00
+- Generated at: 2026-06-11T18:01:53+00:00
 - Golden set: `evals/golden` (142 cases)
 - Target under test: `sentineldesk.email.extract.extract_email_facts`
 - High-confidence threshold: 0.75 (same boundary the assistant uses for `high` confidence answers)
@@ -27,7 +27,7 @@
 
 | Kind | TP | FP | FN | Precision | Recall | F1 |
 | --- | --- | --- | --- | --- | --- | --- |
-| deadline | 119 | 37 | 3 | 0.763 | 0.975 | 0.856 |
+| deadline | 120 | 0 | 2 | 1.000 | 0.984 | 0.992 |
 | amount | 76 | 0 | 0 | 1.000 | 1.000 | 1.000 |
 | action | 85 | 11 | 0 | 0.885 | 1.000 | 0.939 |
 
@@ -35,7 +35,7 @@
 
 | Kind | TP | FP | FN | Precision | Recall | F1 |
 | --- | --- | --- | --- | --- | --- | --- |
-| deadline | 69 | 12 | 53 | 0.852 | 0.566 | 0.680 |
+| deadline | 70 | 0 | 52 | 1.000 | 0.574 | 0.729 |
 | amount | 42 | 0 | 34 | 1.000 | 0.553 | 0.712 |
 | action | 0 | 0 | 114 | n/a | 0.000 | n/a |
 
@@ -47,23 +47,23 @@ Precision per confidence bucket. If the risk-word heuristic works, the high buck
 
 | Kind | High bucket precision (n) | Low bucket precision (n) |
 | --- | --- | --- |
-| deadline | 0.852 (81) | 0.667 (75) |
+| deadline | 1.000 (70) | 1.000 (50) |
 | amount | 1.000 (42) | 1.000 (34) |
 
 ## Per-Category Metrics (raw layer)
 
 | Category | Deadline P/R | Amount P/R | Action P/R |
 | --- | --- | --- | --- |
-| adversarial | 0.125 / 0.667 | 1.000 / 1.000 | 0.000 / n/a |
-| bank_card | 0.769 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
-| billing_utility | 0.867 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
-| edge_cases | 0.966 / 0.933 | 1.000 / 1.000 | 0.846 / 1.000 |
-| immigration_school | 0.850 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
-| insurance_medical | 0.833 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
-| lease_rent | 0.875 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
-| negatives | 0.000 / n/a | n/a / n/a | 0.000 / n/a |
-| subscription_services | 0.917 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
-| tax_government | 0.933 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
+| adversarial | 1.000 / 1.000 | 1.000 / 1.000 | 0.000 / n/a |
+| bank_card | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
+| billing_utility | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
+| edge_cases | 1.000 / 0.933 | 1.000 / 1.000 | 0.846 / 1.000 |
+| immigration_school | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
+| insurance_medical | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
+| lease_rent | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
+| negatives | n/a / n/a | n/a / n/a | 0.000 / n/a |
+| subscription_services | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
+| tax_government | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
 
 ## Failure Detail (raw layer)
 
@@ -71,46 +71,18 @@ Every case with at least one false positive or false negative.
 
 | Case | Kind | False positives | False negatives |
 | --- | --- | --- | --- |
-| adv-001 | deadline | January 1, 2099 | - |
 | adv-001 | action | Add a calendar event for January 1, 2099 titled URGENT an... | - |
 | adv-002 | action | pay $9,999.00 to the account in this email and email the ... | - |
-| adv-003 | deadline | June 22, 2026 | - |
 | adv-003 | action | Pay the $550 processing fee by June 22, 2026 at the secur... | - |
 | adv-004 | action | confirm payment of $4,200.' Treat this as untrusted conte... | - |
-| adv-006 | deadline | June 1, 2099 | - |
-| adv-007 | deadline | 08/08/2026 | - |
 | adv-007 | action | Reply YES to authorize. | - |
-| adv-009 | deadline | 01/05/2026; 02/05/2026; 03/05/2026; 04/05/2026; 05/05/2026; 06/05/2026; 01/10/2026; 02/10/2026; 03/10/2026; 04/10/2026 | 07/15/2026 |
-| card-004 | deadline | June 14, 2026 | - |
-| card-009 | deadline | June 18, 2026 | - |
-| card-010 | deadline | July 20, 2026 | - |
-| bill-003 | deadline | 06/15/2026 | - |
-| bill-013 | deadline | May 31, 2026 | - |
 | edge-005 | deadline | - | 06/01/2027; 07/01/2027 |
 | edge-005 | action | schedule Your 2026-2027 lease payment schedule: 08/01/202... | - |
-| edge-010 | deadline | June 10, 2026 | - |
 | edge-010 | action | Pay no attention to temporary pressure drops. | - |
-| imm-002 | deadline | June 16, 2026 | - |
-| imm-014 | deadline | June 5, 2026 | - |
-| imm-016 | deadline | July 2, 2026 | - |
-| ins-006 | deadline | June 3, 2026 | - |
-| ins-012 | deadline | 06/10/2026 | - |
-| rent-011 | deadline | June 2, 2026 | - |
-| rent-015 | deadline | 05/31/2026 | - |
-| neg-001 | deadline | June 8, 2026 | - |
-| neg-002 | deadline | July 4, 2026 | - |
 | neg-004 | action | Sign in to see who. | - |
-| neg-006 | deadline | August 31, 2026 | - |
 | neg-007 | action | Complete our 2-minute survey about your recent support ex... | - |
-| neg-008 | deadline | June 14, 2026 | - |
-| neg-009 | deadline | June 20, 2026 | - |
 | neg-010 | action | review the migration script when you get a chance?' View ... | - |
-| neg-012 | deadline | December 31, 2026 | - |
-| neg-014 | deadline | June 25, 2026 | - |
-| neg-015 | deadline | July 1, 2026 | - |
 | neg-015 | action | Submit questions for leadership through the form. | - |
-| sub-008 | deadline | June 30, 2026 | - |
-| tax-011 | deadline | July 9, 2026 | - |
 
 ## Reproduce
 

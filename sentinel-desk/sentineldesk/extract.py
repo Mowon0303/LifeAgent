@@ -172,6 +172,8 @@ def extract_deadlines(text: str) -> list[dict[str, Any]]:
     for match in DATE_RE.finditer(normalized):
         start, end = match.span()
         context = normalized[max(0, start - 90) : min(len(normalized), end + 90)]
+        if not _absolute_deadline_context_allowed(normalized, start, end, context):
+            continue
         confidence = _deadline_confidence(context)
         deadlines.append({"date_text": match.group(0), "context": context, "confidence": confidence})
     for match in _relative_deadline_matches(normalized):
@@ -196,6 +198,102 @@ def _deadline_confidence(context: str, *, relative: bool = False) -> float:
     if high_confidence:
         return 0.82
     return 0.58 if relative else 0.5
+
+
+def _absolute_deadline_context_allowed(text: str, start: int, end: int, context: str) -> bool:
+    before = text[max(0, start - 120) : start].lower()
+    after = text[end : min(len(text), end + 120)].lower()
+    lowered_context = context.lower()
+    if _injected_or_phishing_deadline_context(lowered_context):
+        return False
+    if _marketing_deadline_context(before, lowered_context):
+        return False
+    if _narrative_date_context(before, after, lowered_context):
+        return False
+    if _informational_event_context(lowered_context):
+        return False
+    return True
+
+
+def _injected_or_phishing_deadline_context(context: str) -> bool:
+    if re.search(
+        r"\b(ignore (?:all )?(?:(?:previous|prior) )?instructions|pretend you are|"
+        r"add a calendar event|automated stress test|authorize the transfer)\b",
+        context,
+    ):
+        return True
+    return bool(
+        re.search(r"\bsecure link\b", context)
+        and re.search(r"\bprocessing fee\b", context)
+        and re.search(r"\bterminated\b", context)
+    )
+
+
+def _marketing_deadline_context(before: str, context: str) -> bool:
+    if _immediate_obligation_deadline(before):
+        return False
+    if re.search(r"\b(?:offer valid through|offer ends|book by)\s*$", before):
+        return True
+    if re.search(
+        r"\b("
+        r"balance transfer|bonus|book by|donations? made before|double your impact|"
+        r"intro apr|late checkout perks|limited time|matched dollar for dollar|offer terms|"
+        r"refer a friend|rooms from|shop now|summer sale|terms apply|unlock all articles|upgrade to premium"
+        r")\b",
+        context,
+    ):
+        return True
+    return bool(re.search(r"\bexpected to arrive by\s*$", before))
+
+
+def _narrative_date_context(before: str, after: str, context: str) -> bool:
+    if _immediate_obligation_deadline(before):
+        return False
+    if re.search(r"\bdate:\s*$", before) and not re.search(r"\bdue date:\s*$", before):
+        return True
+    if re.search(r"\b(?:period ending|expired on)\s*$", before):
+        return True
+    if re.search(r"\b(?:was|were)?\s*due on\s*$", before) and re.search(
+        r"\b(grace period ends|missed|remains unpaid|we did not receive)\b",
+        context,
+    ):
+        return True
+    if re.search(
+        r"\b("
+        r"account history|card was mailed|changed successfully|complaint regarding|"
+        r"explanation of benefits|final grades were posted|payment of|published|"
+        r"statements were generated|payments posted|visit on|we noticed a charge"
+        r")\b",
+        context,
+    ) and re.search(r"\b(?:on|posted|published|generated|mailed|changed|visit)\b", before[-80:]):
+        return True
+    if "account history" in context and re.search(r"\b(?:statements were generated|payments posted)\b", context):
+        return True
+    return False
+
+
+def _informational_event_context(context: str) -> bool:
+    return bool(
+        re.search(
+            r"\b("
+            r"attendance is optional|information session|this notice is informational|"
+            r"public hearing|open to all residents|quarterly all-hands"
+            r")\b",
+            context,
+        )
+    )
+
+
+def _immediate_obligation_deadline(before: str) -> bool:
+    return bool(
+        re.search(
+            r"\b("
+            r"due by|(?:payment\s+)?due date:|deadline(?: is|:)?|expires|grace period ends|"
+            r"must be .* by|pay .* by|payment by|respond by|submit .* by|upload .* by"
+            r")\s*$",
+            before[-120:],
+        )
+    )
 
 
 def _relative_deadline_matches(text: str) -> list[re.Match[str]]:

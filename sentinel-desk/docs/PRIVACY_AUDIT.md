@@ -41,7 +41,7 @@ To verify the package boundary, extract that ZIP into a temporary directory and 
 python3 -m sentineldesk privacy release-audit --path /tmp/extracted-sentineldesk --require-clean
 ```
 
-The current implementation was verified by packaging the local tree to `/private/tmp/lifeagent-semantic-amount-filters-20260611.release.zip`, extracting it, and auditing the extracted tree with 118 scanned files and 0 release-artifact issues.
+The current implementation was verified by packaging the local tree to `/private/tmp/lifeagent-deadline-fp-filters-20260611.release.zip`, extracting it, and auditing the extracted tree with 118 scanned files and 0 release-artifact issues.
 
 The redacted-output privacy audit remains separate:
 

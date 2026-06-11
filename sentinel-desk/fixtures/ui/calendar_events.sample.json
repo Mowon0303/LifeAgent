@@ -1,37 +1,5 @@
 [
   {
-    "event_id": "5b7aa19bdfef9041",
-    "title": "Deadline: This week in tech",
-    "date_text": "June 21, 2026",
-    "date_key": "2026-06-21",
-    "severity": "medium",
-    "confidence": 0.5,
-    "status": "draft",
-    "sync_state": "local_draft",
-    "approval_state": "draft",
-    "uncertain": true,
-    "source_ids": [
-      "email:ui-sample-news-001"
-    ],
-    "source_trust": "email_evidence",
-    "source_count": 1,
-    "evidence_uri": "email:ui-sample-news-001",
-    "reminders": [
-      {
-        "days_before": 14,
-        "method": "display"
-      },
-      {
-        "days_before": 7,
-        "method": "display"
-      },
-      {
-        "days_before": 1,
-        "method": "display"
-      }
-    ]
-  },
-  {
     "event_id": "0edfeaf987cb6fce",
     "title": "Deadline: Rent payment reminder for July",
     "date_text": "07/01/2026",
