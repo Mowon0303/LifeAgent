@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Test, eval, and privacy gates
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Show Python version
+        run: python -VV
+
+      - name: Check package metadata
+        working-directory: sentinel-desk
+        run: |
+          python - <<'PY'
+          import tomllib
+          with open("pyproject.toml", "rb") as fh:
+              project = tomllib.load(fh)["project"]
+          assert project["name"] == "sentineldesk"
+          assert "email-first" in project["description"].lower()
+          PY
+
+      - name: Run unit tests
+        working-directory: sentinel-desk
+        run: python -B -m unittest discover -s tests -q
+
+      - name: Compile Python modules
+        working-directory: sentinel-desk
+        run: python -m compileall -q sentineldesk tests
+
+      - name: Run email extraction eval
+        working-directory: sentinel-desk
+        run: python -B -m sentineldesk eval email-extract --golden evals/golden --json > /tmp/lifeagent-email-eval.json
+
+      - name: Prepare email-first demo state
+        working-directory: sentinel-desk
+        run: |
+          SENTINEL_RECORD_DRY_RUN=1 \
+          SENTINEL_RECORD_HOME=/tmp/lifeagent-ci-demo \
+          SENTINEL_RECORD_PORT=8787 \
+          SENTINEL_RECORD_OUTPUT_DIR=/tmp/lifeagent-recordings \
+          bash scripts/record_portfolio_demo.sh
+
+      - name: Audit redacted demo artifacts
+        working-directory: sentinel-desk
+        run: python -B -m sentineldesk --home /tmp/lifeagent-ci-demo privacy audit --require-clean
+
+      - name: Build clean source release package
+        working-directory: sentinel-desk
+        run: python -B -m sentineldesk privacy release-package --source . --output /tmp/sentineldesk.release.zip
+
+      - name: Audit extracted source release package
+        working-directory: sentinel-desk
+        run: |
+          rm -rf /tmp/extracted-sentineldesk
+          python -B -m zipfile -e /tmp/sentineldesk.release.zip /tmp/extracted-sentineldesk
+          python -B -m sentineldesk privacy release-audit --path /tmp/extracted-sentineldesk --require-clean

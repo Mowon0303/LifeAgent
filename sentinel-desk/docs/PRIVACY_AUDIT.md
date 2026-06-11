@@ -38,10 +38,12 @@ python3 -m sentineldesk privacy release-package --source . --output /tmp/sentine
 To verify the package boundary, extract that ZIP into a temporary directory and run:
 
 ```bash
-python3 -m sentineldesk privacy release-audit --path /tmp/extracted-sentineldesk --require-clean
+EXTRACT_DIR="$(mktemp -d /tmp/sentineldesk-release-audit.XXXXXX)"
+python3 -m zipfile -e /tmp/sentineldesk.release.zip "$EXTRACT_DIR"
+python3 -m sentineldesk privacy release-audit --path "$EXTRACT_DIR" --require-clean
 ```
 
-The current implementation was verified by packaging the local tree to `/private/tmp/lifeagent-email-first-demo-prep-20260611.release.zip`, extracting it, and auditing the extracted tree with 118 scanned files and 0 release-artifact issues.
+The current implementation was verified by packaging the local tree to `/tmp/sentineldesk.release.zip`, extracting it, and auditing the extracted tree with 118 scanned files and 0 release-artifact issues. The same package/audit boundary is now part of GitHub Actions CI.
 
 The redacted-output privacy audit remains separate:
 

@@ -103,7 +103,7 @@ Rules:
 
 - Rule: Every plan-status reply must show completed plans and the next plan to complete.
 - Completed plans: Read from the `Status Table` rows whose `Status` is `Done`.
-- Next plan to complete: The portfolio engineering loop is closed: eval baseline, UI contract + accepted calendar page, guard-railed model-in-the-loop with cost attribution, stored-evidence ask, pivot postmortem, relative-deadline extraction, non-dollar amount extraction, action-lexicon expansion, date-form expansion, spelled-out amount extraction, high-confidence amount false-positive filtering, low-confidence amount false-positive filtering, semantic amount/source-trust filtering, deadline false-positive filtering, extraction-cap/stuffing handling, action false-positive filtering, redacted Gmail-first package shape evals, and Gmail-first demo prep are all Done. The raw extraction-improvement queue from `docs/EVAL_REPORT.md` is complete; the next practical plan is user-approved 2-minute screen recording. Calendar live writes remain deferred unless the product workflow needs confirmed external calendar sync.
+- Next plan to complete: The portfolio engineering loop is closed: eval baseline, UI contract + accepted calendar page, guard-railed model-in-the-loop with cost attribution, stored-evidence ask, pivot postmortem, relative-deadline extraction, non-dollar amount extraction, action-lexicon expansion, date-form expansion, spelled-out amount extraction, high-confidence amount false-positive filtering, low-confidence amount false-positive filtering, semantic amount/source-trust filtering, deadline false-positive filtering, extraction-cap/stuffing handling, action false-positive filtering, redacted Gmail-first package shape evals, Gmail-first demo prep, GitHub project packaging, and GitHub Actions CI are all Done. The raw extraction-improvement queue from `docs/EVAL_REPORT.md` is complete; the next practical plan is to confirm the first remote GitHub Actions run on `origin/main`, then decide whether the portfolio handoff needs a static case-study package, user-approved 2-minute screen recording, or both. Calendar live writes remain deferred unless the product workflow needs confirmed external calendar sync.
 
 ## Status Table
 
@@ -129,6 +129,8 @@ Rules:
 | Real Chrome CDP dry-run | Done | Dedicated Chrome DevTools endpoint captured synthetic OPT fixture through `cdp://127.0.0.1:9223`, producing health `ok`, status `submitted`, baseline alert, HTML/text artifacts, and a 99,900-byte screenshot artifact | Re-run only when CDP capture changes |
 | Portfolio demo recording pass | Done | Clean Gmail-first dry run in a temporary home outside the repo produced 4 sample email messages, 8 extracted facts, 3 local calendar drafts, 8 reviewable tasks, 5 ops runs, 2 alerts, baseline/critical/uncertain states, calendar assistant and ops dashboard loads at `127.0.0.1:8798`, `/api/calendar/events` returning 3 email-derived drafts, `/api/ask` returning cited uncertainty for conflicting latest-deadline evidence, and a clean redacted-output privacy audit over 12 scanned share/report artifacts; `docs/RECORDING_CHECKLIST.md` captures the final recording checklist | Await explicit user approval before starting real macOS screen recording |
 | Public release privacy audit | Done | `sentineldesk privacy release-audit --path sentinel-desk` detects local ignored development artifacts (`.agent-venv`, `.demo`, `sentineldesk.egg-info`, and `__pycache__/` directories), while `sentineldesk privacy release-package --source sentinel-desk --output /private/tmp/.../sentinel-desk.release.zip` excludes those artifacts; the latest extracted release ZIP passed `privacy release-audit --require-clean` with 118 scanned files and 0 issues | Use `privacy release-package` rather than direct local-tree zipping for public sharing |
+| GitHub project packaging | Done | Root `README.md` now frames LifeAgent as an email-first personal operations agent, documents the architecture, agent layer, current evidence, quickstart, CI gates, privacy boundary, and key docs; `sentinel-desk/README.md` now opens with the email-first demo and points `/ops` to the reliability surface; package metadata description is updated | Keep README evidence counts aligned with tests/evals before public sharing |
+| GitHub Actions CI | Done | `.github/workflows/ci.yml` runs a Python 3.11 package metadata check, 264 unittests, `compileall`, golden email extraction eval JSON, email-first demo dry run, redacted-output privacy audit, clean source release packaging, and extracted release audit; the local CI-equivalent command set passed | Check the first remote Actions run after pushing to GitHub |
 | Manual demo recording handoff | Done | `python3 -m sentineldesk --home .demo demo record-prep --port 8787` now prepares the Gmail-first calendar assistant state from `fixtures/ui/sample_emails.json`, also prepares the secondary `/ops` reliability state, prints dashboard URLs, email/task/calendar counts, run IDs, report paths, and package paths, and is covered by CLI tests; `docs/DEMO_VIDEO_SCRIPT.md` and `docs/RECORDING_CHECKLIST.md` use the new email-first flow | User records the actual video with local screen/audio permissions |
 | User-operated screen recording helper | Done | `scripts/record_portfolio_demo.sh` prepares `.demo`, starts the dashboard, opens `127.0.0.1:8787/` for the calendar assistant, waits 5 seconds, and invokes macOS `screencapture` for a 2-minute `.mov`; recordings are ignored by git | User runs the helper and grants local screen/audio permissions |
 | Screen recording approval guard | Done | Recording helper now requires interactive `record` confirmation or `SENTINEL_RECORD_APPROVED=1`; `SENTINEL_RECORD_DRY_RUN=1` verified setup without recording, and unapproved non-interactive execution exits before capture | Await explicit user approval to record |
@@ -166,6 +168,7 @@ Rules:
 ## Current Non-UI Backend Checkpoint
 
 - UI implementation remains paused pending the user-provided design reference package.
+- Latest portfolio packaging: root README and package docs now present the project as a GitHub-readable, email-first agent with explicit eval, privacy, demo, and CI evidence.
 - Current backend focus: Gmail-first question answering, tool-verified latest facts, portal fallback only when email evidence says the user must log in or view the portal, and calendar as a local action/visibility layer.
 - Latest portal fallback work: deadline fallback answers now cite both the portal run and the triggering email, carry `email_to_portal_deadline` metadata, preserve `planned_tools_initial`, and merge runtime fallback calls into workflow `planned_tools`.
 - Latest eval coverage: targeted orchestration/email tests cover verified portal deadlines, uncertain session-expired portal fallbacks, CLI `ask` fallback output, workflow metadata that records runtime `capture_latest_portal`, and a redacted Gmail-first readiness package shape after a fake Gmail sync.
@@ -234,6 +237,28 @@ python3 -B -m unittest discover -s tests -v
 ```
 
 Current expected result: 264 tests pass.
+
+CI-equivalent local gate:
+
+```bash
+cd sentinel-desk
+python3 - <<'PY'
+import tomllib
+with open("pyproject.toml", "rb") as fh:
+    project = tomllib.load(fh)["project"]
+assert project["name"] == "sentineldesk"
+assert "email-first" in project["description"].lower()
+PY
+python3 -B -m unittest discover -s tests -q
+python3 -m compileall -q sentineldesk tests
+python3 -B -m sentineldesk eval email-extract --golden evals/golden --json > /tmp/lifeagent-email-eval.json
+SENTINEL_RECORD_DRY_RUN=1 SENTINEL_RECORD_HOME=/tmp/lifeagent-ci-demo SENTINEL_RECORD_PORT=8787 SENTINEL_RECORD_OUTPUT_DIR=/tmp/lifeagent-recordings bash scripts/record_portfolio_demo.sh
+python3 -B -m sentineldesk --home /tmp/lifeagent-ci-demo privacy audit --require-clean
+python3 -B -m sentineldesk privacy release-package --source . --output /tmp/sentineldesk.release.zip
+rm -rf /tmp/extracted-sentineldesk
+python3 -B -m zipfile -e /tmp/sentineldesk.release.zip /tmp/extracted-sentineldesk
+python3 -B -m sentineldesk privacy release-audit --path /tmp/extracted-sentineldesk --require-clean
+```
 
 Calendar AI page (after seeding any local home with email evidence):
 

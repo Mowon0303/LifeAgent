@@ -546,9 +546,22 @@ class LiveVerificationTests(unittest.TestCase):
     def test_cli_integrations_completion_audit_requires_final_evidence(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             home = Path(tmp) / "home"
+            missing_release = Path(tmp) / "missing-release"
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
-                code = main(["--home", str(home), "integrations", "completion-audit", "--account", "sandbox@example.com", "--require-ready"])
+                code = main(
+                    [
+                        "--home",
+                        str(home),
+                        "integrations",
+                        "completion-audit",
+                        "--account",
+                        "sandbox@example.com",
+                        "--source-release-path",
+                        str(missing_release),
+                        "--require-ready",
+                    ]
+                )
 
             self.assertEqual(code, 1)
             payload = json.loads(output.getvalue())

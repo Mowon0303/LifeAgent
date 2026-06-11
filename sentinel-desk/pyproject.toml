@@ -1,7 +1,7 @@
 [project]
 name = "sentineldesk"
 version = "0.1.0"
-description = "Fail-loud local portal monitor for high-stakes deadlines"
+description = "Email-first personal operations agent with fail-loud evidence and calendar safety"
 requires-python = ">=3.11"
 dependencies = []
 

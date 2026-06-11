@@ -1,35 +1,44 @@
 # SentinelDesk
 
-SentinelDesk is a fail-loud local portal monitor for high-stakes deadlines.
+SentinelDesk is the deterministic reliability core inside **LifeAgent**, an email-first personal operations agent. LifeAgent extracts deadlines, amounts, and actions from email evidence, answers with citations and uncertainty, and drafts local calendar events behind confirmation gates.
 
-It is not a generic website change detector. The core promise is:
+SentinelDesk still handles the part that should not be delegated to an LLM: portal capture fallback, session health, deterministic diffing, fail-loud classification, evidence bundles, and privacy-safe packages.
+
+The core promise is:
 
 > If the monitor cannot verify the portal state, it must alert instead of silently assuming nothing changed.
 
-The first portfolio version uses synthetic OPT, appointment-slot, and lease/rent fixtures so the repo can be public without leaking real applications, screenshots, cookies, or personal records.
+The public demo uses synthetic Gmail-style email fixtures plus synthetic OPT, appointment-slot, and lease/rent portal fixtures. No real inboxes, screenshots, cookies, portal records, or OAuth credentials are required.
 
 ## What It Demonstrates
 
-- Local-first portal monitoring using user-owned browser/session boundaries.
-- Deterministic diff first; semantic interpretation only after a meaningful change.
-- Session health checks for login expiry, captcha, bot blocks, server errors, and unknown status.
-- Evidence bundles with before/after text previews, status, deadlines, health, and diff.
-- A local dashboard for alerts, recent runs, evidence review, redacted reports, and redacted package downloads.
-- Reliability tests focused on silent-failure prevention.
+- Email-first deadline, amount, and action extraction.
+- Tool-first assistant answers with citations and explicit uncertainty.
+- Local calendar drafts with confirmation-gated ICS/Google/Apple write boundaries.
+- RAG for trusted docs and policy explanations, not primary alerting.
+- Optional LangGraph-shaped route/tools/finalize workflow metadata.
+- Portal monitoring fallback with deterministic diff and fail-loud health checks.
+- Redacted reports and share packages for review without leaking raw local evidence.
+- Regression tests and evals focused on silent-failure prevention, privacy, and package shape.
 
 ## Run The Demo
 
 ```bash
 cd sentinel-desk
-python3 -m sentineldesk --home .demo init
-python3 -m sentineldesk --home .demo demo seed
-python3 -m sentineldesk --home .demo demo scenarios
-python3 -m sentineldesk --home .demo watch run
-python3 -m sentineldesk --home .demo alerts
-python3 -m sentineldesk --home .demo serve --port 8787
+python3 -B -m sentineldesk --home .demo demo record-prep --port 8787
+python3 -B -m sentineldesk --home .demo serve --port 8787
 ```
 
-Open `http://127.0.0.1:8787`.
+Open `http://127.0.0.1:8787/` for the LifeAgent calendar assistant.
+
+Open `http://127.0.0.1:8787/ops` for the SentinelDesk reliability/evidence dashboard.
+
+`demo record-prep` prepares:
+
+- synthetic Gmail-style email evidence
+- email-derived local calendar drafts and reviewable tasks
+- baseline, `critical`, and `uncertain` portal reliability runs
+- redacted report/package artifacts for the ops view
 
 ## Show A Meaningful Change
 

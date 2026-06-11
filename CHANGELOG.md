@@ -6,6 +6,7 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Added
 
+- Added GitHub Actions CI at `.github/workflows/ci.yml`: Python 3.11 package metadata check, 264 unittests, `compileall`, golden email extraction eval JSON, email-first demo dry run, redacted-output privacy audit, clean source release packaging, and extracted release audit.
 - Added a Gmail-first readiness package shape eval: it seeds a fake readonly Gmail sync with a stored cursor, mocks optional Google dependency availability, runs `integrations check --suite gmail --require-ready --package`, verifies the redacted ZIP file set/manifest/check list, asserts account/cursor/token/client-secret/local-path values are absent, and runs `privacy audit --require-clean` on the generated package.
 - Added conservative relative-deadline extraction to `extract_deadlines`: `within N days`, `at least N business days before the ... date`, user-action `N-day grace period` windows, `next Friday`-style weekdays, and `by the end of the month`; added targeted tests proving positive extraction and skipping no-action refund/deposit processing windows.
 - Added expanded date-form extraction for day-month-year (`14 July 2026`), month-day without year (`June 5`), and ISO datetime `T` suffixes (`2026-07-12T22:00` -> `2026-07-12`), with tests proving full month dates are not split into shorter duplicates.
@@ -128,6 +129,7 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Fixed
 
+- Fixed `completion-audit` test isolation so the missing source-release gate is tested against a per-test temporary path instead of depending on the global `/tmp/extracted-sentineldesk` state left by local release-audit runs.
 - Filtered expanded-action false positives from email local parts such as `reply@...` / `no-reply@...`, noun-like `update/check/report` contexts, `Terms apply`, app-store update prompts, and conditional security-support prompts.
 - Fixed the remaining amount false negative in the current golden set: `one thousand two hundred dollars` is now extracted without adding raw amount false positives.
 - Fixed 9 high-confidence amount false positives in the current golden set while keeping amount recall at 1.000.
@@ -142,6 +144,9 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Changed
 
+- Reworked the root `README.md` into a GitHub-facing project overview for the email-first LifeAgent: architecture, agent layer, eval/privacy evidence, quickstart, CI gates, privacy boundary, and key docs.
+- Updated `sentinel-desk/README.md` so the first-run demo opens the calendar assistant at `/`, keeps `/ops` as the SentinelDesk reliability surface, and describes synthetic Gmail-style fixtures as the public demo path.
+- Updated package metadata so the project description matches the current email-first personal operations agent direction.
 - `demo record-prep` now prepares the current Gmail-first product demo: it ingests `fixtures/ui/sample_emails.json`, creates email-derived calendar drafts/tasks for the calendar assistant homepage, still prepares the secondary `/ops` portal reliability runs, and prints both calendar and ops dashboard URLs plus email/task/calendar counts.
 - `docs/DEMO_VIDEO_SCRIPT.md` and `docs/RECORDING_CHECKLIST.md` now lead with LifeAgent's email-first calendar assistant, cited uncertainty, local draft confirmation boundary, and `/ops` as the SentinelDesk reliability-core fallback rather than presenting portal monitoring as the main product.
 - Raised the email-extraction eval gates after the relative-deadline improvement: raw deadline floors are now P>=0.74/R>=0.92 and high-confidence deadline floors are now P>=0.83/R>=0.51.
@@ -210,9 +215,12 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Verified
 
+- Local CI-equivalent gate passed after adding the GitHub workflow: package metadata check, `python3 -B -m unittest discover -s tests -q` with 264 tests, `python3 -m compileall -q sentineldesk tests`, and `python3 -B -m sentineldesk eval email-extract --golden evals/golden --json`.
+- `SENTINEL_RECORD_DRY_RUN=1 SENTINEL_RECORD_HOME=/tmp/lifeagent-ci-demo SENTINEL_RECORD_PORT=8787 SENTINEL_RECORD_OUTPUT_DIR=/tmp/lifeagent-recordings bash scripts/record_portfolio_demo.sh` prepared the email-first demo state for CI without starting a recording: 4 email messages, 8 facts, 3 calendar drafts, 8 tasks, 5 ops runs, and 2 alerts.
+- `python3 -B -m sentineldesk --home /tmp/lifeagent-ci-demo privacy audit --require-clean` passed on the generated redacted demo outputs, and the source release package/extracted release audit passed with 118 scanned files and 0 issues.
 - `cd sentinel-desk && python3 -B -m unittest discover -s tests -q` passed with 264 tests after updating demo prep and recording docs for the Gmail-first flow.
 - `cd sentinel-desk && python3 -m compileall -q sentineldesk tests` passed after the email-first demo prep update.
-- `cd sentinel-desk && python3 -B -m sentineldesk --home /private/tmp/lifeagent-email-first-demo-prep-release-home privacy release-package --source . --output /private/tmp/lifeagent-email-first-demo-prep-20260611.release.zip` wrote a 118-file source release ZIP excluding 10 local runtime artifacts, and `privacy release-audit --require-clean` passed on the extracted package with 0 issues.
+- `cd sentinel-desk && python3 -B -m sentineldesk privacy release-package --source . --output /tmp/sentineldesk.release.zip` wrote a 118-file source release ZIP excluding local runtime artifacts, and `privacy release-audit --require-clean` passed on the extracted package with 0 issues.
 - `cd sentinel-desk && python3 -B -m unittest tests.test_cli_db.CliDbTests.test_demo_record_prep_creates_recording_state -q` passed after updating demo prep to seed Gmail-first calendar data.
 - `cd sentinel-desk && SENTINEL_RECORD_DRY_RUN=1 SENTINEL_RECORD_HOME=/private/tmp/lifeagent-recording-email-first-dryrun-home SENTINEL_RECORD_PORT=8798 SENTINEL_RECORD_OUTPUT_DIR=/private/tmp/lifeagent-recordings bash scripts/record_portfolio_demo.sh` prepared the email-first demo state without recording: 4 sample messages, 8 extracted facts, 3 local calendar drafts, 8 tasks, 5 ops runs, 2 alerts, and critical/uncertain redacted share packages.
 - Local server verification on `127.0.0.1:8798` returned `200` for `/` and `/ops`; `/api/calendar/events` returned 3 email-derived draft events; `/api/ask` returned a cited `uncertain` latest-deadline answer with the safest earlier candidate.
