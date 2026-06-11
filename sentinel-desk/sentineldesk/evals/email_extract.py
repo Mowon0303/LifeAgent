@@ -428,7 +428,7 @@ def render_markdown_report(report: EvalReport) -> str:
     lines.append("")
     lines.append(
         "Precision per confidence bucket. If the risk-word heuristic works, the high bucket "
-        "should be meaningfully more precise than the low bucket."
+        "should not be less precise than the low bucket."
     )
     lines.append("")
     lines.append("| Kind | High bucket precision (n) | Low bucket precision (n) |")

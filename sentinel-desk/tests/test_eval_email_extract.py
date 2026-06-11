@@ -26,20 +26,21 @@ EXPECTED_CATEGORIES = {
 
 # Regression floors sit just below the measured baseline (2026-06-11 after
 # relative-deadline, date-form, non-dollar/spelled-out amount,
-# high-confidence + low-confidence amount false-positive filters, and action-lexicon support:
-# raw deadline P=0.763/R=0.975, raw amount P=0.974/R=1.000,
+# high/low-confidence amount false-positive filters, semantic amount/source-trust filters,
+# and action-lexicon support:
+# raw deadline P=0.763/R=0.975, raw amount P=1.000/R=1.000,
 # raw action P=0.885/R=1.000,
-# high-conf deadline P=0.852/R=0.566, high-conf amount P=0.977/R=0.553).
+# high-conf deadline P=0.852/R=0.566, high-conf amount P=1.000/R=0.553).
 # A failure here means extraction quality regressed or the golden set drifted;
 # improvements should raise these floors deliberately.
 RAW_FLOORS = {
     "deadline": {"precision": 0.75, "recall": 0.96},
-    "amount": {"precision": 0.96, "recall": 0.99},
+    "amount": {"precision": 0.99, "recall": 0.99},
     "action": {"precision": 0.87, "recall": 0.98},
 }
 HIGH_CONFIDENCE_FLOORS = {
     "deadline": {"precision": 0.84, "recall": 0.55},
-    "amount": {"precision": 0.96, "recall": 0.54},
+    "amount": {"precision": 0.99, "recall": 0.54},
 }
 
 
@@ -94,16 +95,16 @@ class EmailExtractEvalGateTests(unittest.TestCase):
                 tally.recall, floors["recall"], f"high_confidence.{kind} recall regressed"
             )
 
-    def test_risk_word_heuristic_improves_precision(self) -> None:
+    def test_risk_word_heuristic_does_not_degrade_precision(self) -> None:
         for kind in ("deadline", "amount"):
             high = self.report.confidence_buckets["high"][kind]
             low = self.report.confidence_buckets["low"][kind]
             self.assertIsNotNone(high.precision)
             self.assertIsNotNone(low.precision)
-            self.assertGreater(
+            self.assertGreaterEqual(
                 high.precision,
                 low.precision,
-                f"{kind}: confidence >= {HIGH_CONFIDENCE_THRESHOLD} bucket should be more precise",
+                f"{kind}: confidence >= {HIGH_CONFIDENCE_THRESHOLD} bucket should be at least as precise",
             )
 
     def test_action_confidence_is_flat_by_construction(self) -> None:

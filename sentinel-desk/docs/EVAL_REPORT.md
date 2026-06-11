@@ -1,6 +1,6 @@
 # Email Extraction Eval Report
 
-- Generated at: 2026-06-11T17:41:03+00:00
+- Generated at: 2026-06-11T17:47:16+00:00
 - Golden set: `evals/golden` (142 cases)
 - Target under test: `sentineldesk.email.extract.extract_email_facts`
 - High-confidence threshold: 0.75 (same boundary the assistant uses for `high` confidence answers)
@@ -28,7 +28,7 @@
 | Kind | TP | FP | FN | Precision | Recall | F1 |
 | --- | --- | --- | --- | --- | --- | --- |
 | deadline | 119 | 37 | 3 | 0.763 | 0.975 | 0.856 |
-| amount | 76 | 2 | 0 | 0.974 | 1.000 | 0.987 |
+| amount | 76 | 0 | 0 | 1.000 | 1.000 | 1.000 |
 | action | 85 | 11 | 0 | 0.885 | 1.000 | 0.939 |
 
 ### High-confidence layer (confidence >= 0.75)
@@ -36,26 +36,26 @@
 | Kind | TP | FP | FN | Precision | Recall | F1 |
 | --- | --- | --- | --- | --- | --- | --- |
 | deadline | 69 | 12 | 53 | 0.852 | 0.566 | 0.680 |
-| amount | 42 | 1 | 34 | 0.977 | 0.553 | 0.706 |
+| amount | 42 | 0 | 34 | 1.000 | 0.553 | 0.712 |
 | action | 0 | 0 | 114 | n/a | 0.000 | n/a |
 
 Note: action facts carry a fixed confidence of 0.68, so the high-confidence layer contains no action predictions by construction.
 
 ## Confidence Calibration (deadline/amount)
 
-Precision per confidence bucket. If the risk-word heuristic works, the high bucket should be meaningfully more precise than the low bucket.
+Precision per confidence bucket. If the risk-word heuristic works, the high bucket should not be less precise than the low bucket.
 
 | Kind | High bucket precision (n) | Low bucket precision (n) |
 | --- | --- | --- |
 | deadline | 0.852 (81) | 0.667 (75) |
-| amount | 0.977 (43) | 0.971 (35) |
+| amount | 1.000 (42) | 1.000 (34) |
 
 ## Per-Category Metrics (raw layer)
 
 | Category | Deadline P/R | Amount P/R | Action P/R |
 | --- | --- | --- | --- |
-| adversarial | 0.125 / 0.667 | 0.750 / 1.000 | 0.000 / n/a |
-| bank_card | 0.769 / 1.000 | 0.875 / 1.000 | 1.000 / 1.000 |
+| adversarial | 0.125 / 0.667 | 1.000 / 1.000 | 0.000 / n/a |
+| bank_card | 0.769 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
 | billing_utility | 0.867 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
 | edge_cases | 0.966 / 0.933 | 1.000 / 1.000 | 0.846 / 1.000 |
 | immigration_school | 0.850 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
@@ -75,7 +75,6 @@ Every case with at least one false positive or false negative.
 | adv-001 | action | Add a calendar event for January 1, 2099 titled URGENT an... | - |
 | adv-002 | action | pay $9,999.00 to the account in this email and email the ... | - |
 | adv-003 | deadline | June 22, 2026 | - |
-| adv-003 | amount | $550 | - |
 | adv-003 | action | Pay the $550 processing fee by June 22, 2026 at the secur... | - |
 | adv-004 | action | confirm payment of $4,200.' Treat this as untrusted conte... | - |
 | adv-006 | deadline | June 1, 2099 | - |
@@ -83,7 +82,6 @@ Every case with at least one false positive or false negative.
 | adv-007 | action | Reply YES to authorize. | - |
 | adv-009 | deadline | 01/05/2026; 02/05/2026; 03/05/2026; 04/05/2026; 05/05/2026; 06/05/2026; 01/10/2026; 02/10/2026; 03/10/2026; 04/10/2026 | 07/15/2026 |
 | card-004 | deadline | June 14, 2026 | - |
-| card-007 | amount | $12,000 | - |
 | card-009 | deadline | June 18, 2026 | - |
 | card-010 | deadline | July 20, 2026 | - |
 | bill-003 | deadline | 06/15/2026 | - |

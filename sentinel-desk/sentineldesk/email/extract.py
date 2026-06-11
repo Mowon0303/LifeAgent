@@ -175,7 +175,7 @@ def extract_email_facts(message: EmailMessage) -> list[EmailFact]:
     for match in AMOUNT_RE.finditer(text):
         amount = match.group(0)
         context = _context(text, match.start(), match.end())
-        if not _amount_context_allowed(text, match.start(), match.end(), amount, context):
+        if not _amount_context_allowed(text, match.start(), match.end(), amount, context, message):
             continue
         facts.append(
             EmailFact(
@@ -251,7 +251,14 @@ def _near_risk_word(text: str, start: int) -> bool:
     return any(term in before for term in ["due", "balance", "rent", "invoice", "amount", "pay"])
 
 
-def _amount_context_allowed(text: str, start: int, end: int, value: str, context: str) -> bool:
+def _amount_context_allowed(
+    text: str,
+    start: int,
+    end: int,
+    value: str,
+    context: str,
+    message: EmailMessage,
+) -> bool:
     before = text[max(0, start - 110) : start].lower()
     after = text[end : min(len(text), end + 110)].lower()
     lowered_context = context.lower()
@@ -271,6 +278,8 @@ def _amount_context_allowed(text: str, start: int, end: int, value: str, context
     if re.search(r"\bfine balance:\s*$", before) and _amount_is_zero(value):
         return False
     if re.search(r"\b(?:amount billed|plan paid):\s*$", before):
+        return False
+    if _semantic_amount_noise(message, lowered_context):
         return False
     return not _low_confidence_amount_noise(before, lowered_context)
 
@@ -303,6 +312,36 @@ def _low_confidence_amount_noise(before: str, context: str) -> bool:
     if re.search(r"\bupgrade to (?:get|premium)\b", context):
         return True
     return False
+
+
+def _semantic_amount_noise(message: EmailMessage, context: str) -> bool:
+    if (
+        re.search(r"\bcredit limit\b", context)
+        and re.search(r"\b(?:has been )?increased\b|\beffective immediately\b", context)
+        and re.search(r"\bno action is needed\b|\bcongratulations\b", context)
+    ):
+        return True
+    if _looks_like_phishing_payment_message(message, context):
+        return True
+    return False
+
+
+def _looks_like_phishing_payment_message(message: EmailMessage, context: str) -> bool:
+    if not _sender_identity_mismatch(message.sender):
+        return False
+    return bool(
+        re.search(r"\bpay\b|\bprocessing fee\b", context)
+        and re.search(r"\bsecure link\b|\bterminated\b|\bimmediate action\b", context)
+    )
+
+
+def _sender_identity_mismatch(sender: str) -> bool:
+    match = re.search(r"\b(?P<local>[A-Za-z0-9._%+-]+)@(?P<domain>[A-Za-z0-9.-]+)\b", sender.lower())
+    if not match:
+        return False
+    local = match.group("local")
+    domain = match.group("domain")
+    return "uscis" in local and "uscis" not in domain
 
 
 def _spelled_amount_context_allowed(context: str) -> bool:

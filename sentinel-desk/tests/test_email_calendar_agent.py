@@ -301,6 +301,73 @@ class EmailCalendarAgentTests(unittest.TestCase):
                 amounts = {fact.value for fact in extract_email_facts(message) if fact.kind == "amount"}
                 self.assertTrue(expected.issubset(amounts))
 
+    def test_extract_email_facts_filters_semantic_amount_noise(self) -> None:
+        messages = [
+            EmailMessage(
+                "m-credit-limit",
+                "t-credit-limit",
+                "service@summitcard.example",
+                "Your credit limit has increased",
+                "2026-06-24",
+                "Congratulations! Your credit limit has been increased to $12,000 effective immediately. "
+                "No action is needed. Sign in to view your updated account terms.",
+            ),
+            EmailMessage(
+                "m-lookalike-phishing",
+                "t-lookalike-phishing",
+                "uscis-notices@uscls-gov.example",
+                "Immediate action on your case",
+                "2026-06-24",
+                "Your case requires immediate action. Pay the $550 processing fee by June 22, 2026 at "
+                "the secure link or your application will be terminated.",
+            ),
+        ]
+        for message in messages:
+            with self.subTest(message=message.message_id):
+                amounts = [fact.value for fact in extract_email_facts(message) if fact.kind == "amount"]
+                self.assertEqual(amounts, [])
+
+    def test_extract_email_facts_keeps_real_fee_and_deposit_amounts_after_semantic_filters(self) -> None:
+        messages_and_amounts = [
+            (
+                EmailMessage(
+                    "m-grad-fee",
+                    "t-grad-fee",
+                    "registrar@lakeview-university.example",
+                    "Apply to graduate",
+                    "2026-06-24",
+                    "Apply to graduate by October 1, 2026. Late applications incur a $25 processing fee.",
+                ),
+                "$25",
+            ),
+            (
+                EmailMessage(
+                    "m-housing-deposit",
+                    "t-housing-deposit",
+                    "housing@lakeview-university.example",
+                    "Secure your housing assignment",
+                    "2026-06-24",
+                    "To secure your housing assignment, submit the $300 housing deposit by 6/30/2026.",
+                ),
+                "$300",
+            ),
+            (
+                EmailMessage(
+                    "m-card-payment",
+                    "t-card-payment",
+                    "service@summitcard.example",
+                    "Payment due",
+                    "2026-06-24",
+                    "Your minimum payment of $120 is due by July 15, 2026.",
+                ),
+                "$120",
+            ),
+        ]
+        for message, expected_amount in messages_and_amounts:
+            with self.subTest(message=message.message_id):
+                amounts = {fact.value for fact in extract_email_facts(message) if fact.kind == "amount"}
+                self.assertIn(expected_amount, amounts)
+
     def test_extract_email_facts_finds_expanded_action_verbs(self) -> None:
         message = EmailMessage(
             "m-expanded-actions",
