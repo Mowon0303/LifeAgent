@@ -114,6 +114,11 @@ All notable project updates for LifeAgent are tracked here.
 - Added structured redaction tests for email headers, attachment names, calendar invitees, secret fields, and connector metadata in redacted share packages.
 - Added dashboard controls for applying scenarios, running one target, toggling redacted evidence, and opening reports.
 
+### Fixed
+
+- Fixed the assistant panel showing stale confirmed/pending counts after confirm/ignore actions (user-reported and user-fixed): the summary embed now carries `id="aiSummary"`, and `refresh()` recomputes both the embed and the channel-topic counter through `updateSummary()`, so the numbers update immediately without a page reload. Browser-verified (confirm flipped the summary from 1 confirmed / 3 pending to 2 / 2 in place) and locked by a page-wiring regression test.
+- Fixed the root README still claiming 217 expected tests (user-reported); the count now matches the suite at 233.
+
 ### Changed
 
 - Default `[model]` config now ships `provider = "local"` (deterministic rule path); enabling the local Ollama refinement path is an explicit opt-in via `config.toml`, keeping fresh homes and test environments from issuing model calls.

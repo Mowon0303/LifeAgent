@@ -491,7 +491,7 @@
     var pending = upcoming.filter(function (i) { return i.pending; }).length + state.undated.filter(function (i) { return i.pending; }).length;
     var confirmed = upcoming.filter(function (i) { return !i.pending; }).length;
     var uncertain = upcoming.filter(function (i) { return i.uncertain; }).length;
-    return '<div class="dD-embed"><h4>日程一览 · 接下来</h4>' +
+    return '<div class="dD-embed" id="aiSummary"><h4>日程一览 · 接下来</h4>' +
       '<div class="dD-sumrow"><div class="n">' + confirmed + '</div><div><div class="lab">已确认日程</div><div class="sub">实线显示，已导出本地 ICS</div></div></div>' +
       '<div class="dD-sumrow"><div class="n' + (pending ? ' u' : '') + '">' + pending + '</div><div><div class="lab">待你确认</div><div class="sub">虚线显示，确认前不写日历</div></div></div>' +
       '<div class="dD-sumrow"><div class="n' + (uncertain ? ' u' : '') + '">' + uncertain + '</div><div><div class="lab">低置信抽取</div><div class="sub">标 ? 的事项建议核对原始邮件</div></div></div></div>';
@@ -514,6 +514,13 @@
     botMessage(suggestionCard(state.queue[0]), { ghost: true });
   }
 
+  function updateSummary() {
+    var embed = document.getElementById('aiSummary');
+    if (embed) embed.outerHTML = summaryEmbed();
+    document.getElementById('aiTopic').textContent =
+      '本地证据 · ' + (state.events.length + state.undated.length) + ' 条事项 · ' + state.queue.length + ' 条待确认';
+  }
+
   function welcome() {
     var today = new Date();
     appendDivider('今天 · ' + (today.getMonth() + 1) + '月' + today.getDate() + '日');
@@ -523,8 +530,6 @@
       '<div class="dD-body">早上好。本地证据中目前有 <b>' + total + '</b> 条带日期的事项，其中 <b>' + pending +
       '</b> 条等你确认——日历里虚线显示的就是。外部写入永远先问你。</div>' + summaryEmbed());
     offerNextSuggestion();
-    document.getElementById('aiTopic').textContent =
-      '本地证据 · ' + total + ' 条事项 · ' + pending + ' 条待确认';
   }
 
   function handleConfirm(eventId, buttons) {
@@ -624,7 +629,10 @@
   });
 
   function refresh() {
-    return loadData().then(renderCalendar);
+    return loadData().then(function () {
+      renderCalendar();
+      updateSummary();
+    });
   }
 
   // ---------- boot ----------

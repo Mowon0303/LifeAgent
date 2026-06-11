@@ -341,6 +341,14 @@ class CalendarPageTests(UiContractBase):
         ):
             self.assertIn(marker, html)
 
+    def test_calendar_page_refreshes_summary_after_actions(self) -> None:
+        _, _, body = self.request("GET", "/")
+        html = body.decode("utf-8")
+        self.assertIn('id="aiSummary"', html)
+        self.assertIn("function updateSummary()", html)
+        refresh_body = html.split("function refresh()", 1)[1].split("// ---------- boot ----------", 1)[0]
+        self.assertIn("updateSummary()", refresh_body, "refresh() must recompute the assistant summary and topic")
+
     def test_calendar_page_has_no_external_script_dependencies(self) -> None:
         _, _, body = self.request("GET", "/calendar")
         html = body.decode("utf-8")
