@@ -78,6 +78,32 @@ def ingest_messages(paths: Paths, messages: list[EmailMessage], *, ingested_at: 
     }
 
 
+def stored_email_messages(paths: Paths, *, limit: int = 200) -> list[EmailMessage]:
+    """Rebuild EmailMessage objects from locally persisted email evidence.
+
+    Lets the assistant answer questions over already-synced mail without a
+    fresh export file; trust labels stay at the stored-evidence level.
+    """
+    db.init_db(paths)
+    messages: list[EmailMessage] = []
+    for row in db.list_email_messages(paths, limit=limit):
+        messages.append(
+            EmailMessage(
+                message_id=str(row.get("message_id") or ""),
+                thread_id=str(row.get("thread_id") or "default"),
+                sender=str(row.get("sender") or ""),
+                subject=str(row.get("subject") or ""),
+                received_at=str(row.get("received_at") or ""),
+                body_text=str(row.get("body_text") or ""),
+                attachment_texts=tuple(str(item) for item in row.get("attachment_texts") or ()),
+                attachment_names=tuple(str(item) for item in row.get("attachment_names") or ()),
+                source_type="stored_email",
+                trust_label="email_evidence",
+            )
+        )
+    return messages
+
+
 def sync_connector(
     paths: Paths,
     connector: Any,

@@ -252,6 +252,43 @@ class AskContractTests(UiContractBase):
         self.assertEqual(status, 400)
         self.assertIn("error", payload)
 
+    def test_ask_reads_stored_email_evidence(self) -> None:
+        status, answer = self.json_request(
+            "POST", "/api/ask", body=json.dumps({"question": "What is my latest deadline?"})
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(answer["citations"], "stored email evidence should reach the answer")
+        self.assertTrue(answer["uncertain"], "four stored deadlines conflict, so the answer must stay uncertain")
+        cited = {citation["source_id"] for citation in answer["citations"]}
+        self.assertTrue(any(source.startswith("stored_email:") for source in cited))
+
+    def test_ask_reaches_verified_answer_with_single_stored_deadline(self) -> None:
+        with tempfile.TemporaryDirectory() as single_home:
+            paths = get_paths(single_home)
+            ensure_dirs(paths)
+            ensure_config(paths)
+            db.init_db(paths)
+            ingest_messages(
+                paths,
+                [m for m in self.messages if m.message_id == "ui-sample-rent-001"],
+                ingested_at="2026-06-25T10:00:00+00:00",
+            )
+            raw = (
+                "POST /api/ask HTTP/1.1\r\nHost: ui-contract\r\n"
+            )
+            body = json.dumps({"question": "What is my latest deadline?"})
+            payload = body.encode("utf-8")
+            raw = raw + f"Content-Length: {len(payload)}\r\n\r\n"
+            socket = FakeSocket(raw.encode("ascii") + payload)
+            handler_class = type("SingleHomeHandler", (Handler,), {"paths": paths})
+            handler_class(socket, ("127.0.0.1", 0), object())
+            status, _, response = parse_response(socket.response.getvalue())
+            answer = json.loads(response.decode("utf-8"))
+        self.assertEqual(status, 200)
+        self.assertFalse(answer["uncertain"])
+        self.assertIn("07/01/2026", answer["answer"])
+        self.assertTrue(answer["citations"])
+
     def test_citation_payload_shape_with_email_evidence(self) -> None:
         answer = answer_with_workflow(
             "What is my latest deadline?",

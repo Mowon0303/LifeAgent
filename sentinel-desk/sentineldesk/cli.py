@@ -16,7 +16,7 @@ from .calendar.models import CalendarDraft, DeadlineEvent
 from .calendar.source import events_from_calendar_rows
 from .email.models import EmailMessage
 from .email.connectors import EmailSyncRequest, GmailApiEmailConnector, LocalJsonEmailConnector
-from .email.ingest import ingest_messages, load_email_json, sync_connector
+from .email.ingest import ingest_messages, load_email_json, stored_email_messages, sync_connector
 from .evals.email_extract import evaluate_golden_path, render_markdown_report, render_text_summary
 from .integrations.apple_calendar import AppleCalendarClientFactory, AppleCalendarConfig
 from .integrations.google_oauth import normalize_google_scopes, write_google_oauth_token
@@ -242,7 +242,7 @@ def cmd_plan_status(args: argparse.Namespace) -> int:
 
 def cmd_ask(args: argparse.Namespace) -> int:
     paths = paths_from_args(args)
-    messages = load_email_messages(args.email_json) if args.email_json else []
+    messages = load_email_messages(args.email_json) if args.email_json else stored_email_messages(paths)
     answer = answer_with_workflow(args.question, provider=load_model_provider(paths), messages=messages, registry=default_tool_registry(paths), paths=paths)
     print_json(
         {

@@ -54,6 +54,7 @@ python3 -m sentineldesk --home .demo serve --port 8787
 - [sentinel-desk/docs/UI_CONTRACT.md](sentinel-desk/docs/UI_CONTRACT.md) — backend ↔ calendar UI handoff contract
 - [sentinel-desk/docs/EVAL_REPORT.md](sentinel-desk/docs/EVAL_REPORT.md) — extraction golden-set eval baseline
 - [sentinel-desk/docs/SECURITY_MODEL.md](sentinel-desk/docs/SECURITY_MODEL.md) — trust boundaries and required controls
+- [sentinel-desk/docs/PIVOT_POSTMORTEM.md](sentinel-desk/docs/PIVOT_POSTMORTEM.md) — blameless postmortem of the two product pivots
 - `design_handoff_calendar_ai/` — user-provided visual design package (direction B′) that `/calendar` implements
 
 ## Privacy Boundary

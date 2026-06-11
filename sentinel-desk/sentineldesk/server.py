@@ -16,6 +16,7 @@ from .calendar.models import CalendarDraft
 from .calendar.source import events_from_calendar_rows
 from .calendar.view import build_calendar_items
 from .config import Paths, project_root
+from .email.ingest import stored_email_messages
 from .extract import utc_now
 from .monitor import run_all
 from .reports import package_path_for, redact_data, write_evidence_package
@@ -214,7 +215,7 @@ class Handler(BaseHTTPRequestHandler):
                 answer = answer_with_workflow(
                     question,
                     provider=load_model_provider(self.paths),
-                    messages=[],
+                    messages=stored_email_messages(self.paths),
                     registry=default_tool_registry(self.paths),
                     paths=self.paths,
                 )

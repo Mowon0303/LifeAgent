@@ -92,7 +92,7 @@ Exposes the assistant layer to the chat panel. Same shape as the CLI `ask` comma
 | `citations` | object[] | `{source_id, source_type, evidence, captured_at}` — render as evidence chips |
 | `metadata` | object | includes `workflow_engine`, `workflow_trace`, `planned_tools` |
 
-Missing/empty `question` → HTTP 400 `{error}`. The dashboard path runs without mailbox context (`messages: []`), so latest-deadline/amount questions answer `uncertain` by design unless portal fallback or local evidence applies; policy questions use the local RAG index.
+Missing/empty `question` → HTTP 400 `{error}`. The dashboard path loads locally stored email evidence (most recent 200 persisted messages, cited as `stored_email:<id>`), so latest-deadline/amount questions can reach verified answers once mail has been synced or scanned; conflicting stored deadlines still answer `uncertain` with the safer earlier candidate, and policy questions use the local RAG index.
 
 When a local model provider is configured (`[model] provider = "ollama"` in `config.toml`), verified answers may be rephrased by the model before returning. The facts stay deterministic: uncertain answers and confirmation boundaries are never sent to the model, every date/amount in the deterministic answer must survive the rewrite (otherwise the deterministic text is returned unchanged), and `metadata` gains two optional keys the UI may surface but must not require:
 

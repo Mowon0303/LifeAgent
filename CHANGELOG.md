@@ -6,6 +6,10 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Added
 
+- Added `docs/PIVOT_POSTMORTEM.md`, a blameless postmortem of the two 36-hour product pivots (JobOps Guard → SentinelDesk → email-first LifeAgent): per-pivot what-broke/why/detection, the shared capability-first root cause, what survived, a prevention table mapping each new project mechanism to the failure it blocks, cost accounting, and portable lessons. Linked from the root README.
+- Added `stored_email_messages` so the assistant can rebuild EmailMessage evidence from persisted local mail; CLI `ask` (without `--email-json`) and dashboard `/api/ask` now answer over the most recent 200 stored messages, cited as `stored_email:<id>`.
+- Added contract tests proving the stored-evidence path: four conflicting stored deadlines answer `uncertain` with the safer earlier candidate and `stored_email:` citations, and a single stored deadline reaches a confident verified answer through the dashboard endpoint.
+
 - Added `sentineldesk/agent/llm.py`: a stdlib `OllamaChatClient` plus a guard-railed `refine_answer` stage so a user-approved local model can rephrase verified assistant answers. Hard boundaries: uncertain answers and confirmation boundaries are never sent to the model; every date/amount anchor in the deterministic answer must survive the rewrite; model-introduced dates/amounts are rejected; errors/timeouts/overlong rewrites fall back silently to the deterministic text; the original text is preserved in `metadata.deterministic_answer`.
 - Added a `refine` workflow stage to `answer_with_workflow` with `metadata.model_call` exposure and `workflow_trace` coverage; CLI `ask` and dashboard `/api/ask` pass `paths` so every model call is attributed.
 - Added the `model_calls` table for per-call cost/latency attribution (provider, model, stage, intent, status, prompt/completion tokens, duration; question and answer text are never persisted), with `sentineldesk model calls` and `GET /api/model/calls` returning totals, per-status counts, and per-model aggregates.
@@ -167,6 +171,8 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Verified
 
+- `cd sentinel-desk && python3 -B -m unittest discover -s tests` passed with 232 tests after wiring stored email evidence into `ask`.
+- Browser verification on `/`: asking "What is my latest deadline?" over four stored sample emails rendered the fail-loud conflict answer (uncertain styling, safer earlier candidate) with four `stored_email:` citation chips — the first dashboard answers grounded in persisted local evidence.
 - `cd sentinel-desk && python3 -B -m unittest discover -s tests` passed with 230 tests after adding the model-in-the-loop guardrail suite.
 - Real user-approved local Ollama dry-run (`qwen2.5:7b`, server 0.15.2): an English latest-deadline question returned a natural rewrite that preserved the `07/01/2026` anchor (199 prompt + 22 completion tokens, 22.8s cold start); a Chinese question returned a Chinese rewrite preserving the same anchor (201+35 tokens, 4.2s warm); a four-way conflicting-deadline question stayed `uncertain` and skipped the model with 0 tokens; `sentineldesk model calls` reported the attribution summary (3 calls, 457 total tokens, refine success rate 0.67, per-status and per-model breakdowns).
 - `cd sentinel-desk && python3 -B -m unittest discover -s tests` passed with 219 tests after the root-route swap, including new assertions that `/` serves the calendar page, `/ops` serves the legacy dashboard, and the assistant header links to `/ops`.
