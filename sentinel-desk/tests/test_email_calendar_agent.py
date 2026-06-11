@@ -57,6 +57,33 @@ class EmailCalendarAgentTests(unittest.TestCase):
         self.assertTrue(any(fact.kind == "amount" and fact.value == "$0.00" for fact in facts))
         self.assertTrue(any(fact.kind == "action" and "submit" in fact.value.lower() for fact in facts))
 
+    def test_extract_email_facts_finds_non_dollar_amounts(self) -> None:
+        message = EmailMessage(
+            "m-currency",
+            "t-currency",
+            "billing@example.com",
+            "International invoice",
+            "2026-06-23",
+            "Invoice total USD 2,450.00 is payable within 30 days. Hosting renewal is €89.00.",
+        )
+        amounts = {fact.value for fact in extract_email_facts(message) if fact.kind == "amount"}
+        self.assertIn("USD 2,450.00", amounts)
+        self.assertIn("€89.00", amounts)
+
+    def test_extract_email_facts_handles_single_decimal_and_invisible_separators(self) -> None:
+        message = EmailMessage(
+            "m-obfuscated-amount",
+            "t-obfuscated-amount",
+            "billing@example.com",
+            "Final charges",
+            "2026-06-24",
+            "Final water bill is $47.5. Security deposit due is $1\u200b,250.",
+        )
+        amounts = {fact.value for fact in extract_email_facts(message) if fact.kind == "amount"}
+        self.assertIn("$47.5", amounts)
+        self.assertIn("$1,250", amounts)
+        self.assertNotIn("$47", amounts)
+
     def test_find_messages_scores_matching_terms(self) -> None:
         messages = [
             EmailMessage("m1", "t1", "bank@example.com", "Statement", "2026-06-09", "No deadline."),

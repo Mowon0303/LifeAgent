@@ -7,6 +7,7 @@ All notable project updates for LifeAgent are tracked here.
 ### Added
 
 - Added conservative relative-deadline extraction to `extract_deadlines`: `within N days`, `at least N business days before the ... date`, user-action `N-day grace period` windows, `next Friday`-style weekdays, and `by the end of the month`; added targeted tests proving positive extraction and skipping no-action refund/deposit processing windows.
+- Added non-dollar and malformed amount extraction: common currency symbols (`€`, `£`, `¥`, `￥`), ISO-style prefixes (`USD`, `EUR`, `GBP`, `CNY`, `RMB`), single-decimal amounts such as `$47.5`, and zero-width separator cleanup for obfuscated numeric strings such as `$1\u200b,250`.
 - Added `docs/PIVOT_POSTMORTEM.md`, a blameless postmortem of the two 36-hour product pivots (JobOps Guard → SentinelDesk → email-first LifeAgent): per-pivot what-broke/why/detection, the shared capability-first root cause, what survived, a prevention table mapping each new project mechanism to the failure it blocks, cost accounting, and portable lessons. Linked from the root README.
 - Added `stored_email_messages` so the assistant can rebuild EmailMessage evidence from persisted local mail; CLI `ask` (without `--email-json`) and dashboard `/api/ask` now answer over the most recent 200 stored messages, cited as `stored_email:<id>`.
 - Added contract tests proving the stored-evidence path: four conflicting stored deadlines answer `uncertain` with the safer earlier candidate and `stored_email:` citations, and a single stored deadline reaches a confident verified answer through the dashboard endpoint.
@@ -118,11 +119,12 @@ All notable project updates for LifeAgent are tracked here.
 ### Fixed
 
 - Fixed the assistant panel showing stale confirmed/pending counts after confirm/ignore actions (user-reported and user-fixed): the summary embed now carries `id="aiSummary"`, and `refresh()` recomputes both the embed and the channel-topic counter through `updateSummary()`, so the numbers update immediately without a page reload. Browser-verified (confirm flipped the summary from 1 confirmed / 3 pending to 2 / 2 in place) and locked by a page-wiring regression test.
-- Fixed the root README still claiming 217 expected tests (user-reported); the count now matches the suite at 235.
+- Fixed the root README still claiming 217 expected tests (user-reported); the count now matches the suite at 237.
 
 ### Changed
 
 - Raised the email-extraction eval gates after the relative-deadline improvement: raw deadline floors are now P>=0.74/R>=0.92 and high-confidence deadline floors are now P>=0.83/R>=0.51.
+- Raised the email-extraction eval gates after the non-dollar amount improvement: raw amount floors are now P>=0.77/R>=0.97 and high-confidence amount floors are now P>=0.79/R>=0.52.
 - Default `[model]` config now ships `provider = "local"` (deterministic rule path); enabling the local Ollama refinement path is an explicit opt-in via `config.toml`, keeping fresh homes and test environments from issuing model calls.
 - Promoted the calendar assistant page to the main dashboard entry after user acceptance: `/` now serves `calendar.html` (with `/calendar` kept as an alias), the legacy monitor ops dashboard moved to `/ops`, the assistant panel header gained an ops-dashboard link, `demo record-prep` prints the `/ops` dashboard URL, and the recording docs point at `/ops`.
 - Reframed the next product direction from portal-first monitoring to email-first LifeAgent: email and attachments are primary sources, portal/CDP capture becomes a verification tool, and calendar becomes the action layer.
@@ -178,6 +180,10 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Verified
 
+- `cd sentinel-desk && python3 -B -m unittest discover -s tests -q` passed with 237 tests after adding non-dollar amount extraction and raised eval gates.
+- `cd sentinel-desk && python3 -B -m sentineldesk eval email-extract --golden evals/golden --report-md docs/EVAL_REPORT.md` measured the non-dollar amount improvement: raw amount P=0.781/R=0.987/F1=0.872 (tp=75/fp=21/fn=1) and high-confidence amount P=0.804/R=0.539/F1=0.646.
+- `cd sentinel-desk && python3 -m compileall -q sentineldesk tests` passed after the non-dollar amount extractor update.
+- `cd sentinel-desk && python3 -B -m sentineldesk --home /private/tmp/lifeagent-currency-release-home privacy release-package --source . --output /private/tmp/lifeagent-currency-amounts-20260611.release.zip` wrote a 118-file source release ZIP excluding 10 local runtime artifacts, and `privacy release-audit --require-clean` passed on the extracted package with 0 issues.
 - `cd sentinel-desk && python3 -B -m unittest discover -s tests -q` passed with 235 tests after adding relative-deadline extraction and raised eval gates.
 - `cd sentinel-desk && python3 -B -m sentineldesk eval email-extract --golden evals/golden --report-md docs/EVAL_REPORT.md` measured the relative-deadline improvement: raw deadline P=0.757/R=0.943/F1=0.839 (tp=115/fp=37/fn=7) and high-confidence deadline P=0.844/R=0.533/F1=0.653 without increasing deadline false positives.
 - `cd sentinel-desk && python3 -m compileall -q sentineldesk tests` passed after the relative-deadline extractor update.

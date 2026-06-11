@@ -8,7 +8,13 @@ from sentineldesk.extract import extract_deadlines, normalize_text
 from .models import EmailFact, EmailMessage
 
 
-AMOUNT_RE = re.compile(r"(?<!\w)\$[0-9][0-9,]*(?:\.[0-9]{2})?\b")
+AMOUNT_RE = re.compile(
+    r"(?<!\w)(?:"
+    r"[$€£¥￥]\s*[0-9][0-9,]*(?:\.[0-9]{1,2})?|"
+    r"(?:USD|EUR|GBP|CNY|RMB)\s+[0-9][0-9,]*(?:\.[0-9]{1,2})?"
+    r")\b",
+    re.IGNORECASE,
+)
 ACTION_RE = re.compile(
     r"\b(?:submit|send|pay|upload|sign|renew|schedule|confirm|respond|complete|"
     r"provide|review|call|email)\b.{0,90}",
@@ -37,7 +43,7 @@ def find_messages(messages: Iterable[EmailMessage], query: str, *, limit: int = 
 
 
 def extract_email_facts(message: EmailMessage) -> list[EmailFact]:
-    text = normalize_text(message.searchable_text)
+    text = normalize_text(_remove_invisible_number_separators(message.searchable_text))
     facts: list[EmailFact] = []
     for deadline in extract_deadlines(text):
         facts.append(
@@ -97,6 +103,10 @@ def _metadata(message: EmailMessage) -> dict[str, str]:
 
 def _context(text: str, start: int, end: int, window: int = 90) -> str:
     return text[max(0, start - window) : min(len(text), end + window)]
+
+
+def _remove_invisible_number_separators(text: str) -> str:
+    return re.sub(r"[\u200b\u200c\u200d\ufeff]", "", text)
 
 
 def _near_risk_word(text: str, start: int) -> bool:

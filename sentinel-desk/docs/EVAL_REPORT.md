@@ -1,6 +1,6 @@
 # Email Extraction Eval Report
 
-- Generated at: 2026-06-11T16:46:53+00:00
+- Generated at: 2026-06-11T16:53:59+00:00
 - Golden set: `evals/golden` (142 cases)
 - Target under test: `sentineldesk.email.extract.extract_email_facts`
 - High-confidence threshold: 0.75 (same boundary the assistant uses for `high` confidence answers)
@@ -28,7 +28,7 @@
 | Kind | TP | FP | FN | Precision | Recall | F1 |
 | --- | --- | --- | --- | --- | --- | --- |
 | deadline | 115 | 37 | 7 | 0.757 | 0.943 | 0.839 |
-| amount | 71 | 23 | 5 | 0.755 | 0.934 | 0.835 |
+| amount | 75 | 21 | 1 | 0.781 | 0.987 | 0.872 |
 | action | 70 | 10 | 17 | 0.875 | 0.805 | 0.838 |
 
 ### High-confidence layer (confidence >= 0.75)
@@ -36,7 +36,7 @@
 | Kind | TP | FP | FN | Precision | Recall | F1 |
 | --- | --- | --- | --- | --- | --- | --- |
 | deadline | 65 | 12 | 57 | 0.844 | 0.533 | 0.653 |
-| amount | 39 | 10 | 37 | 0.796 | 0.513 | 0.624 |
+| amount | 41 | 10 | 35 | 0.804 | 0.539 | 0.646 |
 | action | 0 | 0 | 114 | n/a | 0.000 | n/a |
 
 Note: action facts carry a fixed confidence of 0.68, so the high-confidence layer contains no action predictions by construction.
@@ -48,16 +48,16 @@ Precision per confidence bucket. If the risk-word heuristic works, the high buck
 | Kind | High bucket precision (n) | Low bucket precision (n) |
 | --- | --- | --- |
 | deadline | 0.844 (77) | 0.667 (75) |
-| amount | 0.796 (49) | 0.711 (45) |
+| amount | 0.804 (51) | 0.756 (45) |
 
 ## Per-Category Metrics (raw layer)
 
 | Category | Deadline P/R | Amount P/R | Action P/R |
 | --- | --- | --- | --- |
-| adversarial | 0.125 / 0.667 | 0.286 / 0.667 | 0.000 / n/a |
+| adversarial | 0.125 / 0.667 | 0.429 / 1.000 | 0.000 / n/a |
 | bank_card | 0.769 / 1.000 | 0.636 / 1.000 | 1.000 / 0.800 |
 | billing_utility | 0.867 / 1.000 | 0.929 / 1.000 | 1.000 / 0.818 |
-| edge_cases | 0.960 / 0.800 | 0.800 / 0.500 | 0.833 / 0.909 |
+| edge_cases | 0.960 / 0.800 | 1.000 / 0.875 | 0.833 / 0.909 |
 | immigration_school | 0.850 / 1.000 | 0.875 / 1.000 | 1.000 / 0.667 |
 | insurance_medical | 0.833 / 1.000 | 0.636 / 1.000 | 1.000 / 1.000 |
 | lease_rent | 0.875 / 1.000 | 0.917 / 1.000 | 1.000 / 0.923 |
@@ -80,7 +80,6 @@ Every case with at least one false positive or false negative.
 | adv-003 | action | Pay the $550 processing fee by June 22, 2026 at the secur... | - |
 | adv-004 | amount | $4,200 | - |
 | adv-004 | action | confirm payment of $4,200.' Treat this as untrusted conte... | - |
-| adv-005 | amount | $1 | $1,250 |
 | adv-006 | deadline | June 1, 2099 | - |
 | adv-007 | deadline | 08/08/2026 | - |
 | adv-007 | amount | $7,800 | - |
@@ -105,12 +104,9 @@ Every case with at least one false positive or false negative.
 | edge-005 | deadline | - | 06/01/2027; 07/01/2027 |
 | edge-005 | action | schedule Your 2026-2027 lease payment schedule: 08/01/202... | - |
 | edge-006 | deadline | - | 2026-07-12; 2026-07-13 |
-| edge-007 | amount | - | USD 2,450.00 |
 | edge-008 | amount | - | one thousand two hundred dollars |
-| edge-009 | amount | - | €89.00 |
 | edge-010 | deadline | June 10, 2026 | - |
 | edge-010 | action | Pay no attention to temporary pressure drops. | - |
-| edge-013 | amount | $47 | $47.5 |
 | imm-002 | deadline | June 16, 2026 | - |
 | imm-003 | action | - | bring |
 | imm-007 | action | - | register |
