@@ -56,7 +56,9 @@ def _annotate_answer(
     answer.metadata["model_provider"] = provider.provider
     answer.metadata["model"] = provider.model
     answer.metadata["workflow_trace"] = list(state.get("workflow_trace") or [])
-    answer.metadata["planned_tools"] = list(state.get("planned_tools") or answer.tool_calls)
+    initial_plan = list(state.get("planned_tools") or [])
+    answer.metadata["planned_tools_initial"] = initial_plan
+    answer.metadata["planned_tools"] = _merge_tools(initial_plan, list(answer.tool_calls))
     return answer
 
 
@@ -113,6 +115,14 @@ def _append_trace(state: dict[str, Any], stage: str, metadata: dict[str, Any]) -
     trace = list(state.get("workflow_trace") or [])
     trace.append({"stage": stage, **metadata})
     state["workflow_trace"] = trace
+
+
+def _merge_tools(planned: list[str], actual: list[str]) -> list[str]:
+    merged = list(planned)
+    for tool in actual:
+        if tool not in merged:
+            merged.append(tool)
+    return merged
 
 
 def _planned_tools_for_intent(intent: str) -> list[str]:

@@ -201,8 +201,43 @@ class EmailCalendarAgentTests(unittest.TestCase):
             self.assertEqual(answer.tool_calls, ("search_latest_email", "capture_latest_portal"))
             self.assertIn("July 15, 2026", answer.answer)
             self.assertEqual(answer.citations[0].source_type, "portal_run")
+            self.assertEqual(answer.citations[1].source_id, "email:m-portal-only")
+            self.assertTrue(Path(answer.citations[0].evidence).exists())
             self.assertEqual(answer.metadata["fallback"], "email_to_portal_deadline")
+            self.assertEqual(answer.metadata["fallback_reason"], "email_requested_portal_login")
+            self.assertEqual(answer.metadata["fallback_email_source_ids"], ["email:m-portal-only"])
+            self.assertEqual(answer.metadata["portal_status"], "action_required")
+            self.assertEqual(answer.metadata["portal_health_state"], "ok")
+            self.assertEqual(answer.metadata["portal_deadline_count"], 1)
             self.assertEqual(len(db.list_runs(paths)), 1)
+
+    def test_deadline_fallback_stays_uncertain_when_portal_cannot_verify(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            db.init_db(paths)
+            apply_scenario(paths, "opt_session_expired")
+            registry = default_tool_registry(paths)
+            message = EmailMessage(
+                "m-session",
+                "t-session",
+                "school@example.com",
+                "Portal deadline notice",
+                "2026-06-11T09:00:00Z",
+                "Please sign in to the portal to view the current deadline.",
+            )
+
+            answer = answer_question("What is my deadline?", messages=[message], registry=registry)
+
+            self.assertTrue(answer.uncertain)
+            self.assertEqual(answer.confidence, "uncertain")
+            self.assertEqual(answer.tool_calls, ("search_latest_email", "capture_latest_portal"))
+            self.assertIn("did not expose a deadline", answer.answer)
+            self.assertEqual(answer.citations[0].source_type, "portal_run")
+            self.assertEqual(answer.citations[1].source_id, "email:m-session")
+            self.assertEqual(answer.metadata["fallback"], "email_to_portal_deadline")
+            self.assertEqual(answer.metadata["portal_alert_level"], "uncertain")
+            self.assertEqual(answer.metadata["portal_health_state"], "uncertain")
+            self.assertEqual(answer.metadata["portal_deadline_count"], 0)
 
     def test_page_change_question_runs_bound_portal_capture_tool(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -325,6 +360,43 @@ class EmailCalendarAgentTests(unittest.TestCase):
             self.assertEqual(payload["tool_calls"], ["capture_latest_portal"])
             self.assertIn("alert=baseline", payload["answer"])
             self.assertTrue(payload["citations"])
+            self.assertEqual(len(db.list_runs(paths)), 1)
+
+    def test_cli_ask_uses_email_to_portal_deadline_fallback_with_citations(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            db.init_db(paths)
+            apply_scenario(paths, "lease_notice_required")
+            path = Path(tmp) / "portal-email.json"
+            path.write_text(
+                json.dumps(
+                    [
+                        {
+                            "message_id": "m-cli-portal",
+                            "thread_id": "t-cli-portal",
+                            "sender": "leasing@example.com",
+                            "subject": "Portal notice update",
+                            "received_at": "2026-06-11T09:00:00Z",
+                            "body": "Please log in to the resident portal to view your latest move-out deadline.",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = main(["--home", tmp, "ask", "What is my move-out deadline?", "--email-json", str(path)])
+
+            self.assertEqual(code, 0)
+            payload = json.loads(output.getvalue())
+            self.assertEqual(payload["tool_calls"], ["search_latest_email", "capture_latest_portal"])
+            self.assertFalse(payload["uncertain"])
+            self.assertIn("July 15, 2026", payload["answer"])
+            self.assertEqual(payload["metadata"]["fallback"], "email_to_portal_deadline")
+            self.assertEqual(payload["metadata"]["fallback_email_source_ids"], ["email:m-cli-portal"])
+            self.assertEqual(payload["citations"][0]["source_type"], "portal_run")
+            self.assertEqual(payload["citations"][1]["source_id"], "email:m-cli-portal")
             self.assertEqual(len(db.list_runs(paths)), 1)
 
     def test_cli_ask_explains_latest_alert_from_local_run(self) -> None:

@@ -28,7 +28,11 @@ def answer_question(
         matches = [fact for fact in facts if fact.kind == wanted]
         if not matches:
             if wanted == "deadline" and _should_verify_portal(messages or []):
-                portal_answer = _verify_deadline_from_portal(active_registry, tool_calls=tool_calls)
+                portal_answer = _verify_deadline_from_portal(
+                    active_registry,
+                    tool_calls=tool_calls,
+                    trigger_citations=_portal_trigger_citations(messages or []),
+                )
                 if portal_answer is not None:
                     return portal_answer
             return AgentAnswer(
@@ -162,6 +166,36 @@ def _should_verify_portal(messages: list[EmailMessage]) -> bool:
         if any(term in text for term in terms):
             return True
     return False
+
+
+def _portal_trigger_citations(messages: list[EmailMessage]) -> tuple[Citation, ...]:
+    citations: list[Citation] = []
+    for message in messages:
+        text = " ".join([message.subject, message.body_text, *message.attachment_texts]).lower()
+        if not _contains_portal_trigger(text):
+            continue
+        citations.append(
+            Citation(
+                source_id=message.source_id,
+                source_type=message.source_type,
+                evidence=_portal_trigger_evidence(message),
+                captured_at=message.received_at,
+            )
+        )
+    return tuple(citations)
+
+
+def _contains_portal_trigger(text: str) -> bool:
+    terms = ("log in", "login", "sign in", "portal", "view online", "view your account", "account center")
+    return any(term in text for term in terms)
+
+
+def _portal_trigger_evidence(message: EmailMessage, *, limit: int = 220) -> str:
+    text = " ".join([message.subject, message.body_text, *message.attachment_texts])
+    cleaned = " ".join(text.split())
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[: limit - 3].rstrip() + "..."
 
 
 def _answer_from_latest_evidence(active_registry: ToolRegistry, intent: Intent) -> AgentAnswer:
@@ -417,7 +451,12 @@ def _first_deadline_text(deadlines: list[object]) -> str:
     return str(first.get("date_text") or "").strip()
 
 
-def _verify_deadline_from_portal(active_registry: ToolRegistry, *, tool_calls: list[str]) -> AgentAnswer | None:
+def _verify_deadline_from_portal(
+    active_registry: ToolRegistry,
+    *,
+    tool_calls: list[str],
+    trigger_citations: tuple[Citation, ...] = (),
+) -> AgentAnswer | None:
     try:
         spec = active_registry.assert_can_call("capture_latest_portal")
     except (KeyError, PermissionError):
@@ -432,8 +471,10 @@ def _verify_deadline_from_portal(active_registry: ToolRegistry, *, tool_calls: l
             intent=Intent.LATEST_DEADLINE,
             answer=f"Email points to a portal, but I could not verify the portal deadline: {type(error).__name__}: {error}",
             confidence="uncertain",
+            citations=trigger_citations,
             tool_calls=tuple(portal_tool_calls),
             uncertain=True,
+            metadata=_portal_fallback_metadata(trigger_citations, fallback_error=f"{type(error).__name__}: {error}"),
         )
     runs = list(result.get("runs") or []) if isinstance(result, dict) else []
     if not runs:
@@ -441,40 +482,89 @@ def _verify_deadline_from_portal(active_registry: ToolRegistry, *, tool_calls: l
             intent=Intent.LATEST_DEADLINE,
             answer="Email points to a portal, but no configured portal target ran.",
             confidence="uncertain",
+            citations=trigger_citations,
             tool_calls=tuple(portal_tool_calls),
             uncertain=True,
+            metadata=_portal_fallback_metadata(trigger_citations, fallback_error="no_configured_portal_target"),
         )
     latest = runs[0]
     deadlines = list(latest.get("deadlines") or [])
+    portal_citation = _portal_run_citation(latest)
+    citations = (portal_citation, *trigger_citations)
+    metadata = _portal_fallback_metadata(trigger_citations, latest=latest, deadlines=deadlines)
     if not deadlines:
         return AgentAnswer(
             intent=Intent.LATEST_DEADLINE,
             answer=f"Email points to a portal, but portal capture {latest.get('run_id')} did not expose a deadline.",
             confidence="uncertain",
+            citations=citations,
             tool_calls=tuple(portal_tool_calls),
             uncertain=True,
-            metadata={"run_id": str(latest.get("run_id") or "")},
+            metadata=metadata,
         )
     deadline = deadlines[0]
-    alert = latest.get("alert", {})
-    evidence = latest.get("evidence", {})
+    alert = latest.get("alert", {}) if isinstance(latest.get("alert"), dict) else {}
+    health = latest.get("health", {}) if isinstance(latest.get("health"), dict) else {}
+    alert_level = str(alert.get("level") or "")
+    uncertain = alert_level == "uncertain" or str(health.get("state") or "") != "ok"
+    answer = (
+        f"Verified deadline from portal capture: {deadline.get('date_text')}"
+        if not uncertain
+        else f"Portal capture found deadline candidate {deadline.get('date_text')}, but verification is uncertain. Check the official portal before acting."
+    )
     return AgentAnswer(
         intent=Intent.LATEST_DEADLINE,
-        answer=f"Verified deadline from portal capture: {deadline.get('date_text')}",
-        confidence="uncertain" if str(alert.get("level") or "") == "uncertain" else "medium",
-        citations=(
-            Citation(
-                source_id=str(latest.get("run_id") or ""),
-                source_type="portal_run",
-                evidence=str(evidence.get("path") or ""),
-                captured_at=str(latest.get("captured_at") or ""),
-            ),
-        ),
+        answer=answer,
+        confidence="uncertain" if uncertain else "medium",
+        citations=citations,
         tool_calls=tuple(portal_tool_calls),
-        uncertain=str(alert.get("level") or "") == "uncertain",
-        metadata={
-            "run_id": str(latest.get("run_id") or ""),
-            "fallback": "email_to_portal_deadline",
-            "alert_level": str(alert.get("level") or ""),
-        },
+        uncertain=uncertain,
+        metadata=metadata,
     )
+
+
+def _portal_run_citation(latest: dict[str, object]) -> Citation:
+    evidence = latest.get("evidence", {}) if isinstance(latest.get("evidence"), dict) else {}
+    return Citation(
+        source_id=str(latest.get("run_id") or ""),
+        source_type="portal_run",
+        evidence=str(evidence.get("redacted_path") or evidence.get("path") or ""),
+        captured_at=str(latest.get("captured_at") or ""),
+    )
+
+
+def _portal_fallback_metadata(
+    trigger_citations: tuple[Citation, ...],
+    *,
+    latest: dict[str, object] | None = None,
+    deadlines: list[object] | None = None,
+    fallback_error: str = "",
+) -> dict[str, object]:
+    metadata: dict[str, object] = {
+        "fallback": "email_to_portal_deadline",
+        "fallback_reason": "email_requested_portal_login",
+        "fallback_email_source_ids": [citation.source_id for citation in trigger_citations],
+        "fallback_email_count": len(trigger_citations),
+        "verification_source": "portal_run",
+    }
+    if fallback_error:
+        metadata["fallback_error"] = fallback_error
+    if latest is None:
+        return metadata
+    alert = latest.get("alert", {}) if isinstance(latest.get("alert"), dict) else {}
+    status = latest.get("status", {}) if isinstance(latest.get("status"), dict) else {}
+    health = latest.get("health", {}) if isinstance(latest.get("health"), dict) else {}
+    evidence = latest.get("evidence", {}) if isinstance(latest.get("evidence"), dict) else {}
+    metadata.update(
+        {
+            "run_id": str(latest.get("run_id") or ""),
+            "portal_run_id": str(latest.get("run_id") or ""),
+            "portal_alert_level": str(alert.get("level") or ""),
+            "alert_level": str(alert.get("level") or ""),
+            "portal_status": str(status.get("value") or ""),
+            "portal_health_state": str(health.get("state") or ""),
+            "portal_deadline_count": len(deadlines or []),
+            "evidence_path": str(evidence.get("redacted_path") or evidence.get("path") or ""),
+        }
+    )
+    return metadata

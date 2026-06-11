@@ -19,6 +19,7 @@ from sentineldesk.agent.workflow import answer_with_workflow, build_langgraph_wo
 from sentineldesk.cli import main
 from sentineldesk.config import ensure_dirs, get_paths
 from sentineldesk.email.models import EmailMessage
+from sentineldesk.scenarios import apply_scenario
 
 
 class AgentOrchestrationTests(unittest.TestCase):
@@ -314,6 +315,34 @@ privacy = "cloud-visible"
             self.assertEqual([item["stage"] for item in answer.metadata["workflow_trace"]], ["route", "tools", "finalize"])
             self.assertEqual(answer.metadata["planned_tools"], ["search_latest_email"])
             self.assertIn("July 2, 2026", answer.answer)
+
+    def test_workflow_metadata_includes_runtime_portal_fallback_tool(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            db.init_db(paths)
+            apply_scenario(paths, "lease_notice_required")
+            answer = answer_with_workflow(
+                "When is my move-out deadline?",
+                provider=ModelProvider(provider="local", model="rule-router", langgraph_available=False),
+                messages=[
+                    EmailMessage(
+                        message_id="m-workflow-portal",
+                        thread_id="t-workflow-portal",
+                        sender="leasing@example.com",
+                        subject="Portal notice update",
+                        received_at="2026-06-11T09:00:00Z",
+                        body_text="Please log in to the resident portal to view the latest move-out deadline.",
+                    )
+                ],
+                registry=default_tool_registry(paths),
+            )
+
+            self.assertEqual(answer.metadata["planned_tools_initial"], ["search_latest_email"])
+            self.assertEqual(answer.metadata["planned_tools"], ["search_latest_email", "capture_latest_portal"])
+            self.assertEqual(answer.metadata["fallback"], "email_to_portal_deadline")
+            self.assertEqual(answer.citations[0].source_type, "portal_run")
+            self.assertEqual(answer.citations[1].source_id, "email:m-workflow-portal")
+            self.assertIn("July 15, 2026", answer.answer)
 
     def test_langgraph_workflow_builds_multi_node_tool_route(self) -> None:
         class FakeCompiled:
