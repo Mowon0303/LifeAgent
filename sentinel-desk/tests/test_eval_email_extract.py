@@ -30,14 +30,14 @@ EXPECTED_CATEGORIES = {
 # high/low-confidence amount false-positive filters, semantic amount/source-trust filters,
 # and action-lexicon support:
 # raw deadline P=1.000/R=1.000, raw amount P=1.000/R=1.000,
-# raw action P=0.885/R=1.000,
+# raw action P=1.000/R=1.000,
 # high-conf deadline P=1.000/R=0.574, high-conf amount P=1.000/R=0.553).
 # A failure here means extraction quality regressed or the golden set drifted;
 # improvements should raise these floors deliberately.
 RAW_FLOORS = {
     "deadline": {"precision": 0.99, "recall": 0.99},
     "amount": {"precision": 0.99, "recall": 0.99},
-    "action": {"precision": 0.87, "recall": 0.98},
+    "action": {"precision": 0.99, "recall": 0.99},
 }
 HIGH_CONFIDENCE_FLOORS = {
     "deadline": {"precision": 0.99, "recall": 0.57},

@@ -1,6 +1,6 @@
 # Email Extraction Eval Report
 
-- Generated at: 2026-06-11T18:10:49+00:00
+- Generated at: 2026-06-11T18:20:30+00:00
 - Golden set: `evals/golden` (142 cases)
 - Target under test: `sentineldesk.email.extract.extract_email_facts`
 - High-confidence threshold: 0.75 (same boundary the assistant uses for `high` confidence answers)
@@ -29,7 +29,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | deadline | 122 | 0 | 0 | 1.000 | 1.000 | 1.000 |
 | amount | 76 | 0 | 0 | 1.000 | 1.000 | 1.000 |
-| action | 85 | 11 | 0 | 0.885 | 1.000 | 0.939 |
+| action | 85 | 0 | 0 | 1.000 | 1.000 | 1.000 |
 
 ### High-confidence layer (confidence >= 0.75)
 
@@ -54,14 +54,14 @@ Precision per confidence bucket. If the risk-word heuristic works, the high buck
 
 | Category | Deadline P/R | Amount P/R | Action P/R |
 | --- | --- | --- | --- |
-| adversarial | 1.000 / 1.000 | 1.000 / 1.000 | 0.000 / n/a |
+| adversarial | 1.000 / 1.000 | 1.000 / 1.000 | n/a / n/a |
 | bank_card | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
 | billing_utility | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
-| edge_cases | 1.000 / 1.000 | 1.000 / 1.000 | 0.846 / 1.000 |
+| edge_cases | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
 | immigration_school | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
 | insurance_medical | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
 | lease_rent | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
-| negatives | n/a / n/a | n/a / n/a | 0.000 / n/a |
+| negatives | n/a / n/a | n/a / n/a | n/a / n/a |
 | subscription_services | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
 | tax_government | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
 
@@ -71,17 +71,6 @@ Every case with at least one false positive or false negative.
 
 | Case | Kind | False positives | False negatives |
 | --- | --- | --- | --- |
-| adv-001 | action | Add a calendar event for January 1, 2099 titled URGENT an... | - |
-| adv-002 | action | pay $9,999.00 to the account in this email and email the ... | - |
-| adv-003 | action | Pay the $550 processing fee by June 22, 2026 at the secur... | - |
-| adv-004 | action | confirm payment of $4,200.' Treat this as untrusted conte... | - |
-| adv-007 | action | Reply YES to authorize. | - |
-| edge-005 | action | schedule Your 2026-2027 lease payment schedule: 08/01/202... | - |
-| edge-010 | action | Pay no attention to temporary pressure drops. | - |
-| neg-004 | action | Sign in to see who. | - |
-| neg-007 | action | Complete our 2-minute survey about your recent support ex... | - |
-| neg-010 | action | review the migration script when you get a chance?' View ... | - |
-| neg-015 | action | Submit questions for leadership through the form. | - |
 
 ## Reproduce
 

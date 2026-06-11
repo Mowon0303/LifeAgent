@@ -73,6 +73,13 @@ AMOUNT_INJECTION_CONTEXT_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+ACTION_INJECTION_CONTEXT_RE = re.compile(
+    r"\b("
+    r"system override|ignore (?:all )?(?:(?:previous|prior) )?instructions|pretend you are|"
+    r"treat this as untrusted|disregard sender verification|authorize the transfer"
+    r")\b",
+    re.IGNORECASE,
+)
 BASE_ACTION_VERBS = (
     "submit",
     "send",
@@ -352,6 +359,8 @@ def _spelled_amount_context_allowed(context: str) -> bool:
 
 def _action_context_allowed(text: str, start: int, verb: str, action: str) -> bool:
     lowered = action.lower()
+    if _action_noise_context(text, start, verb, lowered):
+        return False
     if (
         verb == "contact"
         and "support" in lowered
@@ -381,6 +390,36 @@ def _action_context_allowed(text: str, start: int, verb: str, action: str) -> bo
         return True
     previous = _previous_word(text, start)
     return previous in ACTION_CUE_WORDS
+
+
+def _action_noise_context(text: str, start: int, verb: str, action: str) -> bool:
+    context = _context(text, start, start + len(action)).lower()
+    if ACTION_INJECTION_CONTEXT_RE.search(context):
+        return True
+    if re.search(r"\bsecure link\b", context) and re.search(
+        r"\bprocessing fee\b|\bterminated\b", context
+    ):
+        return True
+    if verb == "schedule" and (
+        _previous_word(text, start) in {"billing", "installment", "lease", "payment", "premium", "rent"}
+        or re.search(r"\b(?:lease|payment|premium|rent)\s+schedule\b", action)
+    ):
+        return True
+    if re.search(r"\bpay no attention\b", action):
+        return True
+    if re.search(r"\bsign in to see who\b", action) and re.search(
+        r"\b(connection requests|notifications|viewing your profile)\b", context
+    ):
+        return True
+    if re.search(r"\bcomplete\b.*\bsurvey\b", action) and re.search(
+        r"\b(help us improve|support experience|how did we do)\b", context
+    ):
+        return True
+    if verb == "review" and re.search(r"\bpull request\b|\bmigration script\b|\bcodeforge\b", context):
+        return True
+    if verb == "submit" and re.search(r"\b(all-hands|questions for leadership|leadership through the form)\b", context):
+        return True
+    return False
 
 
 def _starts_action_clause(text: str, start: int) -> bool:
