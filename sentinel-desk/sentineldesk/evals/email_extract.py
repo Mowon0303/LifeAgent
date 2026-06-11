@@ -397,7 +397,7 @@ def render_markdown_report(report: EvalReport) -> str:
     )
     lines.append(
         "- Labels are semantic ground truth for a life-admin assistant; relative deadlines, "
-        "non-dollar currencies, and out-of-lexicon action verbs stay labeled even when extractor "
+        "non-dollar currencies, and expanded action verbs stay labeled even when extractor "
         "support is partial, so recall reflects true capability."
     )
     lines.append("")

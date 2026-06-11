@@ -15,11 +15,66 @@ AMOUNT_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+BASE_ACTION_VERBS = (
+    "submit",
+    "send",
+    "pay",
+    "upload",
+    "sign",
+    "renew",
+    "schedule",
+    "confirm",
+    "respond",
+    "complete",
+    "provide",
+    "review",
+    "call",
+    "email",
+)
+EXPANDED_ACTION_VERBS = (
+    "contact",
+    "register",
+    "apply",
+    "dispute",
+    "redeem",
+    "update",
+    "cancel",
+    "verify",
+    "reply",
+    "bring",
+    "report",
+    "check",
+    "add",
+    "print",
+    "enroll",
+    "contest",
+)
+ACTION_VERBS = BASE_ACTION_VERBS + EXPANDED_ACTION_VERBS
 ACTION_RE = re.compile(
-    r"\b(?:submit|send|pay|upload|sign|renew|schedule|confirm|respond|complete|"
-    r"provide|review|call|email)\b.{0,90}",
+    r"\b(?P<verb>" + "|".join(ACTION_VERBS) + r")\b.{0,90}",
     re.IGNORECASE,
 )
+ACTION_CUE_WORDS = {
+    "and",
+    "after",
+    "before",
+    "by",
+    "can",
+    "cannot",
+    "could",
+    "if",
+    "may",
+    "must",
+    "or",
+    "please",
+    "should",
+    "then",
+    "to",
+    "unless",
+    "will",
+    "would",
+}
+CONTEXT_SENSITIVE_ACTION_VERBS = {"check", "report", "update"}
 
 
 def find_messages(messages: Iterable[EmailMessage], query: str, *, limit: int = 20) -> list[EmailMessage]:
@@ -74,7 +129,10 @@ def extract_email_facts(message: EmailMessage) -> list[EmailFact]:
             )
         )
     for match in ACTION_RE.finditer(text):
+        verb = match.group("verb").lower()
         action = normalize_text(match.group(0))
+        if not _action_context_allowed(text, match.start(), verb, action):
+            continue
         facts.append(
             EmailFact(
                 kind="action",
@@ -112,3 +170,55 @@ def _remove_invisible_number_separators(text: str) -> str:
 def _near_risk_word(text: str, start: int) -> bool:
     before = text[max(0, start - 80) : start].lower()
     return any(term in before for term in ["due", "balance", "rent", "invoice", "amount", "pay"])
+
+
+def _action_context_allowed(text: str, start: int, verb: str, action: str) -> bool:
+    lowered = action.lower()
+    if (
+        verb == "contact"
+        and "support" in lowered
+        and "if you did not" in text[max(0, start - 90) : start].lower()
+    ):
+        return False
+    if verb == "reply" and _looks_like_email_local_part(text, start, verb):
+        return False
+    if verb == "apply" and re.search(
+        r"\b(?:charges|fees|rates|conditions|terms) may\s+$",
+        text[max(0, start - 40) : start].lower(),
+    ):
+        return False
+    if verb == "apply" and _previous_word(text, start) in {
+        "charges",
+        "conditions",
+        "fees",
+        "rates",
+        "terms",
+    }:
+        return False
+    if verb == "update" and re.search(r"\bupdate from (?:your )?device'?s app store\b", lowered):
+        return False
+    if verb not in CONTEXT_SENSITIVE_ACTION_VERBS:
+        return True
+    if _starts_action_clause(text, start):
+        return True
+    previous = _previous_word(text, start)
+    return previous in ACTION_CUE_WORDS
+
+
+def _starts_action_clause(text: str, start: int) -> bool:
+    before = text[:start].rstrip(" \t\r")
+    if not before:
+        return True
+    return before[-1] in ".!?:;,\n"
+
+
+def _previous_word(text: str, start: int) -> str:
+    match = re.search(r"([A-Za-z]+)$", text[:start].rstrip())
+    return match.group(1).lower() if match else ""
+
+
+def _looks_like_email_local_part(text: str, start: int, verb: str) -> bool:
+    after = start + len(verb)
+    previous = text[start - 1] if start > 0 else ""
+    next_char = text[after] if after < len(text) else ""
+    return previous in "-_." or next_char in "@_.-"

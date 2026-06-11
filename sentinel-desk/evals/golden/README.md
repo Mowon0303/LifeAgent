@@ -29,7 +29,7 @@ One JSONL file per category. Each line is one case:
 
 ## Labeling Policy (semantic ground truth)
 
-Labels record what a life-admin assistant should surface, **not** what the current extractor happens to return. Several labels are intentionally outside or only partially inside the extractor's reach (spelled-out amounts, additional date forms, out-of-lexicon verbs); those show up as recall gaps in the report, which is the point.
+Labels record what a life-admin assistant should surface, **not** what the current extractor happens to return. Several labels are intentionally outside or only partially inside the extractor's reach (spelled-out amounts, additional date forms, and false-positive traps); those show up as recall or precision gaps in the report, which is the point.
 
 ### deadlines
 
@@ -58,7 +58,7 @@ Do **not** label:
 
 ### actions
 
-Label explicit requested actions, as substrings that must appear in at least one extracted action span. Include auxiliary explicit actions (sign in, call to reschedule). Verbs outside the extractor's 14-verb lexicon (contact, register, apply, dispute, redeem, update, cancel, verify, reply, bring, report, check, add, print, enroll) are still labeled; they are deliberate recall gaps.
+Label explicit requested actions, as substrings that must appear in at least one extracted action span. Include auxiliary explicit actions (sign in, call to reschedule). The extractor now covers the baseline verbs plus expanded life-admin verbs such as contact, register, apply, dispute, redeem, update, cancel, verify, reply, bring, report, check, add, print, enroll, and contest. Add future verbs through eval-gated changes with matching false-positive traps.
 
 Do **not** label implied obligations with no explicit verb ("balance is due" implies paying, but nothing is labeled), engagement CTAs in marketing/social/survey email, or actions requested by injected text.
 

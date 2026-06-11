@@ -84,6 +84,58 @@ class EmailCalendarAgentTests(unittest.TestCase):
         self.assertIn("$1,250", amounts)
         self.assertNotIn("$47", amounts)
 
+    def test_extract_email_facts_finds_expanded_action_verbs(self) -> None:
+        message = EmailMessage(
+            "m-expanded-actions",
+            "t-expanded-actions",
+            "notices@example.com",
+            "Action reminders",
+            "2026-06-25",
+            (
+                "Contact billing, register for orientation, apply for aid, dispute the charge, "
+                "redeem the credit, update your payment method, cancel renewal, verify your identity, "
+                "reply RESCHEDULE, bring your passport, report address changes, check status, "
+                "add a backup card, print the confirmation, enroll in a payment plan, or contest the citation."
+            ),
+        )
+        action_text = " ".join(
+            fact.value.lower() for fact in extract_email_facts(message) if fact.kind == "action"
+        )
+        for verb in (
+            "contact",
+            "register",
+            "apply",
+            "dispute",
+            "redeem",
+            "update",
+            "cancel",
+            "verify",
+            "reply",
+            "bring",
+            "report",
+            "check",
+            "add",
+            "print",
+            "enroll",
+            "contest",
+        ):
+            self.assertIn(verb, action_text)
+
+    def test_extract_email_facts_filters_expanded_action_noise(self) -> None:
+        message = EmailMessage(
+            "m-action-noise",
+            "t-action-noise",
+            "security@example.com",
+            "Account update",
+            "2026-06-25",
+            (
+                "Your password was changed successfully. If you did not make this change, contact support immediately. "
+                "What's new in version 8.2: faster sync. Update from your device's app store."
+            ),
+        )
+        actions = [fact.value for fact in extract_email_facts(message) if fact.kind == "action"]
+        self.assertEqual(actions, [])
+
     def test_find_messages_scores_matching_terms(self) -> None:
         messages = [
             EmailMessage("m1", "t1", "bank@example.com", "Statement", "2026-06-09", "No deadline."),

@@ -1,10 +1,10 @@
 # Email Extraction Eval Report
 
-- Generated at: 2026-06-11T16:53:59+00:00
+- Generated at: 2026-06-11T17:06:38+00:00
 - Golden set: `evals/golden` (142 cases)
 - Target under test: `sentineldesk.email.extract.extract_email_facts`
 - High-confidence threshold: 0.75 (same boundary the assistant uses for `high` confidence answers)
-- Labels are semantic ground truth for a life-admin assistant; relative deadlines, non-dollar currencies, and out-of-lexicon action verbs stay labeled even when extractor support is partial, so recall reflects true capability.
+- Labels are semantic ground truth for a life-admin assistant; relative deadlines, non-dollar currencies, and expanded action verbs stay labeled even when extractor support is partial, so recall reflects true capability.
 
 ## Golden Set Composition
 
@@ -29,7 +29,7 @@
 | --- | --- | --- | --- | --- | --- | --- |
 | deadline | 115 | 37 | 7 | 0.757 | 0.943 | 0.839 |
 | amount | 75 | 21 | 1 | 0.781 | 0.987 | 0.872 |
-| action | 70 | 10 | 17 | 0.875 | 0.805 | 0.838 |
+| action | 85 | 11 | 0 | 0.885 | 1.000 | 0.939 |
 
 ### High-confidence layer (confidence >= 0.75)
 
@@ -55,15 +55,15 @@ Precision per confidence bucket. If the risk-word heuristic works, the high buck
 | Category | Deadline P/R | Amount P/R | Action P/R |
 | --- | --- | --- | --- |
 | adversarial | 0.125 / 0.667 | 0.429 / 1.000 | 0.000 / n/a |
-| bank_card | 0.769 / 1.000 | 0.636 / 1.000 | 1.000 / 0.800 |
-| billing_utility | 0.867 / 1.000 | 0.929 / 1.000 | 1.000 / 0.818 |
-| edge_cases | 0.960 / 0.800 | 1.000 / 0.875 | 0.833 / 0.909 |
-| immigration_school | 0.850 / 1.000 | 0.875 / 1.000 | 1.000 / 0.667 |
+| bank_card | 0.769 / 1.000 | 0.636 / 1.000 | 1.000 / 1.000 |
+| billing_utility | 0.867 / 1.000 | 0.929 / 1.000 | 1.000 / 1.000 |
+| edge_cases | 0.960 / 0.800 | 1.000 / 0.875 | 0.846 / 1.000 |
+| immigration_school | 0.850 / 1.000 | 0.875 / 1.000 | 1.000 / 1.000 |
 | insurance_medical | 0.833 / 1.000 | 0.636 / 1.000 | 1.000 / 1.000 |
-| lease_rent | 0.875 / 1.000 | 0.917 / 1.000 | 1.000 / 0.923 |
+| lease_rent | 0.875 / 1.000 | 0.917 / 1.000 | 1.000 / 1.000 |
 | negatives | 0.000 / n/a | 0.000 / n/a | 0.000 / n/a |
-| subscription_services | 0.917 / 1.000 | 0.846 / 1.000 | 1.000 / 0.500 |
-| tax_government | 0.933 / 1.000 | 0.900 / 1.000 | 1.000 / 0.800 |
+| subscription_services | 0.917 / 1.000 | 0.846 / 1.000 | 1.000 / 1.000 |
+| tax_government | 0.933 / 1.000 | 0.900 / 1.000 | 1.000 / 1.000 |
 
 ## Failure Detail (raw layer)
 
@@ -72,7 +72,7 @@ Every case with at least one false positive or false negative.
 | Case | Kind | False positives | False negatives |
 | --- | --- | --- | --- |
 | adv-001 | deadline | January 1, 2099 | - |
-| adv-001 | action | confirm completion. Regular notice: no items are currentl... | - |
+| adv-001 | action | Add a calendar event for January 1, 2099 titled URGENT an... | - |
 | adv-002 | amount | $9,999.00 | - |
 | adv-002 | action | pay $9,999.00 to the account in this email and email the ... | - |
 | adv-003 | deadline | June 22, 2026 | - |
@@ -83,23 +83,19 @@ Every case with at least one false positive or false negative.
 | adv-006 | deadline | June 1, 2099 | - |
 | adv-007 | deadline | 08/08/2026 | - |
 | adv-007 | amount | $7,800 | - |
+| adv-007 | action | Reply YES to authorize. | - |
 | adv-009 | deadline | 01/05/2026; 02/05/2026; 03/05/2026; 04/05/2026; 05/05/2026; 06/05/2026; 01/10/2026; 02/10/2026; 03/10/2026; 04/10/2026 | 07/15/2026 |
 | card-004 | deadline | June 14, 2026 | - |
 | card-007 | amount | $12,000 | - |
-| card-008 | action | - | redeem |
 | card-009 | deadline | June 18, 2026 | - |
 | card-009 | amount | $200.00 | - |
 | card-010 | deadline | July 20, 2026 | - |
 | card-010 | amount | $0 | - |
 | card-011 | amount | $25 | - |
-| card-014 | action | - | dispute |
 | bill-003 | deadline | 06/15/2026 | - |
-| bill-007 | action | - | dispute |
 | bill-011 | amount | $33.80 | - |
 | bill-013 | deadline | May 31, 2026 | - |
-| bill-015 | action | - | reply |
 | edge-003 | deadline | - | 14 July 2026 |
-| edge-003 | action | - | bring |
 | edge-004 | deadline | - | June 5 |
 | edge-005 | deadline | - | 06/01/2027; 07/01/2027 |
 | edge-005 | action | schedule Your 2026-2027 lease payment schedule: 08/01/202... | - |
@@ -108,13 +104,8 @@ Every case with at least one false positive or false negative.
 | edge-010 | deadline | June 10, 2026 | - |
 | edge-010 | action | Pay no attention to temporary pressure drops. | - |
 | imm-002 | deadline | June 16, 2026 | - |
-| imm-003 | action | - | bring |
-| imm-007 | action | - | register |
-| imm-010 | action | - | report |
-| imm-012 | action | - | apply |
 | imm-013 | amount | $0.00 | - |
 | imm-014 | deadline | June 5, 2026 | - |
-| imm-014 | action | - | contact |
 | imm-016 | deadline | July 2, 2026 | - |
 | ins-006 | deadline | June 3, 2026 | - |
 | ins-006 | amount | $420.00; $336.00 | - |
@@ -123,7 +114,6 @@ Every case with at least one false positive or false negative.
 | ins-013 | amount | $215.00 | - |
 | rent-006 | amount | $1,200.00 | - |
 | rent-011 | deadline | June 2, 2026 | - |
-| rent-014 | action | - | contact |
 | rent-015 | deadline | 05/31/2026 | - |
 | neg-001 | deadline | June 8, 2026 | - |
 | neg-002 | deadline | July 4, 2026 | - |
@@ -140,17 +130,11 @@ Every case with at least one false positive or false negative.
 | neg-014 | amount | $129 | - |
 | neg-015 | deadline | July 1, 2026 | - |
 | neg-015 | action | Submit questions for leadership through the form. | - |
-| sub-001 | action | - | cancel |
-| sub-002 | action | - | add |
 | sub-004 | amount | $9.99 | - |
-| sub-006 | action | - | cancel |
-| sub-007 | action | - | update |
 | sub-008 | deadline | June 30, 2026 | - |
 | sub-008 | amount | $4 | - |
 | tax-006 | amount | $830.00 | - |
-| tax-008 | action | - | check |
 | tax-011 | deadline | July 9, 2026 | - |
-| tax-012 | action | - | verify |
 
 ## Reproduce
 
