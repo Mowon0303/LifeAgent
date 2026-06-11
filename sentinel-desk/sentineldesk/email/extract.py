@@ -270,7 +270,9 @@ def _amount_context_allowed(text: str, start: int, end: int, value: str, context
         return False
     if re.search(r"\bfine balance:\s*$", before) and _amount_is_zero(value):
         return False
-    return not re.search(r"\b(?:amount billed|plan paid):\s*$", before)
+    if re.search(r"\b(?:amount billed|plan paid):\s*$", before):
+        return False
+    return not _low_confidence_amount_noise(before, lowered_context)
 
 
 def _amount_is_zero(value: str) -> bool:
@@ -281,6 +283,26 @@ def _amount_is_zero(value: str) -> bool:
         return float(numeric) == 0.0
     except ValueError:
         return False
+
+
+def _low_confidence_amount_noise(before: str, context: str) -> bool:
+    if re.search(r"\b(?:refund|refunded|reimbursement|reimbursed)\b", context):
+        return True
+    if re.search(r"\bcredit of\s*$", before) and re.search(
+        r"\b(applied|reflect|no payment is required)\b", context
+    ):
+        return True
+    if re.search(r"\btotal was\s*$", before) and re.search(
+        r"\b(receipt|thanks for your order|order details)\b", context
+    ):
+        return True
+    if re.search(r"\b(new patient special|bonus|unlock all articles)\b", context):
+        return True
+    if re.search(r"\brooms from\s*$", before) or "weekend escape" in context:
+        return True
+    if re.search(r"\bupgrade to (?:get|premium)\b", context):
+        return True
+    return False
 
 
 def _spelled_amount_context_allowed(context: str) -> bool:

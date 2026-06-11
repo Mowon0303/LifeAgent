@@ -176,6 +176,131 @@ class EmailCalendarAgentTests(unittest.TestCase):
         amounts = {fact.value for fact in extract_email_facts(message) if fact.kind == "amount"}
         self.assertIn("$11.99", amounts)
 
+    def test_extract_email_facts_filters_refund_credit_and_reimbursement_amounts(self) -> None:
+        messages = [
+            EmailMessage(
+                "m-credit-applied",
+                "t-credit-applied",
+                "billing@example.com",
+                "Credit applied",
+                "2026-06-24",
+                "Good news: a credit of $33.80 has been applied to your account. No payment is required.",
+            ),
+            EmailMessage(
+                "m-refund-approved",
+                "t-refund-approved",
+                "refunds@example.com",
+                "Refund approved",
+                "2026-06-24",
+                "Your federal refund of $830.00 was approved and will be deposited within 21 days.",
+            ),
+            EmailMessage(
+                "m-reimbursement",
+                "t-reimbursement",
+                "claims@example.com",
+                "Claim approved",
+                "2026-06-24",
+                "A reimbursement of $215.00 will be deposited to your account. No action is required.",
+            ),
+        ]
+        for message in messages:
+            with self.subTest(message=message.message_id):
+                amounts = [fact.value for fact in extract_email_facts(message) if fact.kind == "amount"]
+                self.assertEqual(amounts, [])
+
+    def test_extract_email_facts_filters_receipt_amounts(self) -> None:
+        message = EmailMessage(
+            "m-order-receipt",
+            "t-order-receipt",
+            "receipts@example.com",
+            "Your order receipt",
+            "2026-06-24",
+            "Thanks for your order! Your total was $31.47 including delivery and tip. Your receipt is in the app.",
+        )
+        amounts = [fact.value for fact in extract_email_facts(message) if fact.kind == "amount"]
+        self.assertEqual(amounts, [])
+
+    def test_extract_email_facts_filters_marketing_amounts(self) -> None:
+        messages = [
+            EmailMessage(
+                "m-referral-bonus",
+                "t-referral-bonus",
+                "offers@example.com",
+                "Refer a friend",
+                "2026-06-24",
+                "Refer a friend and you could each earn a $200 bonus when they open a checking account.",
+            ),
+            EmailMessage(
+                "m-patient-special",
+                "t-patient-special",
+                "dental@example.com",
+                "Cleaning reminder",
+                "2026-06-24",
+                "New patient special: exam and x-rays for $79.",
+            ),
+            EmailMessage(
+                "m-hotel-offer",
+                "t-hotel-offer",
+                "offers@example.com",
+                "Weekend escape",
+                "2026-06-24",
+                "Weekend escape: rooms from $129 per night at Lakeside Resort.",
+            ),
+            EmailMessage(
+                "m-upgrade-offer",
+                "t-upgrade-offer",
+                "news@example.com",
+                "Unlock premium",
+                "2026-06-24",
+                "Upgrade to premium for $4 per month and unlock all articles.",
+            ),
+        ]
+        for message in messages:
+            with self.subTest(message=message.message_id):
+                amounts = [fact.value for fact in extract_email_facts(message) if fact.kind == "amount"]
+                self.assertEqual(amounts, [])
+
+    def test_extract_email_facts_keeps_low_confidence_obligation_amounts(self) -> None:
+        messages_and_amounts = [
+            (
+                EmailMessage(
+                    "m-price-change",
+                    "t-price-change",
+                    "internet@example.com",
+                    "Price update",
+                    "2026-06-24",
+                    "Starting with your August bill, the monthly price will increase from $55 to $65.",
+                ),
+                {"$55", "$65"},
+            ),
+            (
+                EmailMessage(
+                    "m-renewal-fee",
+                    "t-renewal-fee",
+                    "service@example.com",
+                    "Annual fee reminder",
+                    "2026-06-24",
+                    "A reminder that your card's $95 annual fee will post to your account on 07/10/2026.",
+                ),
+                {"$95"},
+            ),
+            (
+                EmailMessage(
+                    "m-suspicious-charge",
+                    "t-suspicious-charge",
+                    "fraud@example.com",
+                    "Did you make this purchase?",
+                    "2026-06-24",
+                    "We noticed a charge of $310.45 at an electronics retailer that may not match your activity.",
+                ),
+                {"$310.45"},
+            ),
+        ]
+        for message, expected in messages_and_amounts:
+            with self.subTest(message=message.message_id):
+                amounts = {fact.value for fact in extract_email_facts(message) if fact.kind == "amount"}
+                self.assertTrue(expected.issubset(amounts))
+
     def test_extract_email_facts_finds_expanded_action_verbs(self) -> None:
         message = EmailMessage(
             "m-expanded-actions",

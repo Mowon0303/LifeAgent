@@ -11,6 +11,7 @@ All notable project updates for LifeAgent are tracked here.
 - Added non-dollar and malformed amount extraction: common currency symbols (`€`, `£`, `¥`, `￥`), ISO-style prefixes (`USD`, `EUR`, `GBP`, `CNY`, `RMB`), single-decimal amounts such as `$47.5`, and zero-width separator cleanup for obfuscated numeric strings such as `$1\u200b,250`.
 - Added context-gated spelled-out amount extraction for dollar/USD phrases such as `one thousand two hundred dollars`, with tests proving lease-deposit extraction and filtering of marketing noise such as `Save two dollars`.
 - Added high-confidence numeric amount false-positive filters for prompt-injected payment instructions, completed payment receipts, balance-transfer promo `$0` fees, low-balance thresholds, `$0.00` fine balances, and EOB `Amount billed` / `Plan paid` lines; targeted tests preserve true `You may owe` and failed-payment amounts.
+- Added low-confidence numeric amount false-positive filters for refund/reimbursement, credit-applied, order receipt total, referral bonus, dental special, hotel room-price, and premium-upgrade marketing contexts; targeted tests preserve real low-confidence obligations such as price changes, annual fees, and suspicious charges.
 - Added expanded life-admin action extraction for `contact`, `register`, `apply`, `dispute`, `redeem`, `update`, `cancel`, `verify`, `reply`, `bring`, `report`, `check`, `add`, `print`, `enroll`, and `contest`, with targeted tests for the expanded lexicon and known noise patterns.
 - Added `docs/PIVOT_POSTMORTEM.md`, a blameless postmortem of the two 36-hour product pivots (JobOps Guard → SentinelDesk → email-first LifeAgent): per-pivot what-broke/why/detection, the shared capability-first root cause, what survived, a prevention table mapping each new project mechanism to the failure it blocks, cost accounting, and portable lessons. Linked from the root README.
 - Added `stored_email_messages` so the assistant can rebuild EmailMessage evidence from persisted local mail; CLI `ask` (without `--email-json`) and dashboard `/api/ask` now answer over the most recent 200 stored messages, cited as `stored_email:<id>`.
@@ -125,6 +126,7 @@ All notable project updates for LifeAgent are tracked here.
 - Filtered expanded-action false positives from email local parts such as `reply@...` / `no-reply@...`, noun-like `update/check/report` contexts, `Terms apply`, app-store update prompts, and conditional security-support prompts.
 - Fixed the remaining amount false negative in the current golden set: `one thousand two hundred dollars` is now extracted without adding raw amount false positives.
 - Fixed 9 high-confidence amount false positives in the current golden set while keeping amount recall at 1.000.
+- Fixed 10 low-confidence amount false positives in the current golden set while keeping amount recall at 1.000.
 - Fixed the assistant panel showing stale confirmed/pending counts after confirm/ignore actions (user-reported and user-fixed): the summary embed now carries `id="aiSummary"`, and `refresh()` recomputes both the embed and the channel-topic counter through `updateSummary()`, so the numbers update immediately without a page reload. Browser-verified (confirm flipped the summary from 1 confirmed / 3 pending to 2 / 2 in place) and locked by a page-wiring regression test.
 - Fixed the root README still claiming 217 expected tests (user-reported); the count now tracks the current suite.
 
@@ -135,6 +137,7 @@ All notable project updates for LifeAgent are tracked here.
 - Raised the email-extraction eval gates after the non-dollar amount improvement: raw amount floors are now P>=0.77/R>=0.97 and high-confidence amount floors are now P>=0.79/R>=0.52.
 - Raised the email-extraction eval gates after spelled-out amount extraction: raw amount floors are now P>=0.78/R>=0.99 and high-confidence amount floors are now P>=0.80/R>=0.54.
 - Raised the email-extraction eval gates after high-confidence amount false-positive filtering: raw amount floors are now P>=0.85/R>=0.99 and high-confidence amount floors are now P>=0.96/R>=0.54.
+- Raised the email-extraction eval gates after low-confidence amount false-positive filtering: raw amount floors are now P>=0.96/R>=0.99 while the high-confidence amount floor remains P>=0.96/R>=0.54.
 - Raised the email-extraction eval gates after action-lexicon expansion: raw action floors are now P>=0.87/R>=0.98.
 - Default `[model]` config now ships `provider = "local"` (deterministic rule path); enabling the local Ollama refinement path is an explicit opt-in via `config.toml`, keeping fresh homes and test environments from issuing model calls.
 - Promoted the calendar assistant page to the main dashboard entry after user acceptance: `/` now serves `calendar.html` (with `/calendar` kept as an alias), the legacy monitor ops dashboard moved to `/ops`, the assistant panel header gained an ops-dashboard link, `demo record-prep` prints the `/ops` dashboard URL, and the recording docs point at `/ops`.
@@ -191,6 +194,10 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Verified
 
+- `cd sentinel-desk && python3 -B -m unittest discover -s tests -q` passed with 253 tests after adding low-confidence amount false-positive filters and raised raw amount precision gates.
+- `cd sentinel-desk && python3 -B -m sentineldesk eval email-extract --golden evals/golden --report-md docs/EVAL_REPORT.md` measured the low-confidence amount false-positive improvement: raw amount P=0.974/R=1.000/F1=0.987 (tp=76/fp=2/fn=0) and high-confidence amount P=0.977/R=0.553/F1=0.706 (tp=42/fp=1/fn=34); raw amount false positives fell from 12 to 2 and low-confidence amount false positives fell from 11 to 1.
+- `cd sentinel-desk && python3 -m compileall -q sentineldesk tests` passed after the low-confidence amount false-positive filter update.
+- `cd sentinel-desk && python3 -B -m sentineldesk --home /private/tmp/lifeagent-low-confidence-amount-fp-release-home privacy release-package --source . --output /private/tmp/lifeagent-low-confidence-amount-fp-20260611.release.zip` wrote a 118-file source release ZIP excluding 10 local runtime artifacts, and `privacy release-audit --require-clean` passed on the extracted package with 0 issues.
 - `cd sentinel-desk && python3 -B -m unittest discover -s tests -q` passed with 249 tests after adding high-confidence amount false-positive filters and raised amount precision gates.
 - `cd sentinel-desk && python3 -B -m sentineldesk eval email-extract --golden evals/golden --report-md docs/EVAL_REPORT.md` measured the high-confidence amount false-positive improvement: raw amount P=0.864/R=1.000/F1=0.927 (tp=76/fp=12/fn=0) and high-confidence amount P=0.977/R=0.553/F1=0.706 (tp=42/fp=1/fn=34); raw amount false positives fell from 21 to 12 and high-confidence amount false positives fell from 10 to 1.
 - `cd sentinel-desk && python3 -m compileall -q sentineldesk tests` passed after the amount false-positive filter update.

@@ -1,6 +1,6 @@
 # Email Extraction Eval Report
 
-- Generated at: 2026-06-11T17:27:58+00:00
+- Generated at: 2026-06-11T17:41:03+00:00
 - Golden set: `evals/golden` (142 cases)
 - Target under test: `sentineldesk.email.extract.extract_email_facts`
 - High-confidence threshold: 0.75 (same boundary the assistant uses for `high` confidence answers)
@@ -28,7 +28,7 @@
 | Kind | TP | FP | FN | Precision | Recall | F1 |
 | --- | --- | --- | --- | --- | --- | --- |
 | deadline | 119 | 37 | 3 | 0.763 | 0.975 | 0.856 |
-| amount | 76 | 12 | 0 | 0.864 | 1.000 | 0.927 |
+| amount | 76 | 2 | 0 | 0.974 | 1.000 | 0.987 |
 | action | 85 | 11 | 0 | 0.885 | 1.000 | 0.939 |
 
 ### High-confidence layer (confidence >= 0.75)
@@ -48,7 +48,7 @@ Precision per confidence bucket. If the risk-word heuristic works, the high buck
 | Kind | High bucket precision (n) | Low bucket precision (n) |
 | --- | --- | --- |
 | deadline | 0.852 (81) | 0.667 (75) |
-| amount | 0.977 (43) | 0.756 (45) |
+| amount | 0.977 (43) | 0.971 (35) |
 
 ## Per-Category Metrics (raw layer)
 
@@ -56,14 +56,14 @@ Precision per confidence bucket. If the risk-word heuristic works, the high buck
 | --- | --- | --- | --- |
 | adversarial | 0.125 / 0.667 | 0.750 / 1.000 | 0.000 / n/a |
 | bank_card | 0.769 / 1.000 | 0.875 / 1.000 | 1.000 / 1.000 |
-| billing_utility | 0.867 / 1.000 | 0.929 / 1.000 | 1.000 / 1.000 |
+| billing_utility | 0.867 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
 | edge_cases | 0.966 / 0.933 | 1.000 / 1.000 | 0.846 / 1.000 |
 | immigration_school | 0.850 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
-| insurance_medical | 0.833 / 1.000 | 0.778 / 1.000 | 1.000 / 1.000 |
-| lease_rent | 0.875 / 1.000 | 0.917 / 1.000 | 1.000 / 1.000 |
-| negatives | 0.000 / n/a | 0.000 / n/a | 0.000 / n/a |
-| subscription_services | 0.917 / 1.000 | 0.846 / 1.000 | 1.000 / 1.000 |
-| tax_government | 0.933 / 1.000 | 0.900 / 1.000 | 1.000 / 1.000 |
+| insurance_medical | 0.833 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
+| lease_rent | 0.875 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
+| negatives | 0.000 / n/a | n/a / n/a | 0.000 / n/a |
+| subscription_services | 0.917 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
+| tax_government | 0.933 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
 
 ## Failure Detail (raw layer)
 
@@ -87,7 +87,6 @@ Every case with at least one false positive or false negative.
 | card-009 | deadline | June 18, 2026 | - |
 | card-010 | deadline | July 20, 2026 | - |
 | bill-003 | deadline | 06/15/2026 | - |
-| bill-011 | amount | $33.80 | - |
 | bill-013 | deadline | May 31, 2026 | - |
 | edge-005 | deadline | - | 06/01/2027; 07/01/2027 |
 | edge-005 | action | schedule Your 2026-2027 lease payment schedule: 08/01/202... | - |
@@ -97,31 +96,22 @@ Every case with at least one false positive or false negative.
 | imm-014 | deadline | June 5, 2026 | - |
 | imm-016 | deadline | July 2, 2026 | - |
 | ins-006 | deadline | June 3, 2026 | - |
-| ins-009 | amount | $79 | - |
 | ins-012 | deadline | 06/10/2026 | - |
-| ins-013 | amount | $215.00 | - |
-| rent-006 | amount | $1,200.00 | - |
 | rent-011 | deadline | June 2, 2026 | - |
 | rent-015 | deadline | 05/31/2026 | - |
 | neg-001 | deadline | June 8, 2026 | - |
 | neg-002 | deadline | July 4, 2026 | - |
-| neg-003 | amount | $31.47 | - |
 | neg-004 | action | Sign in to see who. | - |
 | neg-006 | deadline | August 31, 2026 | - |
-| neg-006 | amount | $200 | - |
 | neg-007 | action | Complete our 2-minute survey about your recent support ex... | - |
 | neg-008 | deadline | June 14, 2026 | - |
 | neg-009 | deadline | June 20, 2026 | - |
 | neg-010 | action | review the migration script when you get a chance?' View ... | - |
 | neg-012 | deadline | December 31, 2026 | - |
 | neg-014 | deadline | June 25, 2026 | - |
-| neg-014 | amount | $129 | - |
 | neg-015 | deadline | July 1, 2026 | - |
 | neg-015 | action | Submit questions for leadership through the form. | - |
-| sub-004 | amount | $9.99 | - |
 | sub-008 | deadline | June 30, 2026 | - |
-| sub-008 | amount | $4 | - |
-| tax-006 | amount | $830.00 | - |
 | tax-011 | deadline | July 9, 2026 | - |
 
 ## Reproduce
