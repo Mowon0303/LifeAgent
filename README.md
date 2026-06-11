@@ -35,15 +35,16 @@ cd sentinel-desk
 python3 -B -m sentineldesk --home /tmp/lifeagent-ui-demo init
 python3 -B -m sentineldesk --home /tmp/lifeagent-ui-demo email scan --json fixtures/ui/sample_emails.json
 python3 -B -m sentineldesk --home /tmp/lifeagent-ui-demo serve --port 8788
-# open http://127.0.0.1:8788/calendar  (legacy ops dashboard remains at /)
+# open http://127.0.0.1:8788/  (calendar assistant is the main page; ops dashboard at /ops)
 ```
 
-Run the legacy monitor demo:
+Run the monitor ops demo:
 
 ```bash
 cd sentinel-desk
 python3 -m sentineldesk --home .demo demo record-prep
 python3 -m sentineldesk --home .demo serve --port 8787
+# open http://127.0.0.1:8787/ops
 ```
 
 ## Key Documents

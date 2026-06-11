@@ -2,7 +2,7 @@
 
 This is the stable handoff contract between the SentinelDesk backend and the calendar UI implemented from the design package `design_handoff_calendar_ai/` (selected direction **B′** — warm-paper Bento month grid + Discord-style assistant panel, spec in `directionBD.jsx` and its README).
 
-The UI is a static page served by the stdlib dashboard server: `sentineldesk/static/calendar.html`, mounted at `/calendar`. No build step, no external dependencies; Google Fonts are the only remote asset and the page must degrade gracefully without them.
+The UI is a static page served by the stdlib dashboard server: `sentineldesk/static/calendar.html`, mounted at `/` (with `/calendar` as an alias). The legacy monitor ops dashboard lives at `/ops` and is linked from the assistant panel header. No build step, no external dependencies; Google Fonts are the only remote asset and the page must degrade gracefully without them.
 
 Regression tests for every shape below live in `tests/test_ui_contract.py`. Sample responses (generated from `fixtures/ui/sample_emails.json`, fully synthetic) are committed next to this document:
 

@@ -267,6 +267,18 @@ class AskContractTests(UiContractBase):
 
 
 class CalendarPageTests(UiContractBase):
+    def test_root_serves_calendar_and_ops_serves_legacy_dashboard(self) -> None:
+        status, _, body = self.request("GET", "/")
+        self.assertEqual(status, 200)
+        self.assertIn('id="calApp"', body.decode("utf-8"))
+        status, _, body = self.request("GET", "/ops")
+        self.assertEqual(status, 200)
+        self.assertIn('id="scenarioSelect"', body.decode("utf-8"))
+
+    def test_calendar_page_links_to_ops_dashboard(self) -> None:
+        _, _, body = self.request("GET", "/")
+        self.assertIn('href="/ops"', body.decode("utf-8"))
+
     def test_calendar_page_served_with_contract_wiring(self) -> None:
         status, headers, body = self.request("GET", "/calendar")
         self.assertEqual(status, 200)

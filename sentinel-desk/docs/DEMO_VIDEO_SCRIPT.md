@@ -13,7 +13,7 @@ python3 -m sentineldesk --home .demo demo record-prep --port 8787
 python3 -m sentineldesk --home .demo serve --port 8787
 ```
 
-Open `http://127.0.0.1:8787`.
+Open `http://127.0.0.1:8787/ops` (the monitor ops dashboard; `/` now serves the calendar assistant page).
 
 `demo record-prep` prepares baseline, critical, and uncertain demo states before recording, then prints the run IDs and artifact paths to use if needed.
 

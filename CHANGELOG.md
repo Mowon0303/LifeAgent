@@ -107,6 +107,7 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Changed
 
+- Promoted the calendar assistant page to the main dashboard entry after user acceptance: `/` now serves `calendar.html` (with `/calendar` kept as an alias), the legacy monitor ops dashboard moved to `/ops`, the assistant panel header gained an ops-dashboard link, `demo record-prep` prints the `/ops` dashboard URL, and the recording docs point at `/ops`.
 - Reframed the next product direction from portal-first monitoring to email-first LifeAgent: email and attachments are primary sources, portal/CDP capture becomes a verification tool, and calendar becomes the action layer.
 - Added the planned calendar workflow: verified deadlines become draft events, reminders, dashboard calendar entries, and optional external calendar sync after confirmation.
 - Expanded the calendar plan from simple export into a date-based product surface with evidence-linked deadline chips, draft/synced state, uncertainty markers, and reminder policy.
@@ -160,6 +161,8 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Verified
 
+- `cd sentinel-desk && python3 -B -m unittest discover -s tests` passed with 219 tests after the root-route swap, including new assertions that `/` serves the calendar page, `/ops` serves the legacy dashboard, and the assistant header links to `/ops`.
+- Browser verification after the swap: `/` renders the calendar assistant with the previously confirmed 6/21 deadline still solid (state persisted), `/ops` serves the scenario/evidence dashboard, and `/calendar` still works as an alias.
 - `cd sentinel-desk && python3 -B -m unittest discover -s tests` passed with 217 tests after adding the UI contract gates and the calendar page.
 - Browser verification of `/calendar` against a seeded demo home: month view rendered the warm-paper grid with today outlined and a dashed pending chip; confirming the first suggestion flipped the 6/21 chip from dashed purple to solid terracotta after a real confirmation-gated ICS export; ignoring advanced the suggestion queue and recorded the review; week view rendered the time grid with the now-line in today's column; agenda view grouped events with relative dates, type chips, and source-trust captions; the composer round-tripped `/api/ask` and rendered a fail-loud uncertain answer with the uncertainty style.
 - `cd sentinel-desk && python3 -B -m unittest discover -s tests` passed with 200 tests after adding the email-extraction golden-set eval gates.

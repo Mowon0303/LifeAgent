@@ -780,7 +780,7 @@ class LiveVerificationDashboardTests(unittest.TestCase):
         self.assertEqual(reports[0]["suite"], "langgraph")
 
     def test_dashboard_fetches_integration_verification_count(self) -> None:
-        status, _, body = self.request("GET", "/")
+        status, _, body = self.request("GET", "/ops")
         html = body.decode("utf-8")
         self.assertEqual(status, 200)
         self.assertIn("/api/integrations/verifications", html)

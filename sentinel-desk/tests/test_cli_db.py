@@ -42,7 +42,7 @@ class CliDbTests(unittest.TestCase):
             code = main(["--home", self.home, "demo", "record-prep", "--port", "8899"])
         self.assertEqual(code, 0)
         summary = json.loads(output.getvalue())
-        self.assertEqual(summary["dashboard_url"], "http://127.0.0.1:8899")
+        self.assertEqual(summary["dashboard_url"], "http://127.0.0.1:8899/ops")
         self.assertEqual(summary["run_count"], 5)
         self.assertEqual(summary["alert_count"], 2)
         self.assertEqual(len(summary["baseline_run_ids"]), 3)

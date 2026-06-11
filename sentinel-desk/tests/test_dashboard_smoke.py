@@ -69,7 +69,7 @@ class DashboardSmokeTests(unittest.TestCase):
         return status, headers, json.loads(body.decode("utf-8"))
 
     def test_dashboard_html_exposes_scenario_and_evidence_controls(self) -> None:
-        status, headers, body = self.request("GET", "/")
+        status, headers, body = self.request("GET", "/ops")
         html = body.decode("utf-8")
         self.assertEqual(status, 200)
         self.assertIn("text/html", headers["content-type"])

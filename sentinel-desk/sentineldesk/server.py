@@ -165,10 +165,10 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         static_root = project_root() / "sentineldesk" / "static"
-        if path in {"/", "/index.html"}:
-            file_path = static_root / "index.html"
-        elif path == "/calendar":
+        if path in {"/", "/calendar"}:
             file_path = static_root / "calendar.html"
+        elif path in {"/ops", "/index.html"}:
+            file_path = static_root / "index.html"
         else:
             file_path = static_root / path.lstrip("/")
         if file_path.exists() and file_path.is_file():

@@ -133,7 +133,7 @@ def cmd_demo_record_prep(args: argparse.Namespace) -> int:
         {
             "home": str(paths.home),
             "fixtures_copied": copied,
-            "dashboard_url": f"http://127.0.0.1:{args.port}",
+            "dashboard_url": f"http://127.0.0.1:{args.port}/ops",
             "serve_command": f"python3 -m sentineldesk --home {paths.home} serve --port {args.port}",
             "run_count": len(runs),
             "alert_count": len(alerts),
