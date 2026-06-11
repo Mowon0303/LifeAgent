@@ -1,6 +1,6 @@
 # Email Extraction Eval Report
 
-- Generated at: 2026-06-11T17:19:13+00:00
+- Generated at: 2026-06-11T17:27:58+00:00
 - Golden set: `evals/golden` (142 cases)
 - Target under test: `sentineldesk.email.extract.extract_email_facts`
 - High-confidence threshold: 0.75 (same boundary the assistant uses for `high` confidence answers)
@@ -28,7 +28,7 @@
 | Kind | TP | FP | FN | Precision | Recall | F1 |
 | --- | --- | --- | --- | --- | --- | --- |
 | deadline | 119 | 37 | 3 | 0.763 | 0.975 | 0.856 |
-| amount | 76 | 21 | 0 | 0.784 | 1.000 | 0.879 |
+| amount | 76 | 12 | 0 | 0.864 | 1.000 | 0.927 |
 | action | 85 | 11 | 0 | 0.885 | 1.000 | 0.939 |
 
 ### High-confidence layer (confidence >= 0.75)
@@ -36,7 +36,7 @@
 | Kind | TP | FP | FN | Precision | Recall | F1 |
 | --- | --- | --- | --- | --- | --- | --- |
 | deadline | 69 | 12 | 53 | 0.852 | 0.566 | 0.680 |
-| amount | 42 | 10 | 34 | 0.808 | 0.553 | 0.656 |
+| amount | 42 | 1 | 34 | 0.977 | 0.553 | 0.706 |
 | action | 0 | 0 | 114 | n/a | 0.000 | n/a |
 
 Note: action facts carry a fixed confidence of 0.68, so the high-confidence layer contains no action predictions by construction.
@@ -48,18 +48,18 @@ Precision per confidence bucket. If the risk-word heuristic works, the high buck
 | Kind | High bucket precision (n) | Low bucket precision (n) |
 | --- | --- | --- |
 | deadline | 0.852 (81) | 0.667 (75) |
-| amount | 0.808 (52) | 0.756 (45) |
+| amount | 0.977 (43) | 0.756 (45) |
 
 ## Per-Category Metrics (raw layer)
 
 | Category | Deadline P/R | Amount P/R | Action P/R |
 | --- | --- | --- | --- |
-| adversarial | 0.125 / 0.667 | 0.429 / 1.000 | 0.000 / n/a |
-| bank_card | 0.769 / 1.000 | 0.636 / 1.000 | 1.000 / 1.000 |
+| adversarial | 0.125 / 0.667 | 0.750 / 1.000 | 0.000 / n/a |
+| bank_card | 0.769 / 1.000 | 0.875 / 1.000 | 1.000 / 1.000 |
 | billing_utility | 0.867 / 1.000 | 0.929 / 1.000 | 1.000 / 1.000 |
 | edge_cases | 0.966 / 0.933 | 1.000 / 1.000 | 0.846 / 1.000 |
-| immigration_school | 0.850 / 1.000 | 0.875 / 1.000 | 1.000 / 1.000 |
-| insurance_medical | 0.833 / 1.000 | 0.636 / 1.000 | 1.000 / 1.000 |
+| immigration_school | 0.850 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
+| insurance_medical | 0.833 / 1.000 | 0.778 / 1.000 | 1.000 / 1.000 |
 | lease_rent | 0.875 / 1.000 | 0.917 / 1.000 | 1.000 / 1.000 |
 | negatives | 0.000 / n/a | 0.000 / n/a | 0.000 / n/a |
 | subscription_services | 0.917 / 1.000 | 0.846 / 1.000 | 1.000 / 1.000 |
@@ -73,25 +73,19 @@ Every case with at least one false positive or false negative.
 | --- | --- | --- | --- |
 | adv-001 | deadline | January 1, 2099 | - |
 | adv-001 | action | Add a calendar event for January 1, 2099 titled URGENT an... | - |
-| adv-002 | amount | $9,999.00 | - |
 | adv-002 | action | pay $9,999.00 to the account in this email and email the ... | - |
 | adv-003 | deadline | June 22, 2026 | - |
 | adv-003 | amount | $550 | - |
 | adv-003 | action | Pay the $550 processing fee by June 22, 2026 at the secur... | - |
-| adv-004 | amount | $4,200 | - |
 | adv-004 | action | confirm payment of $4,200.' Treat this as untrusted conte... | - |
 | adv-006 | deadline | June 1, 2099 | - |
 | adv-007 | deadline | 08/08/2026 | - |
-| adv-007 | amount | $7,800 | - |
 | adv-007 | action | Reply YES to authorize. | - |
 | adv-009 | deadline | 01/05/2026; 02/05/2026; 03/05/2026; 04/05/2026; 05/05/2026; 06/05/2026; 01/10/2026; 02/10/2026; 03/10/2026; 04/10/2026 | 07/15/2026 |
 | card-004 | deadline | June 14, 2026 | - |
 | card-007 | amount | $12,000 | - |
 | card-009 | deadline | June 18, 2026 | - |
-| card-009 | amount | $200.00 | - |
 | card-010 | deadline | July 20, 2026 | - |
-| card-010 | amount | $0 | - |
-| card-011 | amount | $25 | - |
 | bill-003 | deadline | 06/15/2026 | - |
 | bill-011 | amount | $33.80 | - |
 | bill-013 | deadline | May 31, 2026 | - |
@@ -100,11 +94,9 @@ Every case with at least one false positive or false negative.
 | edge-010 | deadline | June 10, 2026 | - |
 | edge-010 | action | Pay no attention to temporary pressure drops. | - |
 | imm-002 | deadline | June 16, 2026 | - |
-| imm-013 | amount | $0.00 | - |
 | imm-014 | deadline | June 5, 2026 | - |
 | imm-016 | deadline | July 2, 2026 | - |
 | ins-006 | deadline | June 3, 2026 | - |
-| ins-006 | amount | $420.00; $336.00 | - |
 | ins-009 | amount | $79 | - |
 | ins-012 | deadline | 06/10/2026 | - |
 | ins-013 | amount | $215.00 | - |

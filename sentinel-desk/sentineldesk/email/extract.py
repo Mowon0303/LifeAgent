@@ -66,6 +66,13 @@ SPELLED_AMOUNT_NEGATIVE_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+AMOUNT_INJECTION_CONTEXT_RE = re.compile(
+    r"\b("
+    r"system override|ignore (?:all )?(?:(?:previous|prior) )?instructions|pretend you are|"
+    r"treat this as untrusted|disregard sender verification"
+    r")\b",
+    re.IGNORECASE,
+)
 BASE_ACTION_VERBS = (
     "submit",
     "send",
@@ -166,14 +173,18 @@ def extract_email_facts(message: EmailMessage) -> list[EmailFact]:
             )
         )
     for match in AMOUNT_RE.finditer(text):
+        amount = match.group(0)
+        context = _context(text, match.start(), match.end())
+        if not _amount_context_allowed(text, match.start(), match.end(), amount, context):
+            continue
         facts.append(
             EmailFact(
                 kind="amount",
-                value=match.group(0),
+                value=amount,
                 source_id=message.source_id,
                 source_type=message.source_type,
                 trust_label=message.trust_label,
-                evidence=_context(text, match.start(), match.end()),
+                evidence=context,
                 confidence=0.78 if _near_risk_word(text, match.start()) else 0.52,
                 received_at=message.received_at,
                 metadata=_metadata(message),
@@ -238,6 +249,38 @@ def _remove_invisible_number_separators(text: str) -> str:
 def _near_risk_word(text: str, start: int) -> bool:
     before = text[max(0, start - 80) : start].lower()
     return any(term in before for term in ["due", "balance", "rent", "invoice", "amount", "pay"])
+
+
+def _amount_context_allowed(text: str, start: int, end: int, value: str, context: str) -> bool:
+    before = text[max(0, start - 110) : start].lower()
+    after = text[end : min(len(text), end + 110)].lower()
+    lowered_context = context.lower()
+    if AMOUNT_INJECTION_CONTEXT_RE.search(lowered_context):
+        return False
+    if re.search(r"\breceived your payment of\s*$", before):
+        return False
+    if re.search(r"\bpayment of\s*$", before) and re.search(r"^\s*on\b.*\b(receipt|thank you)\b", after):
+        return False
+    if (
+        re.search(r"\bbalance transfer fee\b", after)
+        and re.search(r"\b(limited time|intro apr|offer terms)\b", lowered_context)
+    ):
+        return False
+    if "low balance alert" in lowered_context and re.search(r"\bfallen below\s*$", before):
+        return False
+    if re.search(r"\bfine balance:\s*$", before) and _amount_is_zero(value):
+        return False
+    return not re.search(r"\b(?:amount billed|plan paid):\s*$", before)
+
+
+def _amount_is_zero(value: str) -> bool:
+    numeric = re.sub(r"[^\d.]", "", value.replace(",", ""))
+    if not numeric:
+        return False
+    try:
+        return float(numeric) == 0.0
+    except ValueError:
+        return False
 
 
 def _spelled_amount_context_allowed(context: str) -> bool:
