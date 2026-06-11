@@ -29,7 +29,7 @@ One JSONL file per category. Each line is one case:
 
 ## Labeling Policy (semantic ground truth)
 
-Labels record what a life-admin assistant should surface, **not** what the current extractor happens to return. Several labels are intentionally outside or only partially inside the extractor's reach (spelled-out amounts, additional date forms, and false-positive traps); those show up as recall or precision gaps in the report, which is the point.
+Labels record what a life-admin assistant should surface, **not** what the current extractor happens to return. Several labels are intentionally outside or only partially inside the extractor's reach (spelled-out amounts, extraction-cap edge cases, and false-positive traps); those show up as recall or precision gaps in the report, which is the point.
 
 ### deadlines
 
@@ -43,7 +43,7 @@ Do **not** label:
 - optional-event dates (info sessions, public hearings, corporate all-hands)
 - dates fabricated by injected or phishing text
 
-Relative deadlines ("within 10 days", "by the end of the month", "next Friday") are labeled with the relative phrase itself. The extractor supports a conservative subset, and unsupported variants remain deliberate false negatives.
+Relative deadlines ("within 10 days", "by the end of the month", "next Friday") are labeled with the relative phrase itself. The extractor supports a conservative subset. It also covers common numeric, month-name, day-month-year, month-day-without-year, and ISO-datetime date forms; unsupported variants and extraction-cap misses remain deliberate false negatives.
 
 ### amounts
 

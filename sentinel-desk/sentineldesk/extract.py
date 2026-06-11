@@ -9,12 +9,15 @@ from html.parser import HTMLParser
 from typing import Any
 
 
+MONTH_PATTERN = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?"
 DATE_RE = re.compile(
-    r"\b(?:"
-    r"\d{4}-\d{1,2}-\d{1,2}|"
-    r"\d{1,2}/\d{1,2}/\d{2,4}|"
-    r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}"
-    r")\b",
+    r"(?<!\w)(?:"
+    r"\d{4}-\d{1,2}-\d{1,2}(?=T|\b)|"
+    r"\d{1,2}/\d{1,2}/\d{2,4}\b|"
+    rf"{MONTH_PATTERN}\s+\d{{1,2}},?\s+\d{{4}}\b|"
+    rf"\d{{1,2}}\s+{MONTH_PATTERN}\s+\d{{4}}\b|"
+    rf"{MONTH_PATTERN}\s+\d{{1,2}}(?!\s*,?\s+\d{{4}})\b"
+    r")",
     re.IGNORECASE,
 )
 

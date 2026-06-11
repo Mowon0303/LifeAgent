@@ -76,6 +76,30 @@ class ExtractTests(unittest.TestCase):
         deadlines = extract_deadlines(fixture("lease_rent_due.html"))
         self.assertTrue(any(item["date_text"] == "06/05/2026" for item in deadlines))
 
+    def test_extract_deadline_day_month_year(self) -> None:
+        deadlines = extract_deadlines(
+            "Your appointment is scheduled for 14 July 2026 at 10:00. Bring your appointment letter."
+        )
+        self.assertTrue(any(item["date_text"] == "14 July 2026" for item in deadlines))
+
+    def test_extract_deadline_month_day_without_year(self) -> None:
+        deadlines = extract_deadlines("Quick reminder: rent is due June 5 as usual.")
+        self.assertTrue(any(item["date_text"] == "June 5" for item in deadlines))
+
+    def test_extract_deadline_iso_datetime_t_suffix(self) -> None:
+        deadlines = extract_deadlines(
+            "Maintenance runs from 2026-07-12T22:00 to 2026-07-13T02:00 UTC. Submit first."
+        )
+        values = {item["date_text"] for item in deadlines}
+        self.assertIn("2026-07-12", values)
+        self.assertIn("2026-07-13", values)
+
+    def test_full_month_date_is_not_split_into_short_date(self) -> None:
+        deadlines = extract_deadlines("Payment is due July 2, 2026.")
+        values = [item["date_text"] for item in deadlines]
+        self.assertEqual(values.count("July 2, 2026"), 1)
+        self.assertNotIn("July 2", values)
+
     def test_extract_relative_deadline_windows(self) -> None:
         text = (
             "Respond to this summons within 10 days of receipt. "

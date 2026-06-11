@@ -1,10 +1,10 @@
 # Email Extraction Eval Report
 
-- Generated at: 2026-06-11T17:06:38+00:00
+- Generated at: 2026-06-11T17:11:42+00:00
 - Golden set: `evals/golden` (142 cases)
 - Target under test: `sentineldesk.email.extract.extract_email_facts`
 - High-confidence threshold: 0.75 (same boundary the assistant uses for `high` confidence answers)
-- Labels are semantic ground truth for a life-admin assistant; relative deadlines, non-dollar currencies, and expanded action verbs stay labeled even when extractor support is partial, so recall reflects true capability.
+- Labels are semantic ground truth for a life-admin assistant; expanded date forms, relative deadlines, non-dollar currencies, and expanded action verbs stay labeled even when extractor support is partial, so recall reflects true capability.
 
 ## Golden Set Composition
 
@@ -27,7 +27,7 @@
 
 | Kind | TP | FP | FN | Precision | Recall | F1 |
 | --- | --- | --- | --- | --- | --- | --- |
-| deadline | 115 | 37 | 7 | 0.757 | 0.943 | 0.839 |
+| deadline | 119 | 37 | 3 | 0.763 | 0.975 | 0.856 |
 | amount | 75 | 21 | 1 | 0.781 | 0.987 | 0.872 |
 | action | 85 | 11 | 0 | 0.885 | 1.000 | 0.939 |
 
@@ -35,7 +35,7 @@
 
 | Kind | TP | FP | FN | Precision | Recall | F1 |
 | --- | --- | --- | --- | --- | --- | --- |
-| deadline | 65 | 12 | 57 | 0.844 | 0.533 | 0.653 |
+| deadline | 69 | 12 | 53 | 0.852 | 0.566 | 0.680 |
 | amount | 41 | 10 | 35 | 0.804 | 0.539 | 0.646 |
 | action | 0 | 0 | 114 | n/a | 0.000 | n/a |
 
@@ -47,7 +47,7 @@ Precision per confidence bucket. If the risk-word heuristic works, the high buck
 
 | Kind | High bucket precision (n) | Low bucket precision (n) |
 | --- | --- | --- |
-| deadline | 0.844 (77) | 0.667 (75) |
+| deadline | 0.852 (81) | 0.667 (75) |
 | amount | 0.804 (51) | 0.756 (45) |
 
 ## Per-Category Metrics (raw layer)
@@ -57,7 +57,7 @@ Precision per confidence bucket. If the risk-word heuristic works, the high buck
 | adversarial | 0.125 / 0.667 | 0.429 / 1.000 | 0.000 / n/a |
 | bank_card | 0.769 / 1.000 | 0.636 / 1.000 | 1.000 / 1.000 |
 | billing_utility | 0.867 / 1.000 | 0.929 / 1.000 | 1.000 / 1.000 |
-| edge_cases | 0.960 / 0.800 | 1.000 / 0.875 | 0.846 / 1.000 |
+| edge_cases | 0.966 / 0.933 | 1.000 / 0.875 | 0.846 / 1.000 |
 | immigration_school | 0.850 / 1.000 | 0.875 / 1.000 | 1.000 / 1.000 |
 | insurance_medical | 0.833 / 1.000 | 0.636 / 1.000 | 1.000 / 1.000 |
 | lease_rent | 0.875 / 1.000 | 0.917 / 1.000 | 1.000 / 1.000 |
@@ -95,11 +95,8 @@ Every case with at least one false positive or false negative.
 | bill-003 | deadline | 06/15/2026 | - |
 | bill-011 | amount | $33.80 | - |
 | bill-013 | deadline | May 31, 2026 | - |
-| edge-003 | deadline | - | 14 July 2026 |
-| edge-004 | deadline | - | June 5 |
 | edge-005 | deadline | - | 06/01/2027; 07/01/2027 |
 | edge-005 | action | schedule Your 2026-2027 lease payment schedule: 08/01/202... | - |
-| edge-006 | deadline | - | 2026-07-12; 2026-07-13 |
 | edge-008 | amount | - | one thousand two hundred dollars |
 | edge-010 | deadline | June 10, 2026 | - |
 | edge-010 | action | Pay no attention to temporary pressure drops. | - |
