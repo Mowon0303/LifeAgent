@@ -144,6 +144,44 @@ class DashboardSmokeTests(unittest.TestCase):
         self.assertEqual(events[0]["source_count"], 1)
         self.assertEqual(audit_events[0]["action"], "email.ingest")
 
+    def test_task_api_exposes_reviewable_tasks_and_status_updates(self) -> None:
+        ingest_messages(
+            self.paths,
+            [
+                EmailMessage(
+                    message_id="m-task-api",
+                    thread_id="t-task-api",
+                    sender="leasing@example.com",
+                    subject="Move-out Notice Reminder",
+                    received_at="2026-06-10",
+                    body_text="Please submit written notice by July 2, 2026. Current balance due is $25.00.",
+                )
+            ],
+            ingested_at="2026-06-10T12:00:00Z",
+        )
+
+        status, _, tasks = self.json_request("GET", "/api/tasks")
+        self.assertEqual(status, 200)
+        self.assertTrue(any(task["kind"] == "deadline" for task in tasks))
+        self.assertTrue(any(task["kind"] == "amount" for task in tasks))
+        task_id = tasks[0]["task_id"]
+
+        review_status, _, reviewed = self.json_request(
+            "POST",
+            f"/api/tasks/review?task_id={task_id}&status=reviewed&note=checked",
+        )
+        self.assertEqual(review_status, 200)
+        self.assertEqual(reviewed["status"], "reviewed")
+        self.assertEqual(reviewed["actor"], "dashboard")
+        self.assertEqual(reviewed["task"]["status"], "reviewed")
+
+        filtered_status, _, filtered = self.json_request("GET", "/api/tasks?status=reviewed")
+        self.assertEqual(filtered_status, 200)
+        self.assertEqual([task["task_id"] for task in filtered], [task_id])
+        audit = db.list_audit_events(self.paths)[0]
+        self.assertEqual(audit["action"], "task.review")
+        self.assertEqual(audit["subject"], task_id)
+
     def test_calendar_sync_api_requires_confirmation_and_exports_ics(self) -> None:
         ingest_messages(
             self.paths,

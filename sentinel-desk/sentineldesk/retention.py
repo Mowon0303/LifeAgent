@@ -11,6 +11,7 @@ from .extract import utc_now
 SOURCE_TABLES = {
     "email": ("email_messages", "ingested_at"),
     "calendar": ("calendar_drafts", "updated_at"),
+    "tasks": ("task_reviews", "updated_at"),
     "audit": ("audit_events", "created_at"),
     "approvals": ("approval_records", "created_at"),
 }
@@ -25,7 +26,7 @@ class RetentionResult:
     counts: dict[str, int]
 
 
-def plan_purge(paths: Paths, *, before: str, sources: tuple[str, ...] = ("email", "calendar", "audit", "approvals")) -> RetentionResult:
+def plan_purge(paths: Paths, *, before: str, sources: tuple[str, ...] = ("email", "calendar", "tasks", "audit", "approvals")) -> RetentionResult:
     return RetentionResult(before=before, sources=sources, dry_run=True, deleted=False, counts=_counts(paths, before, sources))
 
 
@@ -33,7 +34,7 @@ def purge(
     paths: Paths,
     *,
     before: str,
-    sources: tuple[str, ...] = ("email", "calendar", "audit", "approvals"),
+    sources: tuple[str, ...] = ("email", "calendar", "tasks", "audit", "approvals"),
     confirmed: bool = False,
     actor: str = "user",
 ) -> RetentionResult:

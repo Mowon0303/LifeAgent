@@ -38,6 +38,7 @@ from .reports import (
 from .scenarios import apply_scenario, list_scenarios
 from .server import serve
 from .secrets import env_secret
+from .tasks import list_tasks, review_task
 
 
 def print_json(value: object) -> None:
@@ -308,7 +309,7 @@ def cmd_approvals_list(args: argparse.Namespace) -> int:
 def cmd_retention_purge(args: argparse.Namespace) -> int:
     paths = paths_from_args(args)
     db.init_db(paths)
-    sources = tuple(args.source) or ("email", "calendar", "audit", "approvals")
+    sources = tuple(args.source) or ("email", "calendar", "tasks", "audit", "approvals")
     result = purge(paths, before=args.before, sources=sources, confirmed=True) if args.confirm else plan_purge(paths, before=args.before, sources=sources)
     print_json(result_to_dict(result))
     return 0
@@ -391,6 +392,38 @@ def cmd_connectors_state(args: argparse.Namespace) -> int:
     paths = paths_from_args(args)
     db.init_db(paths)
     print_json(db.list_connector_states(paths, limit=args.limit))
+    return 0
+
+
+def cmd_tasks_list(args: argparse.Namespace) -> int:
+    paths = paths_from_args(args)
+    print_json(list_tasks(paths, status=args.status, limit=args.limit))
+    return 0
+
+
+def cmd_tasks_review(args: argparse.Namespace) -> int:
+    paths = paths_from_args(args)
+    try:
+        result = review_task(
+            paths,
+            task_id=args.task_id,
+            status=args.status,
+            note=args.note or "",
+            actor=args.actor,
+        )
+    except ValueError as error:
+        print_json({"error": str(error)})
+        return 1
+    print_json(
+        {
+            "task_id": result.task_id,
+            "status": result.status,
+            "note": result.note,
+            "actor": result.actor,
+            "updated_at": result.updated_at,
+            "task": result.task,
+        }
+    )
     return 0
 
 
@@ -818,6 +851,19 @@ def build_parser() -> argparse.ArgumentParser:
     email_sync_gmail.add_argument("--token-env", default="SENTINEL_GOOGLE_TOKEN_JSON")
     email_sync_gmail.set_defaults(func=cmd_email_sync_gmail)
 
+    tasks = sub.add_parser("tasks", help="Review extracted LifeAgent tasks")
+    tasks_sub = tasks.add_subparsers(dest="tasks_command", required=True)
+    tasks_list = tasks_sub.add_parser("list", help="List task-review items derived from email facts and local drafts")
+    tasks_list.add_argument("--status", choices=["new", "reviewed", "ignored", "needs_verification", "done"])
+    tasks_list.add_argument("--limit", type=int, default=100)
+    tasks_list.set_defaults(func=cmd_tasks_list)
+    tasks_review = tasks_sub.add_parser("review", help="Set review status for one task")
+    tasks_review.add_argument("--task-id", required=True)
+    tasks_review.add_argument("--status", required=True, choices=["new", "reviewed", "ignored", "needs_verification", "done"])
+    tasks_review.add_argument("--note", default="")
+    tasks_review.add_argument("--actor", default="user")
+    tasks_review.set_defaults(func=cmd_tasks_review)
+
     calendar = sub.add_parser("calendar", help="Preview or sync drafted calendar deadline events")
     calendar_sub = calendar.add_subparsers(dest="calendar_command", required=True)
     calendar_sync = calendar_sub.add_parser("sync", help="Sync calendar drafts after explicit confirmation")
@@ -935,7 +981,7 @@ def build_parser() -> argparse.ArgumentParser:
     retention_purge.add_argument(
         "--source",
         action="append",
-        choices=["email", "calendar", "audit", "approvals"],
+        choices=["email", "calendar", "tasks", "audit", "approvals"],
         default=[],
         help="Source to purge; repeat for multiple. Defaults to all sources.",
     )

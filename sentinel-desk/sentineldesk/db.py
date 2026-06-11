@@ -89,6 +89,18 @@ CREATE TABLE IF NOT EXISTS calendar_drafts (
 CREATE INDEX IF NOT EXISTS idx_calendar_drafts_date ON calendar_drafts(date_text);
 CREATE INDEX IF NOT EXISTS idx_calendar_drafts_status ON calendar_drafts(status);
 
+CREATE TABLE IF NOT EXISTS task_reviews (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id TEXT NOT NULL UNIQUE,
+    status TEXT NOT NULL,
+    note TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_task_reviews_status ON task_reviews(status);
+CREATE INDEX IF NOT EXISTS idx_task_reviews_updated ON task_reviews(updated_at);
+
 CREATE TABLE IF NOT EXISTS audit_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     action TEXT NOT NULL,
@@ -661,6 +673,52 @@ def update_calendar_draft_sync_state(
                 "UPDATE calendar_drafts SET sync_state = ?, status = ?, updated_at = ? WHERE event_id = ?",
                 (sync_state, status, updated_at, event_id),
             )
+
+
+def upsert_task_review(
+    paths: Paths,
+    *,
+    task_id: str,
+    status: str,
+    note: str,
+    actor: str,
+    updated_at: str,
+) -> int:
+    with open_db(paths) as conn:
+        existing = conn.execute("SELECT id FROM task_reviews WHERE task_id = ?", (task_id,)).fetchone()
+        if existing:
+            conn.execute(
+                """
+                UPDATE task_reviews
+                SET status = ?, note = ?, actor = ?, updated_at = ?
+                WHERE task_id = ?
+                """,
+                (status, note, actor, updated_at, task_id),
+            )
+            return int(existing["id"])
+        cursor = conn.execute(
+            """
+            INSERT INTO task_reviews(task_id, status, note, actor, updated_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (task_id, status, note, actor, updated_at),
+        )
+        return int(cursor.lastrowid)
+
+
+def get_task_review(paths: Paths, *, task_id: str) -> dict[str, Any] | None:
+    with open_db(paths) as conn:
+        row = conn.execute("SELECT * FROM task_reviews WHERE task_id = ?", (task_id,)).fetchone()
+    return decode_row(row)
+
+
+def list_task_reviews(paths: Paths, *, limit: int = 500) -> list[dict[str, Any]]:
+    with open_db(paths) as conn:
+        rows = conn.execute(
+            "SELECT * FROM task_reviews ORDER BY updated_at DESC, id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+    return decode_rows(rows)
 
 
 def upsert_rag_document(

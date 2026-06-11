@@ -101,6 +101,8 @@ python3 -m sentineldesk privacy audit --path .demo/artifacts --require-clean
 python3 -m sentineldesk privacy release-audit --path . --require-clean
 python3 -m sentineldesk privacy release-package --source . --output /tmp/sentineldesk.release.zip
 python3 -m sentineldesk ask "When is my move-out notice deadline?" --email-json ./emails.json
+python3 -m sentineldesk tasks list
+python3 -m sentineldesk tasks review --task-id TASK_ID --status reviewed --note "Checked source evidence"
 python3 -m sentineldesk calendar edit --event-id EVENT_ID --date 2026-07-03
 python3 -m sentineldesk calendar sync --destination ics --event-id EVENT_ID --confirm
 python3 -m sentineldesk serve
@@ -108,6 +110,8 @@ python3 -m sentineldesk chrome launch
 ```
 
 The `ask` command is the first skeleton of the email-first LifeAgent assistant layer. It supports offline local JSON email fixtures, deterministic intent routing, email fact extraction, local RAG policy lookup, latest-run evidence lookup, and citation-bearing answers for deadline, amount, alert explanation, status meaning, next-step, and policy questions. It is intentionally tool-first: if no evidence is provided for a latest-fact or policy question, it returns `uncertain` instead of guessing.
+
+The `tasks` commands expose the non-UI review layer for extracted LifeAgent work items. `tasks list` merges email facts and local calendar drafts into stable task IDs, and `tasks review` records `new`, `reviewed`, `ignored`, `needs_verification`, or `done` status with an audit event. The same backend is available through `/api/tasks` and `/api/tasks/review` for the future UI.
 
 `chrome launch` starts a detached dedicated Chrome profile under `~/.sentineldesk/chrome-profile` and opens a blank page for the DevTools endpoint. SentinelDesk refuses default Chrome profile paths for remote debugging.
 

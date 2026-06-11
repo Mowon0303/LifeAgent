@@ -18,6 +18,7 @@ from .monitor import run_all
 from .reports import package_path_for, redact_data, write_evidence_package
 from .retention import plan_purge, purge, result_to_dict
 from .scenarios import apply_scenario, list_scenarios
+from .tasks import list_tasks, review_task
 
 
 def json_bytes(value: object) -> bytes:
@@ -71,6 +72,13 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/email/facts":
             query = parse_qs(parsed.query)
             self.send_json(db.list_email_facts(self.paths, kind=query.get("kind", [None])[0], limit=100))
+            return
+        if path == "/api/tasks":
+            query = parse_qs(parsed.query)
+            try:
+                self.send_json(list_tasks(self.paths, status=query.get("status", [None])[0], limit=100))
+            except ValueError as error:
+                self.send_json({"error": str(error)}, status=400)
             return
         if path == "/api/calendar/drafts":
             self.send_json(db.list_calendar_drafts(self.paths, limit=100))
@@ -268,10 +276,43 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as error:
                 self.send_json({"error": str(error)}, status=500)
             return
+        if parsed.path == "/api/tasks/review":
+            query = parse_qs(parsed.query)
+            task_id = query.get("task_id", [""])[0]
+            status = query.get("status", [""])[0]
+            if not task_id:
+                self.send_json({"error": "task_id query parameter required"}, status=400)
+                return
+            if not status:
+                self.send_json({"error": "status query parameter required"}, status=400)
+                return
+            try:
+                result = review_task(
+                    self.paths,
+                    task_id=task_id,
+                    status=status,
+                    note=query.get("note", [""])[0],
+                    actor="dashboard",
+                )
+                self.send_json(
+                    {
+                        "task_id": result.task_id,
+                        "status": result.status,
+                        "note": result.note,
+                        "actor": result.actor,
+                        "updated_at": result.updated_at,
+                        "task": result.task,
+                    }
+                )
+            except ValueError as error:
+                self.send_json({"error": str(error)}, status=400)
+            except Exception as error:
+                self.send_json({"error": str(error)}, status=500)
+            return
         if parsed.path == "/api/retention/purge":
             query = parse_qs(parsed.query)
             before = query.get("before", [""])[0]
-            sources = tuple(query.get("source", [])) or ("email", "calendar", "audit", "approvals")
+            sources = tuple(query.get("source", [])) or ("email", "calendar", "tasks", "audit", "approvals")
             confirmed = query.get("confirm", ["0"])[0] in {"1", "true", "yes"}
             if not before:
                 self.send_json({"error": "before query parameter required"}, status=400)
