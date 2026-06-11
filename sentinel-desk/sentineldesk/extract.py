@@ -21,6 +21,9 @@ DATE_RE = re.compile(
     re.IGNORECASE,
 )
 
+DEFAULT_DEADLINE_LIMIT = 10
+SCHEDULE_DEADLINE_LIMIT = 20
+
 RELATIVE_DEADLINE_PATTERNS = (
     re.compile(r"\bby the end of the month\b", re.IGNORECASE),
     re.compile(
@@ -186,7 +189,7 @@ def extract_deadlines(text: str) -> list[dict[str, Any]]:
                 "confidence": _deadline_confidence(context, relative=True),
             }
         )
-    return deadlines[:10]
+    return _select_deadlines(normalized, deadlines)
 
 
 def _deadline_confidence(context: str, *, relative: bool = False) -> float:
@@ -198,6 +201,27 @@ def _deadline_confidence(context: str, *, relative: bool = False) -> float:
     if high_confidence:
         return 0.82
     return 0.58 if relative else 0.5
+
+
+def _select_deadlines(text: str, deadlines: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    limit = SCHEDULE_DEADLINE_LIMIT if _structured_deadline_series_context(text) else DEFAULT_DEADLINE_LIMIT
+    return deadlines[:limit]
+
+
+def _structured_deadline_series_context(text: str) -> bool:
+    if len(DATE_RE.findall(text)) <= DEFAULT_DEADLINE_LIMIT:
+        return False
+    return bool(
+        re.search(
+            r"\b("
+            r"(?:lease|rent|payment|premium|repayment|billing|installment)\s+"
+            r"(?:schedule|calendar|plan)|"
+            r"monthly installment|payment schedule"
+            r")\b",
+            text,
+            re.IGNORECASE,
+        )
+    )
 
 
 def _absolute_deadline_context_allowed(text: str, start: int, end: int, context: str) -> bool:

@@ -162,6 +162,26 @@ class ExtractTests(unittest.TestCase):
         values = {item["date_text"] for item in extract_deadlines(text)}
         self.assertEqual(values, {"07/15/2026"})
 
+    def test_keeps_structured_schedule_dates_beyond_default_cap(self) -> None:
+        text = (
+            "Your 2026-2027 lease payment schedule: 08/01/2026, 09/01/2026, 10/01/2026, "
+            "11/01/2026, 12/01/2026, 01/01/2027, 02/01/2027, 03/01/2027, 04/01/2027, "
+            "05/01/2027, 06/01/2027, and 07/01/2027. Each monthly installment is $1,900."
+        )
+        values = [item["date_text"] for item in extract_deadlines(text)]
+        self.assertEqual(len(values), 12)
+        self.assertEqual(values[-2:], ["06/01/2027", "07/01/2027"])
+
+    def test_caps_unstructured_date_stuffing_at_default_limit(self) -> None:
+        text = (
+            "Important dates: 01/01/2026, 02/01/2026, 03/01/2026, 04/01/2026, "
+            "05/01/2026, 06/01/2026, 07/01/2026, 08/01/2026, 09/01/2026, "
+            "10/01/2026, 11/01/2026, and 12/01/2026."
+        )
+        values = [item["date_text"] for item in extract_deadlines(text)]
+        self.assertEqual(len(values), 10)
+        self.assertEqual(values[-1], "10/01/2026")
+
     def test_ok_health_for_portal_page(self) -> None:
         health = detect_health(fixture("opt_submitted.html"))
         self.assertEqual(health["state"], "ok")

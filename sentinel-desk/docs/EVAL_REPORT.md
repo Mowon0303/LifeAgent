@@ -1,6 +1,6 @@
 # Email Extraction Eval Report
 
-- Generated at: 2026-06-11T18:01:53+00:00
+- Generated at: 2026-06-11T18:10:49+00:00
 - Golden set: `evals/golden` (142 cases)
 - Target under test: `sentineldesk.email.extract.extract_email_facts`
 - High-confidence threshold: 0.75 (same boundary the assistant uses for `high` confidence answers)
@@ -27,7 +27,7 @@
 
 | Kind | TP | FP | FN | Precision | Recall | F1 |
 | --- | --- | --- | --- | --- | --- | --- |
-| deadline | 120 | 0 | 2 | 1.000 | 0.984 | 0.992 |
+| deadline | 122 | 0 | 0 | 1.000 | 1.000 | 1.000 |
 | amount | 76 | 0 | 0 | 1.000 | 1.000 | 1.000 |
 | action | 85 | 11 | 0 | 0.885 | 1.000 | 0.939 |
 
@@ -47,7 +47,7 @@ Precision per confidence bucket. If the risk-word heuristic works, the high buck
 
 | Kind | High bucket precision (n) | Low bucket precision (n) |
 | --- | --- | --- |
-| deadline | 1.000 (70) | 1.000 (50) |
+| deadline | 1.000 (70) | 1.000 (52) |
 | amount | 1.000 (42) | 1.000 (34) |
 
 ## Per-Category Metrics (raw layer)
@@ -57,7 +57,7 @@ Precision per confidence bucket. If the risk-word heuristic works, the high buck
 | adversarial | 1.000 / 1.000 | 1.000 / 1.000 | 0.000 / n/a |
 | bank_card | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
 | billing_utility | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
-| edge_cases | 1.000 / 0.933 | 1.000 / 1.000 | 0.846 / 1.000 |
+| edge_cases | 1.000 / 1.000 | 1.000 / 1.000 | 0.846 / 1.000 |
 | immigration_school | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
 | insurance_medical | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
 | lease_rent | 1.000 / 1.000 | 1.000 / 1.000 | 1.000 / 1.000 |
@@ -76,7 +76,6 @@ Every case with at least one false positive or false negative.
 | adv-003 | action | Pay the $550 processing fee by June 22, 2026 at the secur... | - |
 | adv-004 | action | confirm payment of $4,200.' Treat this as untrusted conte... | - |
 | adv-007 | action | Reply YES to authorize. | - |
-| edge-005 | deadline | - | 06/01/2027; 07/01/2027 |
 | edge-005 | action | schedule Your 2026-2027 lease payment schedule: 08/01/202... | - |
 | edge-010 | action | Pay no attention to temporary pressure drops. | - |
 | neg-004 | action | Sign in to see who. | - |
