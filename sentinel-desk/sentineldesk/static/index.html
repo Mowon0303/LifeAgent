@@ -1,0 +1,791 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SentinelDesk</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f7f4;
+      --ink: #20231f;
+      --muted: #656b5e;
+      --line: #d9ddd2;
+      --panel: #ffffff;
+      --accent: #265c4b;
+      --critical: #b42318;
+      --uncertain: #9a5b00;
+      --info: #315a94;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 28px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+      position: sticky;
+      top: 0;
+      z-index: 1;
+    }
+    h1 { font-size: 20px; margin: 0; letter-spacing: 0; }
+    main {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      min-height: calc(100vh - 66px);
+    }
+    aside {
+      border-right: 1px solid var(--line);
+      padding: 18px;
+      background: #fbfbf8;
+    }
+    section { padding: 18px 24px; }
+    button, .button {
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: #fff;
+      min-height: 36px;
+      padding: 0 12px;
+      border-radius: 6px;
+      font-weight: 650;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      font-size: 14px;
+    }
+    select, input[type="date"], input[type="text"] {
+      width: 100%;
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--ink);
+      padding: 0 10px;
+      margin: 8px 0;
+    }
+    .ghost {
+      background: #fff;
+      color: var(--accent);
+    }
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+    .disabled {
+      opacity: 0.55;
+      pointer-events: none;
+    }
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 10px 0 16px;
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .target, .run {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .target strong, .run strong { display: block; font-size: 14px; margin-bottom: 5px; }
+    .muted { color: var(--muted); font-size: 12px; }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .metric {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 14px;
+    }
+    .metric span { display: block; color: var(--muted); font-size: 12px; }
+    .metric b { font-size: 26px; }
+    .draft, .approval {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 10px;
+    }
+    .draft strong, .approval strong { display: block; font-size: 14px; margin-bottom: 5px; }
+    .draft-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .retention-panel {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+    .retention-controls {
+      display: grid;
+      grid-template-columns: minmax(180px, 240px) 1fr auto;
+      gap: 12px;
+      align-items: end;
+    }
+    .source-list {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      min-height: 36px;
+      align-items: center;
+    }
+    .source-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--ink);
+      font-size: 13px;
+    }
+    .retention-result {
+      max-height: 220px;
+      margin: 10px 0 0;
+    }
+    .calendar-controls {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 10px 0 12px;
+      flex-wrap: wrap;
+    }
+    .segmented {
+      display: inline-flex;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .segmented button {
+      border: 0;
+      border-right: 1px solid var(--line);
+      border-radius: 0;
+      background: #fff;
+      color: var(--accent);
+      min-width: 68px;
+    }
+    .segmented button:last-child { border-right: 0; }
+    .segmented button.active {
+      background: var(--accent);
+      color: #fff;
+    }
+    .calendar-title {
+      font-weight: 750;
+      min-width: 180px;
+      text-align: center;
+    }
+    .calendar-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 1px;
+      border: 1px solid var(--line);
+      background: var(--line);
+      margin-bottom: 16px;
+    }
+    .calendar-day {
+      min-height: 128px;
+      background: #fff;
+      padding: 8px;
+      overflow: hidden;
+    }
+    .calendar-day.outside {
+      background: #f2f4ef;
+      color: var(--muted);
+    }
+    .calendar-day.today {
+      outline: 2px solid var(--accent);
+      outline-offset: -2px;
+    }
+    .calendar-day.week-view { min-height: 220px; }
+    .calendar-day.day-view {
+      grid-column: 1 / -1;
+      min-height: 260px;
+    }
+    .day-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 24px;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .day-head b {
+      font-size: 15px;
+      color: var(--ink);
+    }
+    .deadline-chip {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #f9faf7;
+      color: var(--ink);
+      min-height: 0;
+      border-radius: 6px;
+      padding: 7px;
+      margin: 0 0 6px;
+      display: block;
+      text-align: left;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .deadline-chip small {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-weight: 500;
+      line-height: 1.35;
+    }
+    .deadline-chip.critical { border-color: #f1b5ae; background: #fff4f2; color: var(--critical); }
+    .deadline-chip.medium { border-color: #edc47c; background: #fff7e8; }
+    .deadline-chip.synced { box-shadow: inset 3px 0 0 var(--accent); }
+    .deadline-chip.uncertain { border-style: dashed; }
+    .empty {
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      color: var(--muted);
+      background: #fff;
+      margin-bottom: 16px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 8px;
+      border-radius: 999px;
+      border: 1px solid var(--line);
+      font-size: 12px;
+      font-weight: 700;
+      margin-top: 8px;
+    }
+    .critical { color: var(--critical); border-color: #f1b5ae; background: #fff4f2; }
+    .uncertain { color: var(--uncertain); border-color: #edc47c; background: #fff7e8; }
+    .info { color: var(--info); border-color: #b6c8e6; background: #f0f5ff; }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      border: 1px solid var(--line);
+      background: #111;
+      color: #f4f4ef;
+      border-radius: 8px;
+      padding: 14px;
+      max-height: 460px;
+      overflow: auto;
+    }
+    @media (max-width: 820px) {
+      main { grid-template-columns: 1fr; }
+      aside { border-right: 0; border-bottom: 1px solid var(--line); }
+      .grid { grid-template-columns: 1fr; }
+      .draft-grid { grid-template-columns: 1fr; }
+      .retention-controls { grid-template-columns: 1fr; }
+      .calendar-grid { grid-template-columns: 1fr; }
+      .calendar-day { min-height: auto; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SentinelDesk</h1>
+    <button id="runAll">Run Watches</button>
+  </header>
+  <main>
+    <aside>
+      <div class="muted">Fail-loud local portal sentinel</div>
+      <h2>Targets</h2>
+      <div id="targets"></div>
+      <h2>Scenarios</h2>
+      <select id="scenarioSelect"></select>
+      <button id="applyScenario">Apply</button>
+      <button id="applyScenarioRun" class="ghost">Apply + Run</button>
+    </aside>
+    <section>
+      <div class="grid">
+        <div class="metric"><span>Targets</span><b id="targetCount">0</b></div>
+        <div class="metric"><span>Alerts</span><b id="alertCount">0</b></div>
+        <div class="metric"><span>Runs</span><b id="runCount">0</b></div>
+        <div class="metric"><span>Calendar Drafts</span><b id="calendarCount">0</b></div>
+        <div class="metric"><span>Audit Events</span><b id="auditCount">0</b></div>
+        <div class="metric"><span>Approvals</span><b id="approvalCount">0</b></div>
+        <div class="metric"><span>Connectors</span><b id="connectorCount">0</b></div>
+        <div class="metric"><span>Integration Checks</span><b id="integrationCount">0</b></div>
+      </div>
+      <h2>Calendar</h2>
+      <div class="calendar-controls">
+        <div class="segmented" aria-label="Calendar view">
+          <button type="button" data-calendar-view="month" class="active">Month</button>
+          <button type="button" data-calendar-view="week">Week</button>
+          <button type="button" data-calendar-view="day">Day</button>
+        </div>
+        <div class="calendar-title" id="calendarTitle">Calendar</div>
+        <div class="toolbar">
+          <button type="button" id="calendarPrev" class="ghost">Prev</button>
+          <button type="button" id="calendarToday" class="ghost">Today</button>
+          <button type="button" id="calendarNext" class="ghost">Next</button>
+        </div>
+      </div>
+      <div id="calendarBoard" class="calendar-grid"></div>
+      <h2>Calendar Drafts</h2>
+      <div id="calendarDrafts" class="draft-grid"></div>
+      <h2>Approval History</h2>
+      <div id="approvalHistory" class="draft-grid"></div>
+      <h2>Retention</h2>
+      <div class="retention-panel" id="retentionPanel">
+        <div class="retention-controls">
+          <label class="muted">Before
+            <input id="retentionBefore" type="date">
+          </label>
+          <div>
+            <div class="muted">Sources</div>
+            <div class="source-list" aria-label="Retention sources">
+              <label class="source-item"><input type="checkbox" data-retention-source value="email" checked> Email</label>
+              <label class="source-item"><input type="checkbox" data-retention-source value="calendar" checked> Calendar</label>
+              <label class="source-item"><input type="checkbox" data-retention-source value="audit"> Audit</label>
+              <label class="source-item"><input type="checkbox" data-retention-source value="approvals"> Approvals</label>
+            </div>
+          </div>
+          <div class="toolbar">
+            <button id="retentionPreview" type="button" class="ghost">Preview</button>
+            <button id="retentionPurge" type="button" disabled>Confirm Purge</button>
+          </div>
+        </div>
+        <pre id="retentionResult" class="retention-result">No retention preview.</pre>
+      </div>
+      <h2>Recent Runs</h2>
+      <div id="runs"></div>
+      <div class="row">
+        <h2>Evidence</h2>
+        <label class="muted"><input id="redactedToggle" type="checkbox" checked> Redacted</label>
+      </div>
+      <div class="toolbar">
+        <button id="openReport" class="ghost" disabled>Open Report</button>
+        <a id="downloadPackage" class="button ghost disabled" href="#" aria-disabled="true" download>Download Package</a>
+      </div>
+      <pre id="evidence">Select an alert or run.</pre>
+    </section>
+  </main>
+  <script>
+    let selectedRunId = '';
+    let calendarView = 'month';
+    let calendarCursor = new Date();
+    let calendarCursorInitialized = false;
+    let calendarEventsCache = [];
+    let lastRetentionPreview = null;
+
+    async function getJSON(url, options = {}) {
+      const res = await fetch(url, options);
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+
+    function esc(value) {
+      return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[ch]));
+    }
+
+    function badge(level) {
+      const cls = level === 'critical' ? 'critical' : level === 'uncertain' ? 'uncertain' : level === 'info' ? 'info' : '';
+      return `<span class="badge ${cls}">${esc(level)}</span>`;
+    }
+
+    function dateFromKey(key) {
+      const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(key || ''));
+      if (!match) return null;
+      return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+    }
+
+    function dateKey(date) {
+      const y = date.getFullYear();
+      const m = String(date.getMonth() + 1).padStart(2, '0');
+      const d = String(date.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+
+    function sameDay(a, b) {
+      return dateKey(a) === dateKey(b);
+    }
+
+    function startOfWeek(date) {
+      const result = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      result.setDate(result.getDate() - result.getDay());
+      return result;
+    }
+
+    function addDays(date, days) {
+      const result = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      result.setDate(result.getDate() + days);
+      return result;
+    }
+
+    function addMonths(date, months) {
+      return new Date(date.getFullYear(), date.getMonth() + months, 1);
+    }
+
+    function formatShortDate(date) {
+      return date.toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+    }
+
+    function ensureCalendarCursor(events) {
+      if (calendarCursorInitialized) return;
+      const first = events.map(e => dateFromKey(e.date_key)).find(Boolean);
+      if (first) calendarCursor = first;
+      calendarCursorInitialized = true;
+    }
+
+    function groupEventsByDate(events) {
+      return events.reduce((groups, event) => {
+        const key = event.date_key || 'unscheduled';
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(event);
+        return groups;
+      }, {});
+    }
+
+    function renderDeadlineChip(event) {
+      const severity = event.severity === 'critical' ? 'critical' : 'medium';
+      const synced = event.approval_state === 'approved' ? 'synced' : '';
+      const uncertain = event.uncertain ? 'uncertain' : '';
+      const state = [event.status, event.sync_state, event.approval_state].filter(Boolean).join(' / ');
+      const source = `${event.source_trust || 'local_evidence'} · sources=${event.source_count || 0}`;
+      return `
+        <button class="deadline-chip ${severity} ${synced} ${uncertain}" data-calendar-sync="${esc(event.event_id)}" title="${esc(event.evidence_uri || event.source_ids?.join(', ') || '')}">
+          ${esc(event.title || 'Deadline')}
+          <small>${esc(state)}</small>
+          <small>${esc(source)}</small>
+        </button>
+      `;
+    }
+
+    function renderDayCell(date, events, options = {}) {
+      const today = sameDay(date, new Date()) ? 'today' : '';
+      const outside = options.outside ? 'outside' : '';
+      const modeClass = options.mode === 'week' ? 'week-view' : options.mode === 'day' ? 'day-view' : '';
+      const key = dateKey(date);
+      const weekday = date.toLocaleDateString(undefined, {weekday: 'short'});
+      const content = events.length
+        ? events.map(renderDeadlineChip).join('')
+        : options.mode === 'day'
+          ? '<div class="muted">No verified deadline drafts on this date.</div>'
+          : '';
+      return `
+        <div class="calendar-day ${today} ${outside} ${modeClass}" data-calendar-date="${esc(key)}">
+          <div class="day-head"><b>${esc(date.getDate())}</b><span>${esc(weekday)}</span></div>
+          ${content}
+        </div>
+      `;
+    }
+
+    function renderCalendarBoard(events) {
+      calendarEventsCache = events;
+      ensureCalendarCursor(events);
+      const groups = groupEventsByDate(events);
+      const board = document.getElementById('calendarBoard');
+      document.querySelectorAll('[data-calendar-view]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.calendarView === calendarView);
+      });
+      if (!events.length) {
+        document.getElementById('calendarTitle').textContent = 'No drafts';
+        board.className = 'empty';
+        board.innerHTML = 'No calendar drafts yet. Ingest email evidence to create dated deadline drafts.';
+        return;
+      }
+      board.className = 'calendar-grid';
+      if (calendarView === 'day') {
+        const key = dateKey(calendarCursor);
+        document.getElementById('calendarTitle').textContent = calendarCursor.toLocaleDateString(undefined, {weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'});
+        board.innerHTML = renderDayCell(calendarCursor, groups[key] || [], {mode: 'day'});
+        bindCalendarButtons();
+        return;
+      }
+      if (calendarView === 'week') {
+        const start = startOfWeek(calendarCursor);
+        const days = Array.from({length: 7}, (_, index) => addDays(start, index));
+        const end = days[6];
+        document.getElementById('calendarTitle').textContent = `${formatShortDate(start)} - ${formatShortDate(end)}, ${end.getFullYear()}`;
+        board.innerHTML = days.map(day => renderDayCell(day, groups[dateKey(day)] || [], {mode: 'week'})).join('');
+        bindCalendarButtons();
+        return;
+      }
+      const monthStart = new Date(calendarCursor.getFullYear(), calendarCursor.getMonth(), 1);
+      const gridStart = startOfWeek(monthStart);
+      const days = Array.from({length: 42}, (_, index) => addDays(gridStart, index));
+      document.getElementById('calendarTitle').textContent = monthStart.toLocaleDateString(undefined, {month: 'long', year: 'numeric'});
+      board.innerHTML = days.map(day => renderDayCell(day, groups[dateKey(day)] || [], {outside: day.getMonth() !== monthStart.getMonth()})).join('');
+      bindCalendarButtons();
+    }
+
+    async function showEvidence(runId) {
+      selectedRunId = runId;
+      document.getElementById('openReport').disabled = !runId;
+      const packageLink = document.getElementById('downloadPackage');
+      if (runId) {
+        packageLink.href = '/api/package/' + encodeURIComponent(runId);
+        packageLink.classList.remove('disabled');
+        packageLink.setAttribute('aria-disabled', 'false');
+      } else {
+        packageLink.href = '#';
+        packageLink.classList.add('disabled');
+        packageLink.setAttribute('aria-disabled', 'true');
+      }
+      const redacted = document.getElementById('redactedToggle').checked ? '?redacted=1' : '';
+      const evidence = await getJSON('/api/evidence/' + encodeURIComponent(runId) + redacted);
+      document.getElementById('evidence').textContent = JSON.stringify(evidence, null, 2);
+    }
+
+    async function exportCalendarDraft(eventId) {
+      const accepted = window.confirm('Export selected deadline draft to local ICS?');
+      if (!accepted) return;
+      const result = await getJSON('/api/calendar/sync?destination=ics&confirm=1&event_id=' + encodeURIComponent(eventId), {method: 'POST'});
+      document.getElementById('evidence').textContent = JSON.stringify(result, null, 2);
+      await load();
+    }
+
+    async function updateCalendarDraft(eventId, dateText) {
+      if (!dateText.trim()) return;
+      const params = new URLSearchParams({event_id: eventId, date: dateText.trim()});
+      const result = await getJSON('/api/calendar/drafts/update?' + params.toString(), {method: 'POST'});
+      document.getElementById('evidence').textContent = JSON.stringify(result, null, 2);
+      await load();
+    }
+
+    function selectedRetentionSources() {
+      return Array.from(document.querySelectorAll('[data-retention-source]:checked')).map(input => input.value);
+    }
+
+    function resetRetentionPreview() {
+      lastRetentionPreview = null;
+      document.getElementById('retentionPurge').disabled = true;
+    }
+
+    function showRetentionResult(value) {
+      document.getElementById('retentionResult').textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
+    }
+
+    function renderRetentionResult(result) {
+      const total = Object.values(result.counts || {}).reduce((sum, count) => sum + Number(count || 0), 0);
+      const output = {...result, total};
+      lastRetentionPreview = result.dry_run ? result : null;
+      document.getElementById('retentionPurge').disabled = !(result.dry_run && total > 0);
+      showRetentionResult(output);
+    }
+
+    async function submitRetention(confirmed) {
+      const before = document.getElementById('retentionBefore').value;
+      const sources = selectedRetentionSources();
+      if (!before) {
+        showRetentionResult('Choose a cutoff date before running retention.');
+        resetRetentionPreview();
+        return;
+      }
+      if (!sources.length) {
+        showRetentionResult('Select at least one retention source.');
+        resetRetentionPreview();
+        return;
+      }
+      const sourceKey = sources.join(',');
+      if (confirmed && (!lastRetentionPreview || lastRetentionPreview.before !== before || (lastRetentionPreview.sources || []).join(',') !== sourceKey)) {
+        showRetentionResult('Run a fresh preview before confirming purge.');
+        resetRetentionPreview();
+        return;
+      }
+      if (confirmed && !window.confirm('Permanently purge selected local records?')) return;
+      const params = new URLSearchParams({before});
+      sources.forEach(source => params.append('source', source));
+      if (confirmed) params.set('confirm', '1');
+      const result = await getJSON('/api/retention/purge?' + params.toString(), {method: 'POST'});
+      renderRetentionResult(result);
+      if (result.deleted) await load();
+    }
+
+    function bindCalendarButtons() {
+      document.querySelectorAll('[data-calendar-sync]').forEach(btn => {
+        if (btn.dataset.boundCalendarSync) return;
+        btn.dataset.boundCalendarSync = '1';
+        btn.addEventListener('click', () => exportCalendarDraft(btn.dataset.calendarSync));
+      });
+      document.querySelectorAll('[data-calendar-edit]').forEach(btn => {
+        if (btn.dataset.boundCalendarEdit) return;
+        btn.dataset.boundCalendarEdit = '1';
+        btn.addEventListener('click', () => {
+          const input = Array.from(document.querySelectorAll('[data-calendar-date]'))
+            .find(item => item.dataset.calendarDate === btn.dataset.calendarEdit);
+          updateCalendarDraft(btn.dataset.calendarEdit, input ? input.value : '');
+        });
+      });
+    }
+
+    async function load() {
+      const [targets, runs, alerts, scenarios, calendarDrafts, calendarEvents, emailFacts, auditEvents, approvals, connectorStates, integrationReports] = await Promise.all([
+        getJSON('/api/targets'),
+        getJSON('/api/runs'),
+        getJSON('/api/alerts'),
+        getJSON('/api/scenarios'),
+        getJSON('/api/calendar/drafts'),
+        getJSON('/api/calendar/events'),
+        getJSON('/api/email/facts?kind=deadline'),
+        getJSON('/api/audit/events'),
+        getJSON('/api/approvals'),
+        getJSON('/api/connectors/state'),
+        getJSON('/api/integrations/verifications')
+      ]);
+      document.getElementById('targetCount').textContent = targets.length;
+      document.getElementById('alertCount').textContent = alerts.length;
+      document.getElementById('runCount').textContent = runs.length;
+      document.getElementById('calendarCount').textContent = calendarDrafts.length;
+      document.getElementById('auditCount').textContent = auditEvents.length;
+      document.getElementById('approvalCount').textContent = approvals.length;
+      document.getElementById('connectorCount').textContent = connectorStates.length;
+      document.getElementById('integrationCount').textContent = integrationReports.length;
+      renderCalendarBoard(calendarEvents);
+      document.getElementById('scenarioSelect').innerHTML = scenarios.map(s => `
+        <option value="${esc(s.id)}">${esc(s.label)} · ${esc(s.expected_alert)}</option>
+      `).join('');
+      document.getElementById('calendarDrafts').innerHTML = calendarDrafts.length ? calendarDrafts.map(d => `
+        <div class="draft">
+          <strong>${esc(d.date_text)} · ${esc(d.title)}</strong>
+          <div class="muted">${esc(d.status)} · ${esc(d.sync_state)} · confidence=${esc(d.confidence)}</div>
+          <div class="muted">sources=${esc((d.source_ids || []).join(', '))}</div>
+          ${badge(d.severity || 'draft')}
+          <input type="text" value="${esc(d.date_text)}" data-calendar-date="${esc(d.event_id)}" aria-label="Draft date">
+          <button class="ghost" data-calendar-edit="${esc(d.event_id)}">Save Date</button>
+          <button class="ghost" data-calendar-sync="${esc(d.event_id)}">Export ICS</button>
+        </div>
+      `).join('') : emailFacts.slice(0, 4).map(f => `
+        <div class="draft">
+          <strong>${esc(f.value)} · ${esc(f.subject || 'Email deadline')}</strong>
+          <div class="muted">source=${esc(f.source_id)} · confidence=${esc(f.confidence)}</div>
+          ${badge('info')}
+        </div>
+      `).join('');
+      document.getElementById('approvalHistory').innerHTML = approvals.slice(0, 6).map(a => `
+        <div class="approval">
+          <strong>${esc(a.created_at)} · ${esc(a.action)}</strong>
+          <div class="muted">${esc(a.actor)} · ${esc(a.subject)} · ${esc(a.side_effect)}</div>
+          <div class="muted">confirmation=${esc(a.confirmation_id)} · evidence=${esc((a.evidence_refs || []).length)}</div>
+          ${badge(a.status || 'confirmed')}
+        </div>
+      `).join('');
+      document.getElementById('targets').innerHTML = targets.map(t => `
+        <div class="target">
+          <strong>${esc(t.name)}</strong>
+          <div class="muted">${esc(t.kind)} · ${esc(t.last_health_state || 'not checked')}</div>
+          ${badge(t.last_alert_level || 'new')}
+          <button class="ghost" data-target="${esc(t.name)}">Run</button>
+        </div>
+      `).join('');
+      document.getElementById('runs').innerHTML = runs.map(r => `
+        <div class="run">
+          <strong>${esc(r.run_id)} · ${esc(r.alert.level)}</strong>
+          <div>${esc(r.alert.reason)}</div>
+          <div class="muted">${esc(r.captured_at)} · status=${esc(r.status.value)} · health=${esc(r.health.state)}</div>
+          ${badge(r.alert.level)}
+          <button class="ghost" data-run="${esc(r.run_id)}">Evidence</button>
+        </div>
+      `).join('');
+      document.querySelectorAll('[data-target]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          await fetch('/api/run?name=' + encodeURIComponent(btn.dataset.target), {method: 'POST'});
+          await load();
+        });
+      });
+      document.querySelectorAll('[data-run]').forEach(btn => {
+        btn.addEventListener('click', () => showEvidence(btn.dataset.run));
+      });
+      bindCalendarButtons();
+    }
+
+    document.getElementById('runAll').addEventListener('click', async () => {
+      await fetch('/api/run', {method: 'POST'});
+      await load();
+    });
+    document.getElementById('applyScenario').addEventListener('click', async () => {
+      const scenario = document.getElementById('scenarioSelect').value;
+      await fetch('/api/scenario?scenario=' + encodeURIComponent(scenario), {method: 'POST'});
+      await load();
+    });
+    document.getElementById('applyScenarioRun').addEventListener('click', async () => {
+      const scenario = document.getElementById('scenarioSelect').value;
+      const result = await getJSON('/api/scenario?run=1&scenario=' + encodeURIComponent(scenario), {method: 'POST'});
+      await load();
+      if (result.runs && result.runs[0]) await showEvidence(result.runs[0].run_id);
+    });
+    document.getElementById('redactedToggle').addEventListener('change', async () => {
+      if (selectedRunId) await showEvidence(selectedRunId);
+    });
+    document.getElementById('openReport').addEventListener('click', () => {
+      if (selectedRunId) window.open('/api/report/' + encodeURIComponent(selectedRunId), '_blank');
+    });
+    document.getElementById('retentionPreview').addEventListener('click', async () => {
+      try {
+        await submitRetention(false);
+      } catch (err) {
+        showRetentionResult(err.stack || String(err));
+        resetRetentionPreview();
+      }
+    });
+    document.getElementById('retentionPurge').addEventListener('click', async () => {
+      try {
+        await submitRetention(true);
+      } catch (err) {
+        showRetentionResult(err.stack || String(err));
+        resetRetentionPreview();
+      }
+    });
+    document.getElementById('retentionBefore').addEventListener('input', resetRetentionPreview);
+    document.querySelectorAll('[data-retention-source]').forEach(input => {
+      input.addEventListener('change', resetRetentionPreview);
+    });
+    document.querySelectorAll('[data-calendar-view]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        calendarView = btn.dataset.calendarView;
+        renderCalendarBoard(calendarEventsCache);
+      });
+    });
+    document.getElementById('calendarPrev').addEventListener('click', () => {
+      calendarCursor = calendarView === 'month' ? addMonths(calendarCursor, -1) : addDays(calendarCursor, calendarView === 'week' ? -7 : -1);
+      renderCalendarBoard(calendarEventsCache);
+    });
+    document.getElementById('calendarToday').addEventListener('click', () => {
+      calendarCursor = new Date();
+      renderCalendarBoard(calendarEventsCache);
+    });
+    document.getElementById('calendarNext').addEventListener('click', () => {
+      calendarCursor = calendarView === 'month' ? addMonths(calendarCursor, 1) : addDays(calendarCursor, calendarView === 'week' ? 7 : 1);
+      renderCalendarBoard(calendarEventsCache);
+    });
+    load().catch(err => {
+      document.getElementById('evidence').textContent = err.stack || String(err);
+    });
+  </script>
+</body>
+</html>

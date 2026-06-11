@@ -1,0 +1,14 @@
+.demo/
+.agent-venv/
+.sentineldesk/
+__pycache__/
+*.pyc
+.DS_Store
+artifacts/
+recordings/
+*.sqlite3
+*.evidence.json
+*.png
+*.mov
+*.mp4
+*.trace.jsonl

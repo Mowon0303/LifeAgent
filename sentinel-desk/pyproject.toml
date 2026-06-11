@@ -1,0 +1,24 @@
+[project]
+name = "sentineldesk"
+version = "0.1.0"
+description = "Fail-loud local portal monitor for high-stakes deadlines"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+browser = ["playwright"]
+api = ["fastapi", "uvicorn"]
+cli = ["typer"]
+agent = ["langchain-core", "langgraph"]
+gmail = ["google-api-python-client", "google-auth", "google-auth-oauthlib"]
+calendar = ["google-api-python-client", "google-auth", "google-auth-oauthlib", "caldav"]
+integrations = ["google-api-python-client", "google-auth", "google-auth-oauthlib", "caldav"]
+
+[project.scripts]
+sentineldesk = "sentineldesk.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["sentineldesk*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

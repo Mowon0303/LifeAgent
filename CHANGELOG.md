@@ -1,0 +1,225 @@
+# Changelog
+
+All notable project updates for LifeAgent are tracked here.
+
+## [Unreleased]
+
+### Added
+
+- Added `sentineldesk/email/` with local email message models, message search, and deadline/amount/action extraction from message and attachment text.
+- Added `sentineldesk/email/ingest.py` and `sentineldesk email scan --json ...` for local email JSON ingestion into persisted evidence.
+- Added email connector abstractions with local JSON and authenticated-client Gmail adapter boundaries.
+- Added `email sync-gmail` with Google OAuth secret references, Gmail readonly scope declaration, stored incremental connector cursor support, and connector state inspection through `connectors state`.
+- Added local attachment parsing for text, HTML, and optional PDF parser-backed attachments.
+- Added `email_messages` persistence with extracted deadline/amount/action facts and `/api/email/facts` for read-only dashboard access.
+- Added `sentineldesk/calendar/` with deadline event models, reminder rules, draft generation, dedupe/update planning, confirmation-gated sync planning, and ICS export.
+- Added persisted `calendar_drafts`, `/api/calendar/drafts`, and a dashboard calendar draft preview fed by email-derived deadlines.
+- Added `sentineldesk/calendar/view.py` and `/api/calendar/events` to normalize draft dates, merge approval/sync state, and expose source-trust metadata for calendar rendering.
+- Added dashboard Month/Week/Day calendar views with dated deadline chips, draft/synced state, source trust, uncertainty styling, evidence tooltips, and confirmation-gated ICS export.
+- Added confirmation-gated calendar adapter sync with ICS file output and Google Calendar client boundary.
+- Added Apple Calendar/CalDAV authenticated-client boundary behind the same confirmation-gated calendar adapter flow.
+- Added remote calendar upsert behavior for Google/Apple adapters: list existing events, update matching LifeAgent events, create only missing events, and audit created/updated external IDs.
+- Added `sentineldesk/agent/` with intent routing, tool registry, optional LangChain/LangGraph availability detection, retrieval skeleton, and graph-style `answer_question`.
+- Added `sentineldesk/agent/workflow.py` so `ask` can use an optional route/tools/finalize LangGraph workflow path when available and otherwise falls back to the same multi-stage rule workflow with runtime metadata.
+- Added `sentineldesk/agent/providers.py` with local, Ollama, OpenAI, and Anthropic adapter boundaries, safe request-shape builders, redacted env-secret status, and `AgentAnswer` structured output validation.
+- Added a reproducible project-local `.agent-venv` optional dependency path for exercising installed LangChain/LangGraph agent dependencies without changing the system Python environment.
+- Added `gmail`, `calendar`, and `integrations` optional dependency extras for Google API, Google auth, and CalDAV live connector paths.
+- Added `sentineldesk integrations env-template` to print live Gmail/Calendar env requirements, redacted availability status, install commands, verification commands, and sync commands without exposing secret values.
+- Added `sentineldesk integrations google-token` to run the local Google OAuth browser flow and write authorized token JSON to a local 0600 file without printing token values.
+- Added `sentineldesk calendar sync --destination ics|google|apple` so local calendar drafts can be previewed, then confirmation-gated into ICS, Google Calendar, or Apple Calendar from the CLI.
+- Added `sentineldesk calendar edit`, `/api/calendar/drafts/update`, and dashboard `Save Date` controls so users can edit or reschedule local deadline drafts before external sync.
+- Added `sentineldesk integrations package VERIFICATION_ID|latest` to export redacted integration verification ZIP packages for live readiness handoff.
+- Added `sentineldesk integrations check --package` so a readiness check can persist its report and write the redacted ZIP package in one step.
+- Added `docs/SECURITY_MODEL.md` to make trust boundaries, data classes, required controls, and the live verification standard explicit.
+- Added `scripts/live_verification_preflight.sh` as a default-safe live Gmail/Calendar handoff script with dry-run mode, redacted package export, and explicit gates for Google OAuth, Gmail sync, and external calendar writes.
+- Added final source release-package and release-audit execution to `scripts/live_verification_preflight.sh`, enabled by default through `SENTINEL_LIVE_RUN_RELEASE_PACKAGE=1` and disabled with `SENTINEL_LIVE_RUN_RELEASE_PACKAGE=0`.
+- Added `sentineldesk integrations seed-calendar-draft` so live calendar sync verification can create a local sandbox deadline draft without depending on Gmail search results.
+- Added `sentineldesk integrations completion-audit` so final live verification requires both current all-suite readiness and a persisted ready redacted package.
+- Added a structured `completion-audit.readiness_action_plan` that maps missing live checks to concrete commands, side-effect labels, and user-approval requirements.
+- Added `source_release_audit` as a machine-checked `completion-audit` requirement, with `--source-release-path` support and redacted private-path handling in action-plan commands.
+- Added `sentineldesk integrations handoff` to render the completion audit and readiness action plan as a human Markdown checklist with side-effect labels, user-approval flags, final source release audit commands, and no secret values.
+- Added redacted Google OAuth credentials/token format checks (`*.credentials_format`, `*.token_format`) so readiness reports distinguish missing env refs, malformed JSON/base64 JSON, missing token/client fields, and missing OAuth scopes without exposing secret values.
+- Added redacted Apple Calendar username/app-password format checks so CalDAV readiness distinguishes missing env refs, malformed Apple ID/app-specific password inputs, and real external sync evidence without exposing secret values.
+- Added `sentineldesk privacy audit` to scan redacted JSON/HTML reports and `.share.zip` packages for unredacted emails, phone numbers, local paths, URLs, and secret-like JSON values without echoing raw leaked values.
+- Added `sentineldesk privacy release-audit` to scan the project tree for local runtime artifacts, generated caches, databases, screenshots, recordings, share packages, virtualenvs, and build metadata before public release.
+- Added `sentineldesk privacy release-package` to write a public source ZIP while excluding the same local artifacts flagged by `privacy release-audit`.
+- Added redacted Google OAuth token scope checks so Gmail readiness requires `gmail.readonly` and Google Calendar readiness requires `calendar.events` without exposing token values.
+- Added a bound `capture_latest_portal` tool handler so page-change questions can call the deterministic monitor core from the assistant/CLI path.
+- Added config-driven model provider loading from `[model]` and `sentineldesk model status`.
+- Added persistent local RAG indexing in SQLite with `sentineldesk rag index/search/docs`.
+- Added trust-weighted sparse lexical RAG ranking with score, matched terms, trust weight, document source, title, token count, and chunk metadata in retrieval results.
+- Added `rag index --title` and repeated `--metadata key=value` for richer trusted-doc indexing.
+- Added `search_policy_docs` as a local RAG-backed agent tool, so `ask` can answer policy/rule questions with citations from indexed documents.
+- Added RAG prompt-injection detection and sanitization for untrusted retrieved documents.
+- Added `audit_events`, `/api/audit/events`, dashboard audit count, and `sentineldesk audit list`.
+- Added `approval_records`, `/api/approvals`, dashboard approval count/history preview, and `sentineldesk approvals list` for durable confirmation history.
+- Added `connector_states`, `/api/connectors/state`, dashboard connector count, and env-only secret references with redacted summaries.
+- Added `integration_verifications`, redacted external-integration readiness reports, `sentineldesk integrations check/reports`, and `/api/integrations/verifications`.
+- Added `sentineldesk integrations check --suite sandbox` to exercise Gmail connector sync, Google/Apple calendar confirmation gates, approval records, audit logs, and redacted integration reports without external credentials.
+- Added dashboard integration verification count so local UI shows whether live/sandbox checks have been run.
+- Added `docs/LIVE_VERIFICATION.md` with Gmail OAuth, Google/Apple Calendar, LangGraph, and redacted report commands.
+- Added confirmation-gated local retention purge controls through `sentineldesk retention purge`.
+- Added `/api/retention/purge` and dashboard retention controls for preview-first local data cleanup with confirmation-gated deletion.
+- Added `/api/rag/docs` and `/api/rag/search` for read-only RAG dashboard/API access.
+- Added `/api/calendar/sync` and dashboard `Export ICS` confirmation for local calendar draft export.
+- Added source conflict detection for assistant answers so conflicting deadline/amount evidence returns `uncertain`; deadline conflicts include the safer earlier candidate.
+- Added stored cross-source conflict detection across email facts, calendar drafts, and portal run evidence, with earliest-deadline safety selection.
+- Added email-to-portal deadline fallback so deadline questions can run deterministic portal capture when available email says to log in or view the portal but does not expose the date.
+- Added `sentineldesk ask "..." --email-json ...` for offline email-first question answering with citations and uncertainty behavior.
+- Added evidence-backed `ask` answers for latest alert explanation, status meaning, and next-step recommendation using the local `read_evidence_bundle` tool over the latest stored run.
+- Added tests for email extraction, email scan persistence, calendar draft APIs, calendar confirmation safety, durable approval records, tool registry write blocking, connector trust labels, sandbox/live verification reports, audit logging, retention gates, RAG injection filtering, retrieved-instruction resistance for verified deadlines and calendar write tools, assistant routing, forced email search for deadline questions, email-to-portal deadline fallback, and CLI ask.
+- Added CLI/API tests proving local calendar draft edits reset previously synced drafts back to `draft`/`local_draft`, audit `calendar.edit`, and do not create external approval records.
+- Added lease/rent synthetic vertical with current, written-notice-required, and rent-due scenarios.
+- Added CDP screenshot artifact capture for Chrome DevTools runs, with screenshot paths recorded in raw evidence metadata.
+- Added `/api/package/<run_id>` and a dashboard `Download Package` link for redacted evidence ZIP downloads.
+- Added `evidence RUN_ID --package` to create a redacted shareable ZIP package with README, manifest, JSON evidence, and HTML report.
+- Added dashboard smoke tests for scenario apply+run, redacted evidence, and HTML report routes without binding a local port.
+- Added agent tests proving page-change questions execute the bound portal capture tool and persist monitor evidence.
+- Added Chrome launcher tests covering dedicated profile startup and default-profile refusal.
+- Added `docs/RECORDING_CHECKLIST.md` for the final portfolio demo recording pass.
+- Added `demo record-prep` to generate the complete manual-recording state, run IDs, reports, and share packages in one command.
+- Added `scripts/record_portfolio_demo.sh` to prepare the demo, start the dashboard, open the browser, and invoke macOS screen recording.
+- Added an explicit recording approval guard plus `SENTINEL_RECORD_DRY_RUN=1` setup verification for the recording helper.
+- Added interview-ready architecture documentation and a timed demo video script.
+- Added `plan status` so plan-tracker responses always show completed plans and the next plan to complete.
+- Added optional `cdp://` Chrome DevTools capture under the SentinelDesk package while keeping file fixtures as the public demo path.
+- Added OPT/USCIS/OIS as the first vertical pack, with appointment slots as the secondary demo.
+- Added scenario transitions for baseline, action required, approved, appointment available, session expired, captcha, maintenance, and portal redesign.
+- Added redacted JSON evidence and redacted HTML reports for evidence bundles.
+- Added structured redaction tests for email headers, attachment names, calendar invitees, secret fields, and connector metadata in redacted share packages.
+- Added dashboard controls for applying scenarios, running one target, toggling redacted evidence, and opening reports.
+
+### Changed
+
+- Reframed the next product direction from portal-first monitoring to email-first LifeAgent: email and attachments are primary sources, portal/CDP capture becomes a verification tool, and calendar becomes the action layer.
+- Added the planned calendar workflow: verified deadlines become draft events, reminders, dashboard calendar entries, and optional external calendar sync after confirmation.
+- Expanded the calendar plan from simple export into a date-based product surface with evidence-linked deadline chips, draft/synced state, uncertainty markers, and reminder policy.
+- Calendar visual system moved from plan to implementation: dashboard deadlines now render on their actual calendar dates instead of only in a flat draft list.
+- Added safety as a first-class planning area covering permission scopes, confirmation flows, calendar write safety, source trust labels, RAG prompt-injection defenses, model privacy, audit trails, and data retention.
+- Expanded the safety plan with background sync limits, sandbox-first integrations, write replay protection, and high-stakes domain guards.
+- Expanded the safety plan into a verification matrix covering external-write confirmation, OAuth scope control, secret handling, live verification artifacts, tool-verified latest facts, RAG/tool boundaries, redacted share packages, and readiness checks.
+- Calendar sync confirmations now write durable approval records with actor, action, capability, side effect, evidence refs, metadata, confirmation ID, and consumption timestamp.
+- Calendar sync now blocks reused confirmation IDs before a second write can occur.
+- Calendar remote sync now dedupes before create when the authenticated client exposes `list_events`/`update_event`, reducing duplicate deadline-event risk.
+- Dashboard approval history now shows recent confirmed actions without rendering approval metadata payloads.
+- Retention purge now supports `approvals` as a confirm-gated source so approval history does not accumulate forever, and the dashboard exposes the same preview-before-delete safety boundary.
+- Assistant workflow metadata now includes route/tools/finalize trace events and planned tools for both the rule workflow and the optional LangGraph-shaped path.
+- Assistant routing now distinguishes status-meaning and next-step questions from generic policy retrieval, while keeping those answers grounded in local evidence citations.
+- Assistant policy/rule questions now run local RAG retrieval before answering; deadline/amount questions still use tool-verified email/portal evidence first.
+- `model status` now includes adapter status without exposing API keys; OpenAI/Anthropic report only env secret availability and redacted refs.
+- Integration readiness now distinguishes local sandbox verification from real account readiness; sandbox can pass without credentials, while live Gmail/Calendar/LangGraph checks still require user-approved credentials or dependencies.
+- `python -m sentineldesk` now preserves CLI return codes, so `integrations check --require-ready` fails shell/CI when readiness is missing.
+- `pyproject.toml` package discovery now only includes `sentineldesk*`, preventing editable installs from treating fixture directories as unintended top-level packages.
+- LangGraph readiness moved from planned to verified: installed optional agent dependencies expose `langgraph.graph`, build the route/tools/finalize workflow as a `CompiledStateGraph`, and pass `integrations check --suite langgraph --require-ready`.
+- Live Google readiness now checks the local OAuth browser-flow dependency `google_auth_oauthlib.flow` in addition to Google API and credential modules.
+- Live Google readiness now checks OAuth credential and token JSON shape separately from token scope checks, so malformed env values fail before Gmail sync or calendar writes are attempted.
+- Current live verification target changed to Gmail-first: real Gmail readonly sync and redacted Gmail readiness package now define the active external-service milestone.
+- Calendar live writes moved behind a later product decision because current useful information is coming from Gmail; calendar remains a local visibility/action layer until confirmed external sync becomes valuable.
+- Calendar sync CLI requires explicit `--confirm` for all writes and a stable `--confirmation-id` for Google/Apple external calendar writes; Google defaults to `primary`, Apple defaults to `default`.
+- Calendar draft edits now stay local-only: changing a date or severity reopens the draft as `local_draft`, writes an audit event, and leaves external calendar approval history untouched until the user confirms a new sync.
+- Calendar readiness now requires non-sandbox Google/Apple calendar sync approval evidence, so live reports cannot pass from dependencies and secrets alone.
+- Integration verification artifacts now include their own artifact path in the written JSON, and redacted integration packages remove local paths and secret values before sharing.
+- Integration verification IDs now get a numeric suffix when repeated checks run in the same second, preventing package/preflight runs from failing on unique ID collisions.
+- `integrations check --package` now rejects `--no-persist` before touching the default home directory, preventing accidental local state creation for an invalid argument combination.
+- `completion-audit` now includes `redacted_output_privacy` and `source_release_audit` requirements, and live verification preflight runs source release-package/release-audit before `completion-audit`; when `SENTINEL_LIVE_REQUIRE_READY=1`, redacted-output privacy leaks or source-release audit failures become hard failures.
+- `completion-audit` now explains remaining live-verification work as explicit gates: optional dependency install, Google OAuth setup, Apple CalDAV setup, Gmail readonly sync, local calendar draft prep, confirmed Google/Apple calendar sync, final redacted package, final privacy audit, and final source release audit.
+- `integrations env-template`, `completion-audit.next_commands`, `integrations handoff`, and the live preflight script now include the final source release-package, ZIP extraction, and release-audit commands so the live handoff checklist covers both redacted integration artifacts and public source packaging.
+- Public release privacy status now distinguishes redacted-output privacy from project-tree release hygiene; the reusable release audit currently flags local ignored development artifacts that must be deleted or excluded before packaging.
+- Public release packaging can now use an exclusion path instead of deleting the local development environment: `privacy release-package` excludes `.agent-venv`, egg-info, caches, screenshots, databases, recordings, and share artifacts before writing the ZIP.
+- Updated the next safety target from local boundaries to production OAuth integrations, real remote calendar clients, connector secret handling, and authenticated connector evals.
+- Updated the plan to add a LangChain/LangGraph assistant layer while keeping SentinelDesk's deterministic monitoring core independent from LLM/RAG decisions.
+- Defined tool-first verification for latest facts such as deadlines, latest messages, alert reasons, and portal state before the assistant answers.
+- Defined RAG as an explanation and documentation layer over local evidence, trusted docs, user-provided docs, and historical runs rather than as the alerting mechanism.
+- RAG search now prefers trusted policy documents over untrusted matching text while still preserving prompt-injection warnings and sanitized text.
+- Demo seeding now creates OPT, appointment, and lease/rent targets.
+- Chrome launcher now starts a detached dedicated profile with an explicit `about:blank` URL so the DevTools endpoint stays available after the CLI exits.
+- Redaction now removes local filesystem paths from redacted evidence and share packages, and structured redacted exports replace sensitive attachment, invitee, secret, and connector metadata fields with explicit placeholders.
+- Hardened CDP tab selection so multiple open Chrome pages require deterministic `url`, `title`, or `id` selectors.
+- Moved fail-loud behavior behind vertical policies so OPT, appointment, lease, generic, and low-stakes targets can diverge without changing classifier code.
+- Status extraction now prioritizes terminal states such as `approved` above generic `pending` copy.
+
+### Verified
+
+- `cd sentinel-desk && python3 -B -m unittest discover -s tests -v` passed with 184 tests after adding env-only secret refs, connector cursor state, fake-authenticated Gmail sync, fake Google/Apple calendar sync, sandbox connector/calendar verification, persistent RAG, trust-weighted sparse RAG ranking, RAG-backed policy answers with citations, config-driven model provider loading, safe model provider adapters, `model status` redacted adapter output, structured output validation, multi-stage workflow metadata, bound portal verification tool execution, evidence-backed alert explanation, status meaning, next-step recommendation, email-to-portal deadline fallback, module entrypoint exit-code coverage, cross-source stored conflict detection, local calendar draft edit/reschedule, dashboard calendar draft update API, dashboard calendar confirmation sync, dashboard retention preview/confirmed purge, structured share-package redaction, redacted-output privacy audit, project-tree release audit, clean source release packaging, completion-audit privacy/source-release/action-plan coverage, human handoff Markdown redaction/approval/side-effect coverage, redacted Google OAuth credentials/token format checks, redacted Apple Calendar username/app-password format checks, retrieved-instruction resistance, remote calendar dedupe/update-before-create behavior, durable approval records, connector boundaries, attachment parsing, audit logs, retention gates, calendar adapter confirmation, CLI Google/Apple calendar sync confirmation gates, live calendar sync-evidence readiness checks, redacted integration verification package export, same-second integration verification ID collision coverage, redacted Google OAuth token scope readiness checks, one-step `integrations check --package`, local-only live calendar draft seeding, final completion-audit readiness/package/source-release-audit gating, default-safe live preflight dry-run redaction/source-release-gate coverage, live verification reports, redacted env-template output, local Google OAuth token writer redaction/0600 coverage, RAG injection filtering, and dashboard integration checks.
+- `cd sentinel-desk && .agent-venv/bin/python -B -m sentineldesk --home .demo integrations google-token --credentials-env SENTINEL_GOOGLE_CREDENTIALS_JSON --token-env SENTINEL_GOOGLE_TOKEN_JSON` completed the user-approved Google OAuth browser flow and wrote `.demo/secrets/google-token.json` with owner-only permissions without printing token values.
+- `cd sentinel-desk && .agent-venv/bin/python -B -m sentineldesk --home .demo email sync-gmail --account user@example.com --query "deadline OR due" --credentials-env SENTINEL_GOOGLE_CREDENTIALS_JSON --token-env SENTINEL_GOOGLE_TOKEN_JSON` completed a real Gmail readonly sync with 50 messages persisted, 2396 facts extracted, 184 local deadline drafts, and a saved connector cursor.
+- `cd sentinel-desk && .agent-venv/bin/python -B -m sentineldesk --home .demo integrations check --suite gmail --account user@example.com --google-credentials-env SENTINEL_GOOGLE_CREDENTIALS_JSON --google-token-env SENTINEL_GOOGLE_TOKEN_JSON --require-ready --package` reported `status: ready` and wrote redacted package `.demo/artifacts/integrations/20260611T130933+0000-gmail.share.zip`.
+- `cd sentinel-desk && .agent-venv/bin/python -B -m sentineldesk --home .demo privacy audit --require-clean` passed after Gmail-first verification with 4 scanned redacted share packages and 0 privacy issues.
+- `cd sentinel-desk && python3 -B -m unittest tests.test_live_verification -v` passed with 24 tests after adding env-template, completion-audit next-command, human handoff checklist, malformed Google secret detection, expected OAuth shape checks, Apple Calendar credential format checks, completion-audit source release requirement checks, and live preflight coverage for the source release-package/release-audit gate.
+- `cd sentinel-desk && env SENTINEL_TEST_BAD_GOOGLE_CREDS=not-json-client-secret SENTINEL_TEST_BAD_GOOGLE_TOKEN=not-json-token-secret python3 -B -m sentineldesk --home /private/tmp/lifeagent-format-check-home integrations check --suite all --account sandbox@example.com --google-credentials-env SENTINEL_TEST_BAD_GOOGLE_CREDS --google-token-env SENTINEL_TEST_BAD_GOOGLE_TOKEN --no-persist` reported `gmail.credentials_format`, `gmail.token_format`, `google_calendar.credentials_format`, and `google_calendar.token_format` as `invalid` while outputting only redacted env refs.
+- `cd sentinel-desk && env SENTINEL_TEST_BAD_APPLE_USER="bad apple user" SENTINEL_TEST_BAD_APPLE_PASSWORD=short python3 -B -m sentineldesk --home /private/tmp/lifeagent-apple-format-check-home integrations check --suite calendar --account sandbox@example.com --apple-user-env SENTINEL_TEST_BAD_APPLE_USER --apple-password-env SENTINEL_TEST_BAD_APPLE_PASSWORD --no-persist` reported `apple_calendar.username_format` and `apple_calendar.app_password_format` as `invalid` while outputting only redacted env refs.
+- `cd sentinel-desk && python3 -B -m sentineldesk --home /private/tmp/lifeagent-source-release-home privacy release-audit --path /private/tmp/lifeagent-sentineldesk-apple-format-extract --require-clean` passed with 91 scanned files and 0 issues after packaging the current source tree.
+- `cd sentinel-desk && python3 -B -m sentineldesk --home /private/tmp/lifeagent-handoff-checklist-home integrations handoff --account sandbox@example.com --output /private/tmp/lifeagent-handoff-checklist.md` wrote a Markdown checklist with completion gates, `external_read`/`external_calendar_write` side-effect labels, approval flags, and final source release audit commands without printing secret values.
+- `cd sentinel-desk && env SENTINEL_LIVE_HOME=/private/tmp/lifeagent-preflight-source-gate-home SENTINEL_LIVE_PYTHON=python3 SENTINEL_LIVE_ACCOUNT=sandbox@example.com SENTINEL_LIVE_RELEASE_OUTPUT=/private/tmp/lifeagent-preflight-source-gate/sentinel-desk.release.zip bash scripts/live_verification_preflight.sh` completed without real credentials or external writes after the source-release gate reorder; it wrote redacted integration packages, wrote and audited a clean source release package before `completion-audit`, and passed the final redacted-output `privacy audit`.
+- `cd sentinel-desk && python3 -B -m sentineldesk --home /private/tmp/lifeagent-final-source-home privacy release-package --source . --output /private/tmp/lifeagent-final-sentineldesk.release.zip` wrote the current source release ZIP with 91 files and excluded 8 local runtime artifacts; `privacy release-audit --path /private/tmp/lifeagent-final-sentineldesk-extract --require-clean` then passed with 0 issues.
+- `cd sentinel-desk && python3 -B -m sentineldesk --home /private/tmp/lifeagent-final-source-home integrations completion-audit --account sandbox@example.com --source-release-path /private/tmp/lifeagent-final-sentineldesk-extract` reported `source_release_audit` as `ready` while correctly leaving real Gmail/Calendar credentials, cursor, sync evidence, and final ready package requirements missing.
+- `cd sentinel-desk && env SENTINEL_LIVE_HOME=/private/tmp/lifeagent-preflight-release-gate-home SENTINEL_LIVE_PYTHON=python3 SENTINEL_LIVE_ACCOUNT=sandbox@example.com SENTINEL_LIVE_RELEASE_OUTPUT=/private/tmp/lifeagent-preflight-release-gate/sentinel-desk.release.zip bash scripts/live_verification_preflight.sh` completed without real credentials or external writes, wrote two redacted integration packages, passed `privacy audit` over those packages, wrote a 91-file source release ZIP, and passed `privacy release-audit --require-clean` on the extracted source tree.
+- `cd sentinel-desk && python3 -B -m sentineldesk privacy release-audit --path /Users/zuge/Mywork/LifeAgent/sentinel-desk` reported `artifacts_found` for local ignored development artifacts: `.agent-venv`, `sentineldesk.egg-info`, and Python `__pycache__/` directories. This is an expected local-dev finding and must be cleaned or excluded before public packaging.
+- `cd sentinel-desk && python3 -B -m sentineldesk privacy release-package --source /Users/zuge/Mywork/LifeAgent/sentinel-desk --output /private/tmp/lifeagent-release-package.WTdJbi/sentinel-desk.release.zip` wrote a source ZIP with 91 files and excluded 8 local artifacts; after extraction, `privacy release-audit --require-clean` passed with 0 issues.
+- Running dashboard smoke on `127.0.0.1:8797` verified the HTML exposed `Save Date`, `/api/calendar/drafts/update` updated a local draft from July 2 to July 3, `/api/calendar/events` returned `date_key: 2026-07-03`, and `/api/audit/events` recorded `calendar.edit` with `side_effect: local_db_write`.
+- `cd sentinel-desk && python3 -m compileall -q sentineldesk tests` passed after the clean release-package update.
+- `cd sentinel-desk && .agent-venv/bin/python -B -m sentineldesk --home /private/tmp/lifeagent-privacy-audit-preflight integrations completion-audit --account sandbox@example.com` reported `redacted_output_privacy` as `ready` while correctly leaving live Gmail/Calendar credentials, cursor, sync evidence, and final ready package requirements missing.
+- `cd sentinel-desk && .agent-venv/bin/python -B -m sentineldesk --home /private/tmp/lifeagent-privacy-audit-preflight privacy audit --require-clean` passed with 4 scanned redacted share packages and 0 privacy issues.
+- `cd sentinel-desk && .agent-venv/bin/python -B -m sentineldesk --home /private/tmp/lifeagent-langgraph-ready integrations check --suite langgraph --require-ready` passed with status `ready` for `langgraph.module` and `langgraph.runtime`.
+- `cd sentinel-desk && .agent-venv/bin/python -B -c "from sentineldesk.agent.workflow import build_langgraph_workflow; graph=build_langgraph_workflow(); print(type(graph).__name__); print(graph is not None)"` printed `CompiledStateGraph` and `True`.
+- `cd sentinel-desk && .agent-venv/bin/python -B -m unittest tests.test_agent_orchestration tests.test_live_verification -q` passed with 16 tests against the installed optional dependency environment.
+- `cd sentinel-desk && .agent-venv/bin/python -B -m sentineldesk model status` reported `langchain_available: true`, `langgraph_available: true`, and redacted local adapter metadata.
+- `cd sentinel-desk && .agent-venv/bin/python -m pip install -e '.[integrations]'` installed Google API, Google auth, and CalDAV connector dependencies in the project-local virtual environment.
+- `cd sentinel-desk && .agent-venv/bin/python -B -m sentineldesk --home /private/tmp/lifeagent-final-preflight-deps integrations check --suite all --require-ready` failed as expected with `partial` status because user-approved Gmail/Calendar env secrets and a post-sync Gmail cursor are not configured yet; Gmail/Google Calendar modules, Apple CalDAV, and LangGraph checks were `ready`.
+- `cd sentinel-desk && python3 -B -m sentineldesk integrations env-template --account sandbox@example.com` printed redacted env refs, install commands, verification commands, and sync commands without exposing secret values.
+- `cd sentinel-desk && .agent-venv/bin/python -m pip install -e '.[agent,integrations]'` installed the Google OAuth browser-flow dependency `google-auth-oauthlib` in the project-local virtual environment.
+- `cd sentinel-desk && .agent-venv/bin/python -B -c "import google_auth_oauthlib.flow; print('google_auth_oauthlib.flow ready')"` verified the Google OAuth token helper dependency.
+- `cd sentinel-desk && .agent-venv/bin/python -B -m sentineldesk --home /private/tmp/lifeagent-final-preflight-oauth integrations check --suite all --require-ready` failed as expected with `partial` status because user-approved Gmail/Calendar env secrets and a post-sync Gmail cursor are not configured yet; Gmail OAuth flow, Gmail/Google Calendar modules, Apple CalDAV, and LangGraph checks were `ready`.
+- Chrome dashboard smoke on `127.0.0.1:8795` verified the Month calendar board rendered a July 2, 2026 email-derived deadline chip with draft/local state and `email_evidence` source trust.
+- Real Chrome CDP dry-run captured the synthetic OPT fixture through `cdp://127.0.0.1:9223`, produced health `ok`, status `submitted`, and wrote a screenshot artifact.
+- Browser-driven dashboard smoke verified scenario selection, Apply + Run, redacted evidence, report opening, package link enablement, and stable package-link click behavior.
+- Clean portfolio demo pass produced baseline, `critical`, and `uncertain` states, loaded the dashboard, and verified a redacted share package with no `file://` leak.
+- Earlier manual public-release privacy audit evidence is superseded by the executable `privacy release-audit` gate; the current local development tree must be cleaned or packaged without ignored artifacts before sharing.
+- `demo record-prep` produced 5 runs, 2 alerts, baseline/critical/uncertain states, report paths, and redacted package paths for recording handoff.
+- Recording helper script passed shell syntax validation; actual screen recording remains user-operated because macOS screen/audio permissions are local user actions.
+- Recording helper dry-run produced the expected demo state without recording, and unapproved non-interactive execution exits before capture.
+
+### Planned
+
+- Keep Gmail readonly as the current live source and add portal fallback evidence only when an email says the user must log in to see the official deadline.
+- Defer live Google/Apple Calendar sync until Calendar becomes a useful product workflow; when resumed, use one seeded verification draft, explicit confirmation, and all-suite/completion audit.
+- Attach Calendar readiness reports only after the deferred Calendar milestone is intentionally resumed.
+- Add embedding/vector ranking, richer trusted-doc metadata, and retrieval evals.
+- Add assistant evals for user-approved live connector routing and citations using the redacted Gmail-first package shape.
+- Keep duplicate remote calendar-event and live calendar-confirmation safety tests deferred with the Calendar milestone.
+- User-operated screen recording with local screen/audio permissions.
+
+## [0.2.0] - 2026-06-10
+
+### Changed
+
+- Pivoted LifeAgent from the old horizontal JobOps Guard pitch to the newer SentinelDesk plan: a fail-loud local portal sentinel for high-stakes deadlines.
+- Moved the active implementation into `sentinel-desk/`.
+- Updated root documentation so the repository points at SentinelDesk instead of the deleted JobOps package.
+- Kept the project focused on reliability engineering: session health, deterministic diffing, uncertainty escalation, and evidence bundles.
+
+### Removed
+
+- Removed the old root `jobops/` package.
+- Removed the old React/Vite `frontend/` dashboard shell.
+- Removed old Greenhouse/Lever/Workday job fixtures under `fixtures/synthetic_portal/`.
+- Removed old root tests tied to JobOps Guard.
+- Removed `lifeagent_jobops.egg-info/`, `.jobops/`, `.venv/`, `.pytest_cache/`, and `.ruff_cache/` runtime/build artifacts.
+- Removed stale root `pyproject.toml` that declared the deleted `jobops` package.
+- Removed remaining job-specific SentinelDesk demo fixtures and seed target.
+
+### Verified
+
+- `cd sentinel-desk && python3 -B -m unittest discover -s tests -v` passed with 35 tests after removing job-specific fixtures.
+- Verified the latest code path still demonstrates both `critical` meaningful-change alerts and `uncertain` fail-loud alerts in SentinelDesk.
+
+## [0.1.0] - 2026-06-10
+
+### Added
+
+- Created the original LifeAgent / JobOps Guard scaffold for generic job portal monitoring, JD review, form inspection, and dashboard exploration.
+- Added root `jobops` package, React/Vite frontend, synthetic Greenhouse/Lever/Workday fixtures, and broad job-application workflow tests.
+
+### Superseded
+
+- This version has been superseded by the SentinelDesk direction. The old implementation was intentionally removed to avoid splitting the project across two incompatible product narratives.
