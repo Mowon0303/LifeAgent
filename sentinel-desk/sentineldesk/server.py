@@ -7,7 +7,10 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 from . import db
+from .agent.model import load_model_provider
 from .agent.rag_index import search_index
+from .agent.tools import default_tool_registry
+from .agent.workflow import answer_with_workflow
 from .calendar.adapters import IcsFileCalendarAdapter, sync_calendar_draft
 from .calendar.models import CalendarDraft
 from .calendar.source import events_from_calendar_rows
@@ -164,16 +167,63 @@ class Handler(BaseHTTPRequestHandler):
         static_root = project_root() / "sentineldesk" / "static"
         if path in {"/", "/index.html"}:
             file_path = static_root / "index.html"
+        elif path == "/calendar":
+            file_path = static_root / "calendar.html"
         else:
             file_path = static_root / path.lstrip("/")
         if file_path.exists() and file_path.is_file():
-            content_type = "text/html; charset=utf-8" if file_path.suffix == ".html" else "text/plain; charset=utf-8"
+            content_types = {
+                ".html": "text/html; charset=utf-8",
+                ".css": "text/css; charset=utf-8",
+                ".js": "text/javascript; charset=utf-8",
+                ".json": "application/json; charset=utf-8",
+                ".svg": "image/svg+xml; charset=utf-8",
+            }
+            content_type = content_types.get(file_path.suffix, "text/plain; charset=utf-8")
             self.send_text(file_path.read_text(encoding="utf-8"), content_type=content_type)
         else:
             self.send_json({"error": "not found"}, status=404)
 
+    def read_json_body(self) -> dict[str, object]:
+        length = int(self.headers.get("Content-Length") or 0)
+        if length <= 0:
+            return {}
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            return {}
+        return payload if isinstance(payload, dict) else {}
+
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
+        if parsed.path == "/api/ask":
+            body = self.read_json_body()
+            question = str(body.get("question") or "").strip()
+            if not question:
+                self.send_json({"error": "question field required"}, status=400)
+                return
+            try:
+                answer = answer_with_workflow(
+                    question,
+                    provider=load_model_provider(self.paths),
+                    messages=[],
+                    registry=default_tool_registry(self.paths),
+                )
+                self.send_json(
+                    {
+                        "intent": answer.intent.value,
+                        "answer": answer.answer,
+                        "confidence": answer.confidence,
+                        "uncertain": answer.uncertain,
+                        "requires_confirmation": answer.requires_confirmation,
+                        "tool_calls": list(answer.tool_calls),
+                        "citations": [citation.__dict__ for citation in answer.citations],
+                        "metadata": answer.metadata,
+                    }
+                )
+            except Exception as error:
+                self.send_json({"error": str(error)}, status=500)
+            return
         if parsed.path == "/api/run":
             query = parse_qs(parsed.query)
             name = query.get("name", [None])[0]

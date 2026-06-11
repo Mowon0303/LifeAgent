@@ -1,0 +1,36 @@
+{
+  "messages": [
+    {
+      "message_id": "ui-sample-rent-001",
+      "thread_id": "ui-thread-rent",
+      "sender": "billing@parkview-residences.example",
+      "subject": "Rent payment reminder for July",
+      "received_at": "2026-06-25T09:00:00+00:00",
+      "body_text": "Hello,\n\nYour July rent payment of $1,850.00 is due by 07/01/2026. Please pay online through the resident portal.\n\nParkview Residences"
+    },
+    {
+      "message_id": "ui-sample-opt-001",
+      "thread_id": "ui-thread-opt",
+      "sender": "case-updates@uscis-notices.example",
+      "subject": "Request for Evidence issued",
+      "received_at": "2026-06-12T15:00:00+00:00",
+      "body_text": "USCIS has issued a Request for Evidence for your Form I-765. You must respond by September 3, 2026. Review the RFE notice and submit the requested documents."
+    },
+    {
+      "message_id": "ui-sample-card-001",
+      "thread_id": "ui-thread-card",
+      "sender": "statements@summitcard.example",
+      "subject": "Your June statement is ready",
+      "received_at": "2026-06-12T07:00:00+00:00",
+      "body_text": "Your June statement is ready. Statement balance: $1,243.87. Minimum payment due: $35.00. Payment due date: 07/02/2026."
+    },
+    {
+      "message_id": "ui-sample-news-001",
+      "thread_id": "ui-thread-news",
+      "sender": "digest@techweekly-news.example",
+      "subject": "This week in tech",
+      "received_at": "2026-06-22T08:00:00+00:00",
+      "body_text": "This week in tech: our latest roundup published June 21, 2026. Top stories include new framework releases. Read the full issue online."
+    }
+  ]
+}

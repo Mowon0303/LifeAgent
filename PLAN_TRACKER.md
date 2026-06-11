@@ -103,7 +103,7 @@ Rules:
 
 - Rule: Every plan-status reply must show completed plans and the next plan to complete.
 - Completed plans: Read from the `Status Table` rows whose `Status` is `Done`.
-- Next plan to complete: UI implementation is paused until the user provides a design reference package. With the email-extraction golden-set eval baseline now committed (142 cases, report, and regression gates), the next non-UI plan is to turn the Gmail-first task/evidence backend into a stable handoff contract for that UI package: documented response shapes, redacted sample fixtures, and regression tests around task review plus citation payloads. Calendar live writes remain deferred unless the product workflow needs confirmed external calendar sync.
+- Next plan to complete: The design package arrived (`design_handoff_calendar_ai/`, direction B′) and UI work is unfrozen: the handoff contract (`docs/UI_CONTRACT.md` + fixtures + 17 contract tests) and the `/calendar` page are both implemented and browser-verified. The next plan is user acceptance of `/calendar` (then decide whether it replaces the legacy `/` dashboard), followed by either real model-in-the-loop work (needs the user's provider/privacy approval: local Ollama vs cloud API) or the public pivot postmortem write-up. The extraction-improvement queue from `docs/EVAL_REPORT.md` (relative deadlines, non-dollar currencies, action lexicon) is ready whenever extraction work resumes. Calendar live writes remain deferred unless the product workflow needs confirmed external calendar sync.
 
 ## Status Table
 
@@ -115,7 +115,9 @@ Rules:
 | Fail-loud classifier | Done | Handles session expired, captcha, maintenance, capture errors, unknown high-stakes status, meaningful changes, irrelevant changes | Tune vertical policies from real user dry-runs |
 | Evidence bundles | Done | Each run writes raw evidence JSON, redacted JSON, redacted HTML report, optional CDP screenshot artifacts, CLI share package, and dashboard share package download; redacted exports include structured handling for email headers, attachment names, calendar invitees, secrets, and connector metadata | Keep screenshots excluded from redacted share packages |
 | Dashboard | Done | Local dashboard has target runs, scenario apply/apply+run controls, redacted evidence toggle, report link, package download link, month/week/day calendar board for email-derived deadlines, calendar draft preview, approval history preview, retention preview/confirmed purge controls, audit event count, approval count, connector state count, integration verification count, and confirmation-gated local ICS export for calendar drafts | Keep download and retention controls as stable preview-first actions |
-| Reliability tests | Done | 200 unittest cases pass in `sentinel-desk/tests`, covering email/calendar extraction, task review backend, dashboard APIs, retention/audit/approval gates, privacy/release packaging, RAG safety, model/provider boundaries, LangGraph-shaped workflow metadata, tool-verified latest facts, portal fallback citation chaining, CLI `ask`, Gmail-first integration readiness reports, and golden-set eval regression gates | Re-run before publishing |
+| Reliability tests | Done | 217 unittest cases pass in `sentinel-desk/tests`, covering email/calendar extraction, task review backend, dashboard APIs, retention/audit/approval gates, privacy/release packaging, RAG safety, model/provider boundaries, LangGraph-shaped workflow metadata, tool-verified latest facts, portal fallback citation chaining, CLI `ask`, Gmail-first integration readiness reports, golden-set eval regression gates, and UI contract shape gates | Re-run before publishing |
+| UI contract handoff | Done | `docs/UI_CONTRACT.md` documents response shapes for `/api/calendar/events`, `/api/tasks`, `/api/tasks/review`, `/api/calendar/sync`, `/api/calendar/drafts/update`, and the new `/api/ask`, plus the design-token mapping rules (pending=dashed `approval_state: draft`, confirmed=solid `approved`, source-trust captions, undated handling); `fixtures/ui/` holds synthetic sample emails and committed sample responses; `tests/test_ui_contract.py` gates 17 regression assertions including confirm/replay flows, ignore review flow, citation payload shape, fixture/live shape sync, and page wiring | Update the contract doc and fixtures together whenever an API shape changes |
+| Calendar AI dashboard page | Done | `sentineldesk/static/calendar.html` served at `/calendar` implements the user-provided design package (`design_handoff_calendar_ai/`, direction B′): warm-paper Bento month grid, week/day time grids with live now-line, agenda view with relative dates and an undated group, Discord-style assistant panel with summary embed, pending-suggestion cards, confirm (ICS confirmation gate with single-use confirmation IDs) and ignore (task review) actions, and a composer wired to `/api/ask` with uncertainty styling and citation chips; zero external script dependencies; browser-verified end to end (pending dashed chip turned solid after confirm, fail-loud uncertain answer rendered) | Treat the design package as the visual spec; gather user feedback before replacing the legacy `/` dashboard |
 | Commercial alignment | Done | Product narrative pivoted from portal-first monitoring to email-first personal operations with portal/CDP as a verification tool and calendar as the action layer | Keep demos focused on email-derived deadlines, lease/rent admin, billing, and calendar reminders |
 | Interview presentation polish | Done | `docs/ARCHITECTURE.md`, `docs/DEMO_VIDEO_SCRIPT.md`, and `docs/RECORDING_CHECKLIST.md` added | Record a 2-minute portfolio demo using the script |
 | CDP hardening | Done | CDP target selection now allows auto-selection only for a single page and otherwise requires deterministic `url`, `title`, or `id` selectors; real Chrome CDP dry-run captured a synthetic OPT fixture successfully | Record a portfolio demo using the verified path |
@@ -216,7 +218,17 @@ cd sentinel-desk
 python3 -B -m unittest discover -s tests -v
 ```
 
-Current expected result: 200 tests pass.
+Current expected result: 217 tests pass.
+
+Calendar AI page (after seeding any local home with email evidence):
+
+```bash
+cd sentinel-desk
+python3 -B -m sentineldesk --home /tmp/lifeagent-ui-demo init
+python3 -B -m sentineldesk --home /tmp/lifeagent-ui-demo email scan --json fixtures/ui/sample_emails.json
+python3 -B -m sentineldesk --home /tmp/lifeagent-ui-demo serve --port 8788
+# open http://127.0.0.1:8788/calendar
+```
 
 Extraction eval (golden set + report):
 

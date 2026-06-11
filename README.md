@@ -1,10 +1,10 @@
 # LifeAgent
 
-LifeAgent currently hosts **SentinelDesk**, the latest implementation direction for the project.
+LifeAgent is an **email-first personal operations agent**. It finds high-risk deadlines, amounts, and required actions in email and attachments, verifies live facts with tools when evidence is insufficient, answers with citations and explicit uncertainty, and turns verified deadlines into a calendar surface where every external write requires confirmation.
 
-SentinelDesk is a local-first, fail-loud portal sentinel for high-stakes deadlines. It does not try to be a horizontal job portal monitor. Its core promise is:
+**SentinelDesk** is the deterministic reliability core inside LifeAgent (portal capture, health checks, diffing, fail-loud alerts). Its founding rule still governs the whole project:
 
-> If the monitor cannot verify the portal state, it must alert instead of silently assuming nothing changed.
+> If the system cannot verify the current state, it must say so instead of silently assuming nothing changed.
 
 ## Current Project
 
@@ -14,34 +14,47 @@ The active implementation lives in:
 cd sentinel-desk
 ```
 
-Run the local demo:
-
-```bash
-python3 -m sentineldesk --home .demo demo record-prep
-python3 -m sentineldesk --home .demo serve --port 8787
-```
-
-Run tests:
+Run tests (expected: 217 pass):
 
 ```bash
 cd sentinel-desk
 python3 -B -m unittest discover -s tests -v
 ```
 
-## What Changed From The Old Plan
+Run the extraction eval (golden set + report):
 
-The previous **JobOps Guard** implementation was removed from the root of this folder because the plan pivoted away from generic job portal monitoring, JD review, form filling, and a broad CLI/web app pitch. Remaining job-specific demo fixtures were also removed from SentinelDesk.
+```bash
+cd sentinel-desk
+python3 -B -m sentineldesk eval email-extract --golden evals/golden --report-md docs/EVAL_REPORT.md
+```
 
-The current plan keeps only the parts that matter for the newer direction:
+Run the Calendar + AI assistant page against synthetic demo data:
 
-- local browser/session boundary
-- deterministic capture and diff
-- session health detection
-- fail-loud uncertainty alerts
-- evidence bundles
-- high-stakes vertical portal demos
-- privacy-first public portfolio fixtures
+```bash
+cd sentinel-desk
+python3 -B -m sentineldesk --home /tmp/lifeagent-ui-demo init
+python3 -B -m sentineldesk --home /tmp/lifeagent-ui-demo email scan --json fixtures/ui/sample_emails.json
+python3 -B -m sentineldesk --home /tmp/lifeagent-ui-demo serve --port 8788
+# open http://127.0.0.1:8788/calendar  (legacy ops dashboard remains at /)
+```
+
+Run the legacy monitor demo:
+
+```bash
+cd sentinel-desk
+python3 -m sentineldesk --home .demo demo record-prep
+python3 -m sentineldesk --home .demo serve --port 8787
+```
+
+## Key Documents
+
+- [PLAN_TRACKER.md](PLAN_TRACKER.md) — architecture boundary, status table, safety verification matrix, next plan
+- [sentinel-desk/docs/ARCHITECTURE.md](sentinel-desk/docs/ARCHITECTURE.md) — system diagram and safety boundaries
+- [sentinel-desk/docs/UI_CONTRACT.md](sentinel-desk/docs/UI_CONTRACT.md) — backend ↔ calendar UI handoff contract
+- [sentinel-desk/docs/EVAL_REPORT.md](sentinel-desk/docs/EVAL_REPORT.md) — extraction golden-set eval baseline
+- [sentinel-desk/docs/SECURITY_MODEL.md](sentinel-desk/docs/SECURITY_MODEL.md) — trust boundaries and required controls
+- `design_handoff_calendar_ai/` — user-provided visual design package (direction B′) that `/calendar` implements
 
 ## Privacy Boundary
 
-Do not commit runtime state, real portal URLs, screenshots, DOM dumps, cookies, traces, or local database files. Public demos should use synthetic fixtures under `sentinel-desk/fixtures/portals/`.
+Do not commit runtime state, real portal URLs, screenshots, DOM dumps, cookies, traces, or local database files. Public demos use synthetic fixtures only (`sentinel-desk/fixtures/`, `sentinel-desk/evals/golden/`). Before sharing source publicly, use `sentineldesk privacy release-package` and `privacy release-audit --require-clean`.

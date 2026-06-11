@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LifeAgent · 日历 AI 助手</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=IBM+Plex+Sans:wght@400;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body { background:#EFE9DC; }
+
+  .dD { width:100%; height:100vh; min-width:1100px; display:flex; background:#EFE9DC;
+    font-family:'IBM Plex Sans',sans-serif; color:#2B2622; }
+
+  /* ---- calendar (B template, warm) ---- */
+  .dD-cal { flex:1; display:flex; flex-direction:column; padding:30px 32px; min-width:0; }
+  .dD-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; }
+  .dD-tl { display:flex; align-items:center; gap:18px; }
+  .dD-title { font-family:'Newsreader',serif; font-size:42px; font-weight:500; letter-spacing:-.5px; line-height:1; }
+  .dD-title em { font-style:normal; color:#A2937B; font-weight:400; font-size:24px; }
+  .dD-nav { display:flex; gap:6px; }
+  .dD-nav button { width:38px; height:38px; border-radius:11px; border:1px solid #E0D6C4; background:#FBF8F1; color:#5C5446;
+    font-size:17px; cursor:pointer; }
+  .dD-nav button:hover { background:#EDE5D6; }
+  .dD-seg { display:flex; background:#EBE2D2; border-radius:13px; padding:4px; gap:3px; }
+  .dD-seg button { border:0; background:transparent; color:#8A7F6D; padding:9px 18px; border-radius:9px;
+    font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; }
+  .dD-seg button.on { background:#2A6FDB; color:#fff; box-shadow:0 2px 6px rgba(42,111,219,.25); }
+  .dD-week { display:grid; grid-template-columns:repeat(7,1fr); gap:10px; margin-bottom:10px; }
+  .dD-week span { font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:500; letter-spacing:.1em; color:#A2937B; text-transform:uppercase; }
+  .dD-grid { flex:1; display:grid; grid-template-columns:repeat(7,1fr); gap:10px; min-height:0; }
+  .dD-cell { background:#FBF8F1; border-radius:14px; padding:9px 9px 7px; display:flex; flex-direction:column; gap:5px;
+    min-height:0; overflow:hidden; box-shadow:0 1px 2px rgba(80,60,20,.04); }
+  .dD-cell.out { background:rgba(251,248,241,.45); }
+  .dD-cell.today { box-shadow:0 0 0 2px #2A6FDB, 0 6px 16px rgba(42,111,219,.16); }
+  .dD-dn { font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; color:#6B6253; }
+  .dD-cell.out .dD-dn { color:#C2B6A0; }
+  .dD-cell.today .dD-dn { color:#2A6FDB; }
+  .dD-blk { border-radius:7px; padding:4px 8px; font-size:11.5px; font-weight:600; line-height:1.25;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:default; }
+  .dD-blk .tm { font-weight:700; opacity:.7; margin-right:5px; }
+  .dD-blk.pending { background:transparent !important; border:1.5px dashed; }
+  .dD-more { font-size:10.5px; font-weight:600; color:#A2937B; padding-left:2px; }
+
+  /* ---- week / day time grid ---- */
+  .dD-tg { flex:1; display:flex; flex-direction:column; min-height:0; }
+  .dD-tg-head { display:grid; }
+  .wk-dh { text-align:center; padding:2px 0 12px; display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .wk-dh .wd { font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:#A2937B; }
+  .wk-dh .dnum { font-family:'Newsreader',serif; font-size:24px; font-weight:500; color:#3A352D; line-height:1; }
+  .wk-dh.is-today .wd { color:#2A6FDB; }
+  .wk-dh.is-today .dnum { color:#fff; background:#2A6FDB; width:36px; height:36px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-size:19px; box-shadow:0 4px 10px rgba(42,111,219,.3); }
+  .dD-allday { display:grid; border-top:1px solid #E4DBC9; border-bottom:1px solid #E4DBC9; min-height:36px; }
+  .adg-lab { font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:.06em; text-transform:uppercase;
+    color:#B3A893; text-align:right; padding-right:11px; align-self:center; }
+  .adg-cell { padding:5px; display:flex; flex-direction:column; gap:3px; border-left:1px solid #ECE3D2; }
+  .ad-chip { border-radius:6px; padding:3px 8px; font-size:11.5px; font-weight:600;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ad-chip.pending { background:transparent !important; border:1.5px dashed; }
+  .dD-tg-body { display:grid; overflow:auto; position:relative; }
+  .tg-gutter { position:relative; }
+  .tg-hr { position:absolute; right:9px; font-family:'IBM Plex Mono',monospace; font-size:10.5px;
+    color:#9A8E7B; transform:translateY(-50%); white-space:nowrap; }
+  .tg-col { position:relative; border-left:1px solid #DDD2BE; }
+  .tg-col .ln { position:absolute; left:0; right:0; border-top:1px solid #DAD0BC; }
+  .tg-gutter .gln { position:absolute; right:0; width:6px; border-top:1px solid #DAD0BC; }
+  .tg-now { position:absolute; left:0; right:0; height:0; border-top:2px solid #B14228; z-index:5; }
+  .tg-now:before { content:''; position:absolute; left:-4px; top:-5px; width:9px; height:9px; border-radius:50%; background:#B14228; }
+
+  /* ---- agenda ---- */
+  .dD-ag { flex:1; overflow:auto; padding-right:4px; }
+  .ag-day { display:grid; grid-template-columns:108px 1fr; gap:22px; padding:15px 0; border-top:1px solid #E4DBC9; }
+  .ag-day:first-child { border-top:0; padding-top:6px; }
+  .ag-dl { padding-top:2px; }
+  .ag-dl .dow { font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:#A2937B; }
+  .ag-dl .dd { font-family:'Newsreader',serif; font-size:30px; font-weight:500; color:#3A352D; line-height:1; margin-top:5px; }
+  .ag-dl.today .dd { color:#2A6FDB; }
+  .ag-dl .rel { font-size:11px; color:#B3A893; margin-top:7px; }
+  .ag-rows { display:flex; flex-direction:column; gap:8px; }
+  .ag-row { display:flex; align-items:center; gap:13px; background:#FBF8F1; border-radius:11px; padding:11px 15px;
+    box-shadow:0 1px 2px rgba(80,60,20,.05); }
+  .ag-row.pending { background:transparent; border:1.5px dashed #C9BCEC; box-shadow:none; }
+  .ag-time { font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; color:#6B6253; min-width:50px; }
+  .ag-dot { width:9px; height:9px; border-radius:50%; flex:none; }
+  .ag-ttl { font-size:15px; font-weight:600; color:#2B2622; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .ag-chip { font-size:10.5px; font-weight:700; border-radius:5px; padding:2px 8px; white-space:nowrap; }
+  .ag-src { font-size:11.5px; color:#A89A86; min-width:88px; text-align:right; white-space:nowrap; }
+  .dD-empty { color:#A2937B; font-size:13px; padding:26px 4px; }
+
+  /* ---- Discord-style agent panel ---- */
+  .dD-ai { width:438px; flex:none; background:#F1ECE1; border-left:1px solid #E0D6C4; display:flex; flex-direction:column; }
+  .dD-chh { height:56px; flex:none; display:flex; align-items:center; gap:9px; padding:0 16px;
+    border-bottom:1px solid #E4DBC9; box-shadow:0 1px 0 rgba(80,60,20,.03); }
+  .dD-chh .hash { font-size:22px; color:#B3A893; font-weight:500; }
+  .dD-chh .cn { font-size:15.5px; font-weight:700; color:#2B2622; }
+  .dD-chh .sep { width:1px; height:20px; background:#E0D6C4; margin:0 4px; }
+  .dD-chh .topic { font-size:12px; color:#9A8E7B; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dD-chh .icons { margin-left:auto; display:flex; gap:14px; color:#A89A86; }
+  .dD-chh .icons i { width:18px; height:18px; display:block; opacity:.8; }
+
+  .dD-feed { flex:1; overflow-y:auto; padding:14px 0 8px; display:flex; flex-direction:column; }
+  .dD-div { display:flex; align-items:center; gap:10px; padding:6px 16px 14px; }
+  .dD-div .ln { flex:1; height:1px; background:#E4DBC9; }
+  .dD-div .pill { font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.06em; color:#A89A86; }
+
+  .dD-msg { display:grid; grid-template-columns:40px 1fr; gap:14px; padding:8px 16px; position:relative; }
+  .dD-msg:hover { background:rgba(80,60,20,.035); }
+  .dD-msg.right { grid-template-columns:1fr 40px; }
+  .dD-msg.right .dD-av { grid-column:2; grid-row:1; }
+  .dD-msg.right .dD-mc { grid-column:1; grid-row:1; text-align:right; }
+  .dD-msg.right .dD-hl { justify-content:flex-end; }
+  .dD-msg.right .dD-body { text-align:right; }
+  .dD-av { width:40px; height:40px; border-radius:50%; flex:none; }
+  .dD-av.bot { background:radial-gradient(circle at 34% 30%,#5B92F0,#2A6FDB 70%); position:relative; }
+  .dD-av.bot:before { content:''; position:absolute; inset:11px; border:2px solid #fff; border-radius:3px; border-top-width:5px; }
+  .dD-av.me { background:#4F7A4A; color:#fff; display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-size:15px; }
+  .dD-av.ghost { visibility:hidden; }
+  .dD-hl { display:flex; align-items:baseline; gap:8px; margin-bottom:3px; }
+  .dD-un { font-weight:700; font-size:15px; }
+  .dD-un.bot { color:#2A6FDB; }
+  .dD-un.me { color:#4F7A4A; }
+  .dD-app { font-size:10px; font-weight:700; color:#fff; background:#2A6FDB; border-radius:4px; padding:1px 5px; letter-spacing:.02em;
+    position:relative; top:-1px; }
+  .dD-ts { font-family:'IBM Plex Mono',monospace; font-size:11px; color:#B3A893; }
+  .dD-body { font-size:14.5px; line-height:1.5; color:#393429; overflow-wrap:break-word; }
+  .dD-body.uncertain { border-left:3px solid #B14228; padding-left:9px; }
+
+  /* embeds */
+  .dD-embed { border-left:4px solid #2A6FDB; background:#FBF8F1; border-radius:6px; padding:13px 16px; margin-top:8px;
+    box-shadow:0 1px 2px rgba(80,60,20,.05); max-width:340px; }
+  .dD-embed h4 { font-family:'IBM Plex Mono',monospace; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase;
+    color:#A89A86; margin:0 0 10px; }
+  .dD-sumrow { display:flex; gap:12px; align-items:flex-start; padding:7px 0; border-top:1px solid #F1EADB; }
+  .dD-sumrow:first-of-type { border-top:0; }
+  .dD-sumrow .n { font-family:'Newsreader',serif; font-size:22px; line-height:1; min-width:26px; color:#2B2622; }
+  .dD-sumrow .n.u { color:#B14228; }
+  .dD-sumrow .lab { font-size:13.5px; font-weight:600; color:#2B2622; }
+  .dD-sumrow .sub { font-size:12px; color:#9A8E7B; margin-top:1px; }
+  .dD-embed.ev { border-left-color:#6A5BD0; }
+  .dD-embed .etitle { font-size:15px; font-weight:700; color:#2B2622; display:flex; align-items:center; gap:8px; }
+  .dD-embed .etitle .pin { width:8px; height:8px; border-radius:50%; background:#6A5BD0; flex:none; }
+  .dD-embed .ewhen { font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6A5BD0; margin:7px 0 1px; }
+  .dD-embed .esrc { font-size:11.5px; color:#A89A86; }
+  .dD-embed .enote { font-size:13.5px; color:#5A5247; line-height:1.5; margin-top:9px; }
+  .dD-cites { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+  .dD-cite { font-family:'IBM Plex Mono',monospace; font-size:10px; color:#6A5BD0; background:#EAE6FA;
+    border-radius:5px; padding:2px 7px; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dD-btns { display:flex; gap:8px; margin-top:9px; max-width:340px; }
+  .dD-cbtn { height:34px; padding:0 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; border:0;
+    display:flex; align-items:center; gap:6px; font-family:inherit; }
+  .dD-cbtn.prim { background:#2A6FDB; color:#fff; }
+  .dD-cbtn.sec { background:#E6DECD; color:#5C5446; }
+  .dD-cbtn:disabled { opacity:.5; cursor:default; }
+
+  /* composer */
+  .dD-comp { padding:10px 16px 18px; }
+  .dD-compbox { background:#FBF8F1; border:1px solid #E4DBC9; border-radius:13px; padding:11px 12px;
+    display:flex; align-items:center; gap:11px; }
+  .dD-plus { width:26px; height:26px; border-radius:50%; background:#E6DECD; color:#8A7F6D; flex:none;
+    display:flex; align-items:center; justify-content:center; font-size:18px; line-height:1; }
+  .dD-compbox input { flex:1; font-size:14px; color:#393429; background:transparent; border:0; outline:none;
+    font-family:'IBM Plex Sans',sans-serif; }
+  .dD-compbox input::placeholder { color:#B3A893; }
+  .dD-tools { display:flex; gap:12px; color:#B3A893; font-size:16px; }
+</style>
+</head>
+<body>
+<div class="dD" id="calApp">
+  <div class="dD-cal">
+    <div class="dD-top">
+      <div class="dD-tl">
+        <div class="dD-title" id="calTitle"></div>
+        <div class="dD-nav">
+          <button id="calPrev" aria-label="上一页">‹</button>
+          <button id="calNext" aria-label="下一页">›</button>
+        </div>
+      </div>
+      <div class="dD-seg" id="calSeg">
+        <button data-view="month">月</button>
+        <button data-view="week">周</button>
+        <button data-view="day">日</button>
+        <button data-view="agenda">议程</button>
+      </div>
+    </div>
+    <div id="calBody" style="flex:1; display:flex; flex-direction:column; min-height:0;"></div>
+  </div>
+
+  <div class="dD-ai">
+    <div class="dD-chh">
+      <span class="hash">#</span>
+      <span class="cn">日程助手</span>
+      <span class="sep"></span>
+      <span class="topic" id="aiTopic">本地证据 · 写日历需确认</span>
+      <span class="icons">
+        <i><svg viewBox="0 0 22 22" width="18" height="18"><path stroke="#A89A86" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round" d="M6 9a5 5 0 0 1 10 0c0 5 2 6 2 6H4s2-1 2-6"/><path stroke="#A89A86" stroke-width="1.7" fill="none" stroke-linecap="round" d="M9.5 18a1.8 1.8 0 0 0 3 0"/></svg></i>
+        <i><svg viewBox="0 0 22 22" width="18" height="18"><circle stroke="#A89A86" stroke-width="1.7" fill="none" cx="10" cy="10" r="6"/><path stroke="#A89A86" stroke-width="1.7" stroke-linecap="round" d="M15 15l3 3"/></svg></i>
+        <i><svg viewBox="0 0 22 22" width="18" height="18"><circle stroke="#A89A86" stroke-width="1.7" fill="none" cx="8" cy="8" r="3"/><path stroke="#A89A86" stroke-width="1.7" fill="none" stroke-linecap="round" d="M2.5 18a5.5 5.5 0 0 1 11 0"/><path stroke="#A89A86" stroke-width="1.7" fill="none" stroke-linecap="round" d="M15 6a3 3 0 0 1 0 6"/><path stroke="#A89A86" stroke-width="1.7" fill="none" stroke-linecap="round" d="M15.5 18a5.5 5.5 0 0 0-2-4.3"/></svg></i>
+      </span>
+    </div>
+    <div class="dD-feed" id="aiFeed"></div>
+    <div class="dD-comp">
+      <div class="dD-compbox">
+        <div class="dD-plus">+</div>
+        <input id="aiInput" placeholder="给 #日程助手 发消息…" autocomplete="off">
+        <span class="dD-tools">⏎</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // ---- design tokens: event type palettes (see docs/UI_CONTRACT.md mapping) ----
+  var TYPE_META = {
+    deadline: { label: '截止', ink: '#B14228', soft: '#F6E4DC' },
+    meeting:  { label: '会议', ink: '#2A6FDB', soft: '#E1ECFB' },
+    personal: { label: '个人', ink: '#4F7A4A', soft: '#E4EFE2' },
+    ai:       { label: 'AI 建议', ink: '#6A5BD0', soft: '#EAE6FA' }
+  };
+  var TRUST_LABEL = {
+    email_evidence: '邮件证据',
+    portal_verified: '门户已验证',
+    trusted_doc_context: '可信文档',
+    local_evidence: '本地证据'
+  };
+  var WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']; // Mon-first
+  var MONTH_CN = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
+  var START_H = 7, END_H = 21, HPX = 50;
+
+  var state = {
+    view: 'month',
+    cursor: startOfDay(new Date()),
+    events: [],          // mapped calendar items
+    undated: [],         // items with no parseable date_key
+    ignored: {},         // task_id -> true (calendar:<event_id> ignored via review)
+    queue: [],           // pending suggestion queue for the assistant panel
+    busy: false
+  };
+
+  // ---------- helpers ----------
+  function startOfDay(d) { var x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
+  function isoKey(d) {
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function parseKey(key) {
+    var parts = key.split('-').map(Number);
+    return new Date(parts[0], parts[1] - 1, parts[2]);
+  }
+  function mondayIndex(d) { return (d.getDay() + 6) % 7; }
+  function addDays(d, n) { var x = new Date(d); x.setDate(x.getDate() + n); return x; }
+  function escapeHtml(text) {
+    return String(text == null ? '' : text)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function nowStamp() {
+    var d = new Date();
+    return '今天 ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  }
+
+  // ---------- data ----------
+  function mapItem(raw) {
+    var pending = raw.approval_state === 'draft';
+    return {
+      eventId: raw.event_id,
+      title: raw.title || '(未命名)',
+      dateKey: raw.date_key || '',
+      dateText: raw.date_text || '',
+      pending: pending,
+      uncertain: !!raw.uncertain,
+      confidence: raw.confidence,
+      type: pending ? 'ai' : 'deadline',
+      source: TRUST_LABEL[raw.source_trust] || raw.source_trust || '本地证据',
+      syncState: raw.sync_state
+    };
+  }
+
+  function loadData() {
+    return Promise.all([
+      fetch('/api/calendar/events').then(function (r) { return r.json(); }),
+      fetch('/api/tasks?status=ignored').then(function (r) { return r.json(); })
+    ]).then(function (results) {
+      var events = results[0], ignoredTasks = results[1];
+      state.ignored = {};
+      (ignoredTasks || []).forEach(function (t) { state.ignored[t.task_id] = true; });
+      var mapped = (events || []).map(mapItem).filter(function (item) {
+        return !(item.pending && state.ignored['calendar:' + item.eventId]);
+      });
+      state.events = mapped.filter(function (item) { return item.dateKey; });
+      state.undated = mapped.filter(function (item) { return !item.dateKey; });
+      state.queue = mapped.filter(function (item) { return item.pending; });
+    });
+  }
+
+  function byDate() {
+    var map = {};
+    state.events.forEach(function (item) {
+      (map[item.dateKey] = map[item.dateKey] || []).push(item);
+    });
+    return map;
+  }
+
+  // ---------- calendar rendering ----------
+  function chipStyle(item) {
+    var m = TYPE_META[item.type];
+    return item.pending
+      ? 'color:' + m.ink + ';border-color:' + m.ink
+      : 'background:' + m.soft + ';color:' + m.ink;
+  }
+  function chipHtml(item, cls) {
+    return '<div class="' + cls + (item.pending ? ' pending' : '') + '" style="' + chipStyle(item) + '" title="' +
+      escapeHtml(item.title + ' · ' + item.source) + '">' +
+      escapeHtml(item.title) + (item.uncertain ? ' ?' : '') + '</div>';
+  }
+
+  function renderTitle() {
+    var c = state.cursor, el = document.getElementById('calTitle');
+    if (state.view === 'month') {
+      el.innerHTML = MONTH_CN[c.getMonth()] + ' <em>' + c.getFullYear() + '</em>';
+    } else if (state.view === 'week') {
+      var monday = addDays(c, -mondayIndex(c)), sunday = addDays(monday, 6);
+      var label = (monday.getMonth() + 1) + '月' + monday.getDate() + ' – ' +
+        (sunday.getMonth() === monday.getMonth() ? '' : (sunday.getMonth() + 1) + '月') + sunday.getDate();
+      el.innerHTML = escapeHtml(label) + ' <em>周</em>';
+    } else if (state.view === 'day') {
+      el.innerHTML = (c.getMonth() + 1) + '月' + c.getDate() + '日 <em>周' + WEEKDAYS[mondayIndex(c)] + '</em>';
+    } else {
+      el.innerHTML = '议程 <em>接下来</em>';
+    }
+  }
+
+  function renderMonth(body) {
+    var c = state.cursor, map = byDate();
+    var first = new Date(c.getFullYear(), c.getMonth(), 1);
+    var lead = mondayIndex(first);
+    var daysInMonth = new Date(c.getFullYear(), c.getMonth() + 1, 0).getDate();
+    var total = Math.ceil((lead + daysInMonth) / 7) * 7;
+    var todayKey = isoKey(new Date());
+    var html = '<div class="dD-week">' + WEEKDAYS.map(function (w) { return '<span>周' + w + '</span>'; }).join('') + '</div>';
+    html += '<div class="dD-grid" style="grid-template-rows:repeat(' + (total / 7) + ',1fr);">';
+    for (var i = 0; i < total; i++) {
+      var date = addDays(first, i - lead);
+      var out = date.getMonth() !== c.getMonth();
+      var key = isoKey(date);
+      var items = out ? [] : (map[key] || []);
+      var isToday = key === todayKey && !out;
+      html += '<div class="dD-cell' + (out ? ' out' : '') + (isToday ? ' today' : '') + '">';
+      html += '<div class="dD-dn">' + (date.getDate() === 1 ? (date.getMonth() + 1) + '/1' : date.getDate()) + '</div>';
+      items.slice(0, 3).forEach(function (item) { html += chipHtml(item, 'dD-blk'); });
+      if (items.length > 3) html += '<div class="dD-more">+' + (items.length - 3) + '</div>';
+      html += '</div>';
+    }
+    html += '</div>';
+    body.innerHTML = html;
+  }
+
+  function renderTimeGrid(body, days) {
+    var map = byDate(), todayKey = isoKey(new Date());
+    var cols = '56px repeat(' + days.length + ',1fr)';
+    var gridH = (END_H - START_H) * HPX;
+    var html = '<div class="dD-tg">';
+    html += '<div class="dD-tg-head" style="grid-template-columns:' + cols + '"><div></div>';
+    days.forEach(function (d) {
+      var key = isoKey(d);
+      html += '<div class="wk-dh' + (key === todayKey ? ' is-today' : '') + '">' +
+        '<div class="wd">周' + WEEKDAYS[mondayIndex(d)] + '</div>' +
+        '<div class="dnum">' + d.getDate() + '</div></div>';
+    });
+    html += '</div>';
+    html += '<div class="dD-allday" style="grid-template-columns:' + cols + '"><div class="adg-lab">全天</div>';
+    days.forEach(function (d) {
+      html += '<div class="adg-cell">';
+      (map[isoKey(d)] || []).forEach(function (item) { html += chipHtml(item, 'ad-chip'); });
+      html += '</div>';
+    });
+    html += '</div>';
+    html += '<div class="dD-tg-body" style="grid-template-columns:' + cols + ';height:' + gridH + 'px;">';
+    html += '<div class="tg-gutter">';
+    for (var h = START_H; h <= END_H; h++) {
+      var top = (h - START_H) * HPX;
+      html += '<div class="tg-hr" style="top:' + top + 'px">' + String(h).padStart(2, '0') + ':00</div>';
+      html += '<div class="gln" style="top:' + top + 'px"></div>';
+    }
+    html += '</div>';
+    var now = new Date();
+    var nowOffset = (now.getHours() + now.getMinutes() / 60 - START_H) * HPX;
+    days.forEach(function (d) {
+      html += '<div class="tg-col">';
+      for (var h = START_H; h <= END_H; h++) {
+        html += '<div class="ln" style="top:' + ((h - START_H) * HPX) + 'px"></div>';
+      }
+      if (isoKey(d) === todayKey && nowOffset >= 0 && nowOffset <= (END_H - START_H) * HPX) {
+        html += '<div class="tg-now" style="top:' + nowOffset + 'px"></div>';
+      }
+      html += '</div>';
+    });
+    html += '</div></div>';
+    body.innerHTML = html;
+  }
+
+  function renderAgenda(body) {
+    var today = startOfDay(new Date()), todayKey = isoKey(today);
+    var upcoming = state.events.filter(function (item) { return item.dateKey >= todayKey; });
+    var groups = {};
+    upcoming.forEach(function (item) { (groups[item.dateKey] = groups[item.dateKey] || []).push(item); });
+    var keys = Object.keys(groups).sort();
+    var html = '<div class="dD-ag">';
+    if (!keys.length && !state.undated.length) {
+      html += '<div class="dD-empty">接下来没有已提取的日程。试试在右侧问助手，或先同步邮件证据。</div>';
+    }
+    keys.forEach(function (key) {
+      var d = parseKey(key);
+      var diff = Math.round((startOfDay(d) - today) / 86400000);
+      var rel = diff === 0 ? '今天' : diff === 1 ? '明天' : diff + ' 天后';
+      html += '<div class="ag-day"><div class="ag-dl' + (diff === 0 ? ' today' : '') + '">' +
+        '<div class="dow">周' + WEEKDAYS[mondayIndex(d)] + '</div>' +
+        '<div class="dd">' + (d.getMonth() + 1) + '/' + d.getDate() + '</div>' +
+        '<div class="rel">' + rel + '</div></div><div class="ag-rows">';
+      groups[key].forEach(function (item) { html += agendaRow(item, '全天'); });
+      html += '</div></div>';
+    });
+    if (state.undated.length) {
+      html += '<div class="ag-day"><div class="ag-dl">' +
+        '<div class="dow">待定</div><div class="dd">—</div><div class="rel">日期待定</div></div><div class="ag-rows">';
+      state.undated.forEach(function (item) { html += agendaRow(item, item.dateText || '—'); });
+      html += '</div></div>';
+    }
+    html += '</div>';
+    body.innerHTML = html;
+  }
+
+  function agendaRow(item, timeLabel) {
+    var m = TYPE_META[item.type];
+    return '<div class="ag-row' + (item.pending ? ' pending' : '') + '">' +
+      '<div class="ag-time">' + escapeHtml(timeLabel) + '</div>' +
+      '<span class="ag-dot" style="background:' + m.ink + '"></span>' +
+      '<div class="ag-ttl">' + escapeHtml(item.title) + (item.uncertain ? ' ?' : '') + '</div>' +
+      '<span class="ag-chip" style="background:' + m.soft + ';color:' + m.ink + '">' + m.label + '</span>' +
+      '<div class="ag-src">' + escapeHtml(item.source) + '</div></div>';
+  }
+
+  function renderCalendar() {
+    renderTitle();
+    document.querySelectorAll('#calSeg button').forEach(function (btn) {
+      btn.classList.toggle('on', btn.dataset.view === state.view);
+    });
+    var body = document.getElementById('calBody');
+    if (state.view === 'month') renderMonth(body);
+    else if (state.view === 'week') {
+      var monday = addDays(state.cursor, -mondayIndex(state.cursor));
+      renderTimeGrid(body, [0, 1, 2, 3, 4, 5, 6].map(function (i) { return addDays(monday, i); }));
+    }
+    else if (state.view === 'day') renderTimeGrid(body, [state.cursor]);
+    else renderAgenda(body);
+  }
+
+  // ---------- assistant panel ----------
+  var feed = document.getElementById('aiFeed');
+
+  function appendDivider(label) {
+    feed.insertAdjacentHTML('beforeend',
+      '<div class="dD-div"><span class="ln"></span><span class="pill">' + escapeHtml(label) + '</span><span class="ln"></span></div>');
+  }
+  function botMessage(bodyHtml, opts) {
+    opts = opts || {};
+    feed.insertAdjacentHTML('beforeend',
+      '<div class="dD-msg"><div class="dD-av bot' + (opts.ghost ? ' ghost' : '') + '"></div><div>' +
+      (opts.ghost ? '' :
+        '<div class="dD-hl"><span class="dD-un bot">助手</span><span class="dD-app">应用</span><span class="dD-ts">' + nowStamp() + '</span></div>') +
+      bodyHtml + '</div></div>');
+    feed.scrollTop = feed.scrollHeight;
+  }
+  function userMessage(text) {
+    feed.insertAdjacentHTML('beforeend',
+      '<div class="dD-msg right"><div class="dD-mc">' +
+      '<div class="dD-hl"><span class="dD-ts">' + nowStamp() + '</span><span class="dD-un me">你</span></div>' +
+      '<div class="dD-body">' + escapeHtml(text) + '</div></div><div class="dD-av me">我</div></div>');
+    feed.scrollTop = feed.scrollHeight;
+  }
+
+  function summaryEmbed() {
+    var todayKey = isoKey(new Date());
+    var upcoming = state.events.filter(function (i) { return i.dateKey >= todayKey; });
+    var pending = upcoming.filter(function (i) { return i.pending; }).length + state.undated.filter(function (i) { return i.pending; }).length;
+    var confirmed = upcoming.filter(function (i) { return !i.pending; }).length;
+    var uncertain = upcoming.filter(function (i) { return i.uncertain; }).length;
+    return '<div class="dD-embed"><h4>日程一览 · 接下来</h4>' +
+      '<div class="dD-sumrow"><div class="n">' + confirmed + '</div><div><div class="lab">已确认日程</div><div class="sub">实线显示，已导出本地 ICS</div></div></div>' +
+      '<div class="dD-sumrow"><div class="n' + (pending ? ' u' : '') + '">' + pending + '</div><div><div class="lab">待你确认</div><div class="sub">虚线显示，确认前不写日历</div></div></div>' +
+      '<div class="dD-sumrow"><div class="n' + (uncertain ? ' u' : '') + '">' + uncertain + '</div><div><div class="lab">低置信抽取</div><div class="sub">标 ? 的事项建议核对原始邮件</div></div></div></div>';
+  }
+
+  function suggestionCard(item) {
+    return '<div class="dD-body">我在本地证据里发现这条日程，要加入日历吗？</div>' +
+      '<div class="dD-embed ev">' +
+      '<div class="etitle"><span class="pin"></span>' + escapeHtml(item.title) + (item.uncertain ? ' ?' : '') + '</div>' +
+      '<div class="ewhen">' + escapeHtml(item.dateText || item.dateKey || '日期待定') + '</div>' +
+      '<div class="esrc">来源 · ' + escapeHtml(item.source) + ' · 置信 ' + Number(item.confidence).toFixed(2) + '</div>' +
+      '</div>' +
+      '<div class="dD-btns" data-event-id="' + escapeHtml(item.eventId) + '">' +
+      '<button class="dD-cbtn prim" data-act="confirm">✓ 确认加入日历</button>' +
+      '<button class="dD-cbtn sec" data-act="ignore">忽略</button></div>';
+  }
+
+  function offerNextSuggestion() {
+    if (!state.queue.length) return;
+    botMessage(suggestionCard(state.queue[0]), { ghost: true });
+  }
+
+  function welcome() {
+    var today = new Date();
+    appendDivider('今天 · ' + (today.getMonth() + 1) + '月' + today.getDate() + '日');
+    var total = state.events.length + state.undated.length;
+    var pending = state.queue.length;
+    botMessage(
+      '<div class="dD-body">早上好。本地证据中目前有 <b>' + total + '</b> 条带日期的事项，其中 <b>' + pending +
+      '</b> 条等你确认——日历里虚线显示的就是。外部写入永远先问你。</div>' + summaryEmbed());
+    offerNextSuggestion();
+    document.getElementById('aiTopic').textContent =
+      '本地证据 · ' + total + ' 条事项 · ' + pending + ' 条待确认';
+  }
+
+  function handleConfirm(eventId, buttons) {
+    if (state.busy) return;
+    state.busy = true;
+    var confirmationId = 'ui-' + eventId + '-' + Date.now();
+    fetch('/api/calendar/sync?destination=ics&confirm=1&event_id=' + encodeURIComponent(eventId) +
+      '&confirmation_id=' + encodeURIComponent(confirmationId), { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (result) {
+        if (result.allowed) {
+          botMessage('<div class="dD-body">已确认并导出到本地 ICS（确认 ID <code>' + escapeHtml(confirmationId) +
+            '</code> 已记录审批，单次有效）。日历上这条已变成实线。</div>');
+        } else {
+          botMessage('<div class="dD-body uncertain">这次写入被确认门拦下了：' + escapeHtml(result.reason || '未知原因') + '</div>');
+        }
+        buttons.remove();
+        return refresh();
+      })
+      .then(offerNextSuggestion)
+      .catch(function (err) { botMessage('<div class="dD-body uncertain">确认失败：' + escapeHtml(err) + '</div>'); })
+      .finally(function () { state.busy = false; });
+  }
+
+  function handleIgnore(eventId, buttons) {
+    if (state.busy) return;
+    state.busy = true;
+    fetch('/api/tasks/review?task_id=' + encodeURIComponent('calendar:' + eventId) +
+      '&status=ignored&note=' + encodeURIComponent('dismissed from calendar assistant'), { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function () {
+        botMessage('<div class="dD-body">好的，已忽略这条建议（本地草稿仍保留，可在数据保留控制里清理）。</div>');
+        buttons.remove();
+        return refresh();
+      })
+      .then(offerNextSuggestion)
+      .catch(function (err) { botMessage('<div class="dD-body uncertain">忽略失败：' + escapeHtml(err) + '</div>'); })
+      .finally(function () { state.busy = false; });
+  }
+
+  function askAssistant(question) {
+    userMessage(question);
+    fetch('/api/ask', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ question: question })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (answer) {
+        if (answer.error) {
+          botMessage('<div class="dD-body uncertain">' + escapeHtml(answer.error) + '</div>');
+          return;
+        }
+        var html = '<div class="dD-body' + (answer.uncertain ? ' uncertain' : '') + '">' + escapeHtml(answer.answer) + '</div>';
+        if (answer.citations && answer.citations.length) {
+          html += '<div class="dD-cites">' + answer.citations.map(function (c) {
+            return '<span class="dD-cite" title="' + escapeHtml(c.evidence || '') + '">' + escapeHtml(c.source_id) + '</span>';
+          }).join('') + '</div>';
+        }
+        botMessage(html);
+      })
+      .catch(function (err) { botMessage('<div class="dD-body uncertain">请求失败：' + escapeHtml(err) + '</div>'); });
+  }
+
+  // ---------- events ----------
+  document.getElementById('calSeg').addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-view]');
+    if (!btn) return;
+    state.view = btn.dataset.view;
+    renderCalendar();
+  });
+  document.getElementById('calPrev').addEventListener('click', function () { step(-1); });
+  document.getElementById('calNext').addEventListener('click', function () { step(1); });
+  function step(dir) {
+    var c = state.cursor;
+    if (state.view === 'month') state.cursor = new Date(c.getFullYear(), c.getMonth() + dir, 1);
+    else if (state.view === 'week') state.cursor = addDays(c, 7 * dir);
+    else if (state.view === 'day') state.cursor = addDays(c, dir);
+    else return;
+    renderCalendar();
+  }
+  feed.addEventListener('click', function (e) {
+    var btn = e.target.closest('button[data-act]');
+    if (!btn) return;
+    var wrap = btn.closest('.dD-btns');
+    var eventId = wrap.dataset.eventId;
+    state.queue = state.queue.filter(function (item) { return item.eventId !== eventId; });
+    if (btn.dataset.act === 'confirm') handleConfirm(eventId, wrap);
+    else handleIgnore(eventId, wrap);
+  });
+  document.getElementById('aiInput').addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter') return;
+    var text = e.target.value.trim();
+    if (!text) return;
+    e.target.value = '';
+    askAssistant(text);
+  });
+
+  function refresh() {
+    return loadData().then(renderCalendar);
+  }
+
+  // ---------- boot ----------
+  refresh().then(welcome).catch(function (err) {
+    document.getElementById('calBody').innerHTML =
+      '<div class="dD-empty">加载失败：' + escapeHtml(err) + '</div>';
+  });
+  // keep the now line honest without re-fetching
+  setInterval(function () {
+    if (state.view === 'week' || state.view === 'day') renderCalendar();
+  }, 60000);
+})();
+</script>
+</body>
+</html>

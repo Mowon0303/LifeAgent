@@ -1,0 +1,334 @@
+from __future__ import annotations
+
+import io
+import json
+import tempfile
+import unittest
+from pathlib import Path
+
+from sentineldesk import db
+from sentineldesk.agent.model import load_model_provider
+from sentineldesk.agent.tools import default_tool_registry
+from sentineldesk.agent.workflow import answer_with_workflow
+from sentineldesk.config import ensure_config, ensure_dirs, get_paths, project_root
+from sentineldesk.email.ingest import ingest_messages, load_email_json
+from sentineldesk.server import Handler
+
+SAMPLE_EMAILS = project_root() / "fixtures" / "ui" / "sample_emails.json"
+FIXTURES_UI = project_root() / "fixtures" / "ui"
+
+CALENDAR_ITEM_FIELDS = {
+    "event_id",
+    "title",
+    "date_text",
+    "date_key",
+    "severity",
+    "confidence",
+    "status",
+    "sync_state",
+    "approval_state",
+    "uncertain",
+    "source_ids",
+    "source_trust",
+    "source_count",
+    "evidence_uri",
+    "reminders",
+}
+TASK_FIELDS = {
+    "task_id",
+    "kind",
+    "title",
+    "value",
+    "due_date",
+    "severity",
+    "confidence",
+    "source_type",
+    "source_refs",
+    "primary_source",
+    "evidence",
+    "calendar_event_id",
+    "sync_state",
+    "updated_at",
+    "needs_verification",
+    "status",
+    "review_note",
+    "review_actor",
+    "reviewed_at",
+}
+ASK_FIELDS = {
+    "intent",
+    "answer",
+    "confidence",
+    "uncertain",
+    "requires_confirmation",
+    "tool_calls",
+    "citations",
+    "metadata",
+}
+CITATION_FIELDS = {"source_id", "source_type", "evidence", "captured_at"}
+SOURCE_TRUST_VALUES = {"email_evidence", "portal_verified", "trusted_doc_context", "local_evidence"}
+APPROVAL_STATES = {"draft", "approved"}
+TASK_STATUSES = {"new", "reviewed", "ignored", "needs_verification", "done"}
+TASK_KINDS = {"deadline", "amount", "action"}
+
+
+class FakeSocket:
+    def __init__(self, request: bytes) -> None:
+        self.request = io.BytesIO(request)
+        self.response = io.BytesIO()
+
+    def makefile(self, mode: str, *args: object, **kwargs: object) -> io.BytesIO:
+        if "r" in mode:
+            return self.request
+        return self.response
+
+    def sendall(self, data: bytes) -> None:
+        self.response.write(data)
+
+
+def parse_response(raw: bytes) -> tuple[int, dict[str, str], bytes]:
+    header_bytes, body = raw.split(b"\r\n\r\n", 1)
+    header_lines = header_bytes.decode("iso-8859-1").split("\r\n")
+    status = int(header_lines[0].split(" ")[1])
+    headers: dict[str, str] = {}
+    for line in header_lines[1:]:
+        if ":" not in line:
+            continue
+        key, value = line.split(":", 1)
+        headers[key.lower()] = value.strip()
+    return status, headers, body
+
+
+class UiContractBase(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.paths = get_paths(self.tmp.name)
+        ensure_dirs(self.paths)
+        ensure_config(self.paths)
+        db.init_db(self.paths)
+        self.messages = load_email_json(SAMPLE_EMAILS)
+        ingest_messages(self.paths, self.messages, ingested_at="2026-06-25T10:00:00+00:00")
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def request(self, method: str, path: str, body: str = "") -> tuple[int, dict[str, str], bytes]:
+        payload = body.encode("utf-8")
+        raw = (
+            f"{method} {path} HTTP/1.1\r\n"
+            "Host: ui-contract\r\n"
+            f"Content-Length: {len(payload)}\r\n"
+            "\r\n"
+        ).encode("ascii") + payload
+        socket = FakeSocket(raw)
+        handler_class = type("UiContractHandler", (Handler,), {"paths": self.paths})
+        handler_class(socket, ("127.0.0.1", 0), object())
+        return parse_response(socket.response.getvalue())
+
+    def json_request(self, method: str, path: str, body: str = "") -> tuple[int, object]:
+        status, _, raw = self.request(method, path, body)
+        return status, json.loads(raw.decode("utf-8"))
+
+
+class CalendarEventsContractTests(UiContractBase):
+    def test_calendar_events_shape(self) -> None:
+        status, events = self.json_request("GET", "/api/calendar/events")
+        self.assertEqual(status, 200)
+        self.assertIsInstance(events, list)
+        self.assertGreaterEqual(len(events), 3)
+        for item in events:
+            self.assertEqual(set(item), CALENDAR_ITEM_FIELDS)
+            self.assertIsInstance(item["event_id"], str)
+            self.assertTrue(item["event_id"])
+            self.assertIsInstance(item["uncertain"], bool)
+            self.assertIsInstance(item["confidence"], float)
+            self.assertIsInstance(item["source_ids"], list)
+            self.assertIn(item["approval_state"], APPROVAL_STATES)
+            self.assertIn(item["source_trust"], SOURCE_TRUST_VALUES)
+            if item["date_key"]:
+                self.assertRegex(item["date_key"], r"^\d{4}-\d{2}-\d{2}$")
+
+    def test_fresh_drafts_are_pending_and_email_sourced(self) -> None:
+        status, events = self.json_request("GET", "/api/calendar/events")
+        self.assertEqual(status, 200)
+        for item in events:
+            self.assertEqual(item["approval_state"], "draft")
+            self.assertEqual(item["source_trust"], "email_evidence")
+
+
+class TaskContractTests(UiContractBase):
+    def test_tasks_shape(self) -> None:
+        status, tasks = self.json_request("GET", "/api/tasks")
+        self.assertEqual(status, 200)
+        self.assertIsInstance(tasks, list)
+        self.assertGreaterEqual(len(tasks), 4)
+        for task in tasks:
+            self.assertLessEqual(TASK_FIELDS, set(task))
+            self.assertIn(task["status"], TASK_STATUSES)
+            self.assertIn(task["kind"], TASK_KINDS)
+            self.assertIsInstance(task["source_refs"], list)
+
+    def test_calendar_tasks_reference_real_calendar_events(self) -> None:
+        _, events = self.json_request("GET", "/api/calendar/events")
+        event_ids = {item["event_id"] for item in events}
+        _, tasks = self.json_request("GET", "/api/tasks")
+        calendar_tasks = [task for task in tasks if str(task["task_id"]).startswith("calendar:")]
+        self.assertTrue(calendar_tasks)
+        for task in calendar_tasks:
+            self.assertIn(str(task["task_id"]).split(":", 1)[1], event_ids)
+
+    def test_ignore_review_flow(self) -> None:
+        _, tasks = self.json_request("GET", "/api/tasks")
+        calendar_task = next(task for task in tasks if str(task["task_id"]).startswith("calendar:"))
+        task_id = calendar_task["task_id"]
+        status, receipt = self.json_request(
+            "POST", f"/api/tasks/review?task_id={task_id}&status=ignored&note=ui-dismissed"
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(receipt["status"], "ignored")
+        self.assertEqual(receipt["task_id"], task_id)
+        self.assertEqual(receipt["task"]["status"], "ignored")
+        status, ignored = self.json_request("GET", "/api/tasks?status=ignored")
+        self.assertEqual(status, 200)
+        self.assertIn(task_id, {task["task_id"] for task in ignored})
+
+    def test_invalid_review_status_is_rejected(self) -> None:
+        status, payload = self.json_request("POST", "/api/tasks/review?task_id=calendar:x&status=bogus")
+        self.assertEqual(status, 400)
+        self.assertIn("error", payload)
+
+
+class ConfirmFlowContractTests(UiContractBase):
+    def test_confirm_turns_pending_into_approved(self) -> None:
+        _, events = self.json_request("GET", "/api/calendar/events")
+        target = events[0]
+        self.assertEqual(target["approval_state"], "draft")
+        event_id = target["event_id"]
+        status, blocked = self.json_request(
+            "POST", f"/api/calendar/sync?destination=ics&event_id={event_id}"
+        )
+        self.assertEqual(status, 200)
+        self.assertFalse(blocked["allowed"])
+        status, receipt = self.json_request(
+            "POST",
+            f"/api/calendar/sync?destination=ics&confirm=1&confirmation_id=ui-{event_id}-1&event_id={event_id}",
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(receipt["allowed"])
+        self.assertIn(event_id, receipt["event_ids"])
+        _, refreshed = self.json_request("GET", "/api/calendar/events")
+        updated = next(item for item in refreshed if item["event_id"] == event_id)
+        self.assertEqual(updated["approval_state"], "approved")
+        self.assertEqual(updated["sync_state"], "ics_exported")
+
+    def test_confirmation_id_replay_is_blocked(self) -> None:
+        _, events = self.json_request("GET", "/api/calendar/events")
+        event_id = events[0]["event_id"]
+        path = f"/api/calendar/sync?destination=ics&confirm=1&confirmation_id=ui-replay&event_id={event_id}"
+        status, first = self.json_request("POST", path)
+        self.assertEqual(status, 200)
+        self.assertTrue(first["allowed"])
+        status, second = self.json_request("POST", path)
+        self.assertEqual(status, 200)
+        self.assertFalse(second["allowed"])
+
+
+class AskContractTests(UiContractBase):
+    def test_ask_answer_shape(self) -> None:
+        status, answer = self.json_request(
+            "POST", "/api/ask", body=json.dumps({"question": "What is my latest deadline?"})
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(set(answer), ASK_FIELDS)
+        self.assertIn(answer["confidence"], {"high", "medium", "uncertain"})
+        self.assertIsInstance(answer["uncertain"], bool)
+        self.assertIsInstance(answer["tool_calls"], list)
+        self.assertIn("search_latest_email", answer["tool_calls"])
+        self.assertIsInstance(answer["citations"], list)
+        self.assertIn("workflow_engine", answer["metadata"])
+
+    def test_ask_without_question_is_rejected(self) -> None:
+        status, payload = self.json_request("POST", "/api/ask", body="{}")
+        self.assertEqual(status, 400)
+        self.assertIn("error", payload)
+
+    def test_citation_payload_shape_with_email_evidence(self) -> None:
+        answer = answer_with_workflow(
+            "What is my latest deadline?",
+            provider=load_model_provider(self.paths),
+            messages=self.messages,
+            registry=default_tool_registry(self.paths),
+        )
+        self.assertTrue(answer.citations)
+        for citation in answer.citations:
+            self.assertEqual(set(citation.__dict__), CITATION_FIELDS)
+            self.assertTrue(citation.source_id)
+            self.assertTrue(citation.evidence)
+
+
+class CalendarPageTests(UiContractBase):
+    def test_calendar_page_served_with_contract_wiring(self) -> None:
+        status, headers, body = self.request("GET", "/calendar")
+        self.assertEqual(status, 200)
+        self.assertIn("text/html", headers["content-type"])
+        html = body.decode("utf-8")
+        for marker in (
+            'id="calApp"',
+            'id="calSeg"',
+            'id="calBody"',
+            'id="aiFeed"',
+            'id="aiInput"',
+            'data-view="month"',
+            'data-view="week"',
+            'data-view="day"',
+            'data-view="agenda"',
+            "/api/calendar/events",
+            "/api/tasks?status=ignored",
+            "/api/tasks/review?task_id=",
+            "/api/calendar/sync?destination=ics&confirm=1",
+            "/api/ask",
+            "approval_state",
+            "confirmation_id",
+        ):
+            self.assertIn(marker, html)
+
+    def test_calendar_page_has_no_external_script_dependencies(self) -> None:
+        _, _, body = self.request("GET", "/calendar")
+        html = body.decode("utf-8")
+        self.assertNotIn("<script src=", html)
+        self.assertNotIn("cdn.", html)
+
+
+class UiFixtureSampleTests(UiContractBase):
+    def test_committed_calendar_sample_matches_live_shape(self) -> None:
+        sample = json.loads((FIXTURES_UI / "calendar_events.sample.json").read_text(encoding="utf-8"))
+        self.assertTrue(sample)
+        _, live = self.json_request("GET", "/api/calendar/events")
+        self.assertEqual({frozenset(item) for item in sample}, {frozenset(item) for item in live})
+        self.assertEqual(
+            sorted(item["title"] for item in sample), sorted(item["title"] for item in live)
+        )
+
+    def test_committed_tasks_sample_matches_live_shape(self) -> None:
+        sample = json.loads((FIXTURES_UI / "tasks.sample.json").read_text(encoding="utf-8"))
+        self.assertTrue(sample)
+        _, live = self.json_request("GET", "/api/tasks")
+        self.assertEqual({frozenset(item) for item in sample}, {frozenset(item) for item in live})
+
+    def test_committed_ask_sample_matches_live_shape(self) -> None:
+        sample = json.loads((FIXTURES_UI / "ask_answer.sample.json").read_text(encoding="utf-8"))
+        status, live = self.json_request(
+            "POST", "/api/ask", body=json.dumps({"question": "What is my latest deadline?"})
+        )
+        self.assertEqual(status, 200)
+        self.assertEqual(set(sample), set(live))
+
+    def test_samples_stay_synthetic(self) -> None:
+        for name in ("sample_emails.json", "calendar_events.sample.json", "tasks.sample.json"):
+            text = (FIXTURES_UI / name).read_text(encoding="utf-8")
+            for marker in ("@gmail.", "@outlook.", "@qq.", "@163."):
+                self.assertNotIn(marker, text, f"{name} must stay synthetic")
+
+
+if __name__ == "__main__":
+    unittest.main()

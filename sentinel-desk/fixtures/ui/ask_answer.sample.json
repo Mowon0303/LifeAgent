@@ -1,0 +1,39 @@
+{
+  "intent": "latest_deadline",
+  "answer": "I cannot verify the latest fact from available email evidence.",
+  "confidence": "uncertain",
+  "uncertain": true,
+  "requires_confirmation": false,
+  "tool_calls": [
+    "search_latest_email"
+  ],
+  "citations": [],
+  "metadata": {
+    "workflow_engine": "rule_graph",
+    "model_provider": "local",
+    "model": "rule-router",
+    "workflow_trace": [
+      {
+        "stage": "route",
+        "intent": "latest_deadline"
+      },
+      {
+        "stage": "tools",
+        "planned_tools": [
+          "search_latest_email"
+        ]
+      },
+      {
+        "stage": "finalize",
+        "confidence": "uncertain",
+        "uncertain": true
+      }
+    ],
+    "planned_tools_initial": [
+      "search_latest_email"
+    ],
+    "planned_tools": [
+      "search_latest_email"
+    ]
+  }
+}

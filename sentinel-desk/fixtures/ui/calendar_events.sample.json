@@ -1,0 +1,130 @@
+[
+  {
+    "event_id": "5b7aa19bdfef9041",
+    "title": "Deadline: This week in tech",
+    "date_text": "June 21, 2026",
+    "date_key": "2026-06-21",
+    "severity": "medium",
+    "confidence": 0.5,
+    "status": "draft",
+    "sync_state": "local_draft",
+    "approval_state": "draft",
+    "uncertain": true,
+    "source_ids": [
+      "email:ui-sample-news-001"
+    ],
+    "source_trust": "email_evidence",
+    "source_count": 1,
+    "evidence_uri": "email:ui-sample-news-001",
+    "reminders": [
+      {
+        "days_before": 14,
+        "method": "display"
+      },
+      {
+        "days_before": 7,
+        "method": "display"
+      },
+      {
+        "days_before": 1,
+        "method": "display"
+      }
+    ]
+  },
+  {
+    "event_id": "0edfeaf987cb6fce",
+    "title": "Deadline: Rent payment reminder for July",
+    "date_text": "07/01/2026",
+    "date_key": "2026-07-01",
+    "severity": "critical",
+    "confidence": 0.82,
+    "status": "draft",
+    "sync_state": "local_draft",
+    "approval_state": "draft",
+    "uncertain": false,
+    "source_ids": [
+      "email:ui-sample-rent-001"
+    ],
+    "source_trust": "email_evidence",
+    "source_count": 1,
+    "evidence_uri": "email:ui-sample-rent-001",
+    "reminders": [
+      {
+        "days_before": 14,
+        "method": "display"
+      },
+      {
+        "days_before": 7,
+        "method": "display"
+      },
+      {
+        "days_before": 1,
+        "method": "display"
+      }
+    ]
+  },
+  {
+    "event_id": "f87f8e455e3b564e",
+    "title": "Deadline: Your June statement is ready",
+    "date_text": "07/02/2026",
+    "date_key": "2026-07-02",
+    "severity": "critical",
+    "confidence": 0.82,
+    "status": "draft",
+    "sync_state": "local_draft",
+    "approval_state": "draft",
+    "uncertain": false,
+    "source_ids": [
+      "email:ui-sample-card-001"
+    ],
+    "source_trust": "email_evidence",
+    "source_count": 1,
+    "evidence_uri": "email:ui-sample-card-001",
+    "reminders": [
+      {
+        "days_before": 14,
+        "method": "display"
+      },
+      {
+        "days_before": 7,
+        "method": "display"
+      },
+      {
+        "days_before": 1,
+        "method": "display"
+      }
+    ]
+  },
+  {
+    "event_id": "c2eaaa22af3f4fdb",
+    "title": "Deadline: Request for Evidence issued",
+    "date_text": "September 3, 2026",
+    "date_key": "2026-09-03",
+    "severity": "critical",
+    "confidence": 0.82,
+    "status": "draft",
+    "sync_state": "local_draft",
+    "approval_state": "draft",
+    "uncertain": false,
+    "source_ids": [
+      "email:ui-sample-opt-001"
+    ],
+    "source_trust": "email_evidence",
+    "source_count": 1,
+    "evidence_uri": "email:ui-sample-opt-001",
+    "reminders": [
+      {
+        "days_before": 14,
+        "method": "display"
+      },
+      {
+        "days_before": 7,
+        "method": "display"
+      },
+      {
+        "days_before": 1,
+        "method": "display"
+      }
+    ]
+  }
+]
