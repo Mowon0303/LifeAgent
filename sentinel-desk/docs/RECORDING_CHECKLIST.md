@@ -13,7 +13,7 @@ python3 -m sentineldesk --home .demo demo record-prep --port 8787
 python3 -m sentineldesk --home .demo serve --port 8787
 ```
 
-Open `http://127.0.0.1:8787/ops` (the monitor ops dashboard; `/` now serves the calendar assistant page).
+Open `http://127.0.0.1:8787/` for the LifeAgent calendar assistant page. Use `http://127.0.0.1:8787/ops` only as the secondary reliability/evidence view.
 
 `demo record-prep` prints the run IDs, report paths, package paths, expected dashboard URL, and serve command.
 
@@ -43,8 +43,11 @@ Do not run the recording helper from an automation unless the user explicitly ap
 
 ## Expected State
 
-- Dashboard shows 3 targets.
-- Recent runs include baseline, `critical`, and `uncertain` states.
+- Calendar assistant shows email-derived deadline drafts from the synthetic Gmail-style fixture.
+- Demo prep persists 4 sample messages, 8 extracted facts, 3 calendar drafts, and reviewable tasks.
+- Asking "What is my latest deadline?" returns an `uncertain` answer with `stored_email:` citations and the safest earlier candidate.
+- Ops dashboard shows 3 targets.
+- Ops recent runs include baseline, `critical`, and `uncertain` states.
 - Alerts count is at least 2 after the action-required and session-expired scenarios.
 - Evidence panel defaults to redacted evidence.
 - `Open Report` opens the redacted HTML report.
@@ -52,12 +55,12 @@ Do not run the recording helper from an automation unless the user explicitly ap
 
 ## Voiceover Beats
 
-1. Problem: silent false negatives are worse than no monitor.
-2. Baseline: first verified snapshots are stored locally.
-3. Meaningful change: OPT action-required status becomes `critical`.
-4. Fail loud: session-expired state becomes `uncertain`.
-5. Evidence: raw local evidence exists, but report/package outputs are redacted.
-6. Architecture: capture, extraction, health, status/deadlines, diff, policy, evidence, dashboard.
+1. Problem: important life-admin deadlines are scattered through email, attachments, and occasional portals.
+2. Gmail-first: synthetic email evidence creates dated calendar drafts, amounts, and required actions.
+3. Assistant: latest-deadline questions answer with citations and uncertainty when evidence conflicts.
+4. Calendar layer: deadlines remain local drafts until the user confirms an export/write.
+5. Reliability core: `/ops` shows fail-loud portal capture as a verification fallback, not the main product.
+6. Evidence/privacy: redacted reports and packages are shareable; raw local evidence stays local.
 
 ## Privacy Check
 
@@ -84,6 +87,12 @@ The latest dry-run used a temporary home outside the repo and verified:
 
 - 5 demo runs
 - 2 alerts
+- 4 sample email messages
+- 8 extracted email facts
+- 3 local calendar drafts
+- 8 reviewable tasks
 - baseline, `critical`, and `uncertain` states
-- dashboard load at `127.0.0.1:8792`
+- calendar assistant and ops dashboard load at `127.0.0.1:8798`
+- `/api/calendar/events` returns 3 email-derived drafts
+- `/api/ask` returns cited uncertainty for conflicting latest-deadline evidence
 - redacted share package contents with no `file://` leak

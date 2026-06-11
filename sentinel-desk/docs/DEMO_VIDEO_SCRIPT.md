@@ -1,4 +1,4 @@
-# SentinelDesk Demo Video Script
+# LifeAgent Demo Video Script
 
 Target length: 2 minutes.
 
@@ -13,9 +13,9 @@ python3 -m sentineldesk --home .demo demo record-prep --port 8787
 python3 -m sentineldesk --home .demo serve --port 8787
 ```
 
-Open `http://127.0.0.1:8787/ops` (the monitor ops dashboard; `/` now serves the calendar assistant page).
+Open `http://127.0.0.1:8787/` for the calendar assistant page. Use `/ops` as a secondary view for the deterministic SentinelDesk reliability core.
 
-`demo record-prep` prepares baseline, critical, and uncertain demo states before recording, then prints the run IDs and artifact paths to use if needed.
+`demo record-prep` ingests synthetic Gmail-style sample emails for the calendar assistant, prepares baseline, critical, and uncertain portal states for `/ops`, then prints run IDs, report paths, package paths, and the serve command.
 
 On macOS, you can run `bash scripts/record_portfolio_demo.sh` to prepare the demo, start the dashboard, open the browser, and record a 2-minute `.mov` file under `recordings/`. The script asks for explicit confirmation before recording; use `SENTINEL_RECORD_DRY_RUN=1 bash scripts/record_portfolio_demo.sh` to verify setup without recording.
 
@@ -23,58 +23,44 @@ On macOS, you can run `bash scripts/record_portfolio_demo.sh` to prepare the dem
 
 ### 0:00-0:15 - Problem
 
-SentinelDesk is a local-first monitor for high-stakes portals. The problem is not just detecting page changes. The real failure is a silent false negative: the tool says nothing changed when the user was actually logged out, blocked by captcha, or looking at a redesigned page.
+LifeAgent is an email-first personal operations agent. The problem is that important deadlines, amounts, and required actions are scattered across inboxes, attachments, and occasional portals. A useful agent has to show evidence, say when it is uncertain, and avoid writing to calendars without confirmation.
 
-### 0:15-0:35 - Baseline
+### 0:15-0:40 - Gmail-First Calendar Surface
 
-Here I start with synthetic OPT and appointment portals. The first run stores verified baselines. The dashboard shows local targets, recent runs, and evidence. There are no real portal URLs, cookies, screenshots, or personal records in the public demo.
-
-Command:
-
-```bash
-python3 -m sentineldesk --home .demo watch run
-```
-
-### 0:35-1:00 - Meaningful Change
-
-Now I apply an OPT action-required scenario. The status changes from submitted to action required, and the deadline candidate changes. SentinelDesk classifies that as a critical alert and writes an evidence bundle.
-
-Command:
-
-```bash
-python3 -m sentineldesk --home .demo demo apply opt_action_required --run
-```
-
-Optional lease/rent variant:
-
-```bash
-python3 -m sentineldesk --home .demo demo apply lease_notice_required --run
-```
+Here I start on the calendar assistant page. The demo ingested four synthetic Gmail-style messages. LifeAgent extracted deadlines, amounts, and required actions, then turned the verified deadline facts into local calendar drafts.
 
 On screen:
 
-- Show the new `critical` run in Recent Runs.
-- Click Evidence.
-- Point out status evidence, deadline context, and diff preview.
-- Open the redacted report or download the redacted package when showing a shareable artifact.
+- Show the month board with July 1 and July 2 email-derived deadlines.
+- Point out source trust and draft state.
+- Emphasize that these are local drafts, not external calendar writes.
 
-### 1:00-1:25 - Fail-Loud Uncertainty
+### 0:40-1:05 - Cited Assistant Answer
 
-Next I apply a session-expired scenario. A generic website monitor might treat this as just another page change or miss the real portal state. SentinelDesk marks it `uncertain` because it cannot verify the case status.
+Ask: "What is my latest deadline?"
 
-Command:
-
-```bash
-python3 -m sentineldesk --home .demo demo apply opt_session_expired --run
-```
+The assistant returns an uncertain answer because multiple deadline facts exist. It cites the stored email evidence and chooses the safest earlier candidate instead of pretending one answer is definitely correct.
 
 On screen:
 
-- Show `uncertain`.
-- Show the reason: login required or session expired.
-- Say that uncertainty is intentionally surfaced instead of hidden.
+- Show the uncertainty styling.
+- Show the citation chips.
+- State that the LLM/model path cannot override verified facts or confirmation boundaries.
 
-### 1:25-1:45 - Evidence And Privacy
+### 1:05-1:30 - Calendar Confirmation Boundary
+
+Show a pending calendar draft. The important behavior is not automatic scheduling. The system requires confirmation before external writes; local ICS/export and remote calendar sync use explicit approval gates.
+
+### 1:30-1:45 - Reliability Core
+
+Open `/ops`. SentinelDesk is the deterministic reliability core behind LifeAgent: portal capture, health checks, diffing, and fail-loud alerts. It is useful as a fallback when an email says "log in to see the official deadline," not as the main product surface.
+
+On screen:
+
+- Show baseline, `critical`, and `uncertain` runs.
+- Show that session-expired states become `uncertain` instead of silent no-change.
+
+### 1:45-1:55 - Evidence And Privacy
 
 Every run writes raw evidence for local debugging plus redacted JSON, a redacted HTML report, and a redacted ZIP package for sharing. The dashboard defaults to redacted evidence, so file URLs and personal identifiers are not exposed in a portfolio demo.
 
@@ -88,17 +74,17 @@ python3 -m sentineldesk --home .demo evidence RUN_ID --report
 python3 -m sentineldesk --home .demo evidence RUN_ID --package
 ```
 
-### 1:45-2:00 - Architecture Close
+### 1:55-2:00 - Architecture Close
 
-The pipeline is capture, visible-text extraction, session health, status and deadline extraction, deterministic diff, vertical policy, and evidence. The important engineering choice is that health checks and unknown status can block "no change." That is what makes this a deadline sentinel instead of a generic webpage watcher.
+The architecture is deterministic extraction and tool verification first, RAG for explanation over trusted docs, and model refinement only after verified answers. The product boundary is explicit: read and draft locally by default; external writes require confirmation.
 
 ## Shot Checklist
 
-- Dashboard first screen with two demo targets.
-- Baseline run list.
-- Critical OPT action-required run.
-- Evidence panel with deadline and diff preview.
-- Uncertain session-expired run.
+- Calendar assistant first screen with email-derived deadline drafts.
+- Assistant answer with cited uncertainty.
+- Pending calendar draft and confirmation boundary.
+- Ops dashboard as the reliability-core secondary view.
+- Critical and uncertain portal runs.
 - Redacted evidence, HTML report, and ZIP package.
 - Architecture diagram from `docs/ARCHITECTURE.md`.
 
@@ -106,7 +92,7 @@ The pipeline is capture, visible-text extraction, session health, status and dea
 
 | Question | Short answer |
 | --- | --- |
-| Why not just use a website monitor? | Website monitors optimize for change detection. SentinelDesk optimizes against silent false negatives in high-stakes portals. |
-| Why local first? | Credentials, cookies, and real portal state stay on the user's machine. |
-| Where would an LLM fit? | Only after deterministic diff finds a candidate change; never before health verification. |
-| What is the first real vertical? | OPT/USCIS/OIS, because missed deadlines have concrete user cost. |
+| Why email first? | Most useful life-admin signals arrive by email; portals are a fallback when email says the official fact is behind login. |
+| Why not just use RAG? | Deadlines and amounts are facts that need extraction and tool verification; RAG is for policy/docs explanation, not primary alerting. |
+| Where does an LLM fit? | Only as a guarded rephrasing/refinement layer over verified answers; uncertain answers and calendar-write boundaries are not sent for rewrite. |
+| Why local first? | Mail evidence, raw artifacts, credentials, and calendar drafts stay on the user's machine; share packages are redacted. |

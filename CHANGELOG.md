@@ -142,6 +142,8 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Changed
 
+- `demo record-prep` now prepares the current Gmail-first product demo: it ingests `fixtures/ui/sample_emails.json`, creates email-derived calendar drafts/tasks for the calendar assistant homepage, still prepares the secondary `/ops` portal reliability runs, and prints both calendar and ops dashboard URLs plus email/task/calendar counts.
+- `docs/DEMO_VIDEO_SCRIPT.md` and `docs/RECORDING_CHECKLIST.md` now lead with LifeAgent's email-first calendar assistant, cited uncertainty, local draft confirmation boundary, and `/ops` as the SentinelDesk reliability-core fallback rather than presenting portal monitoring as the main product.
 - Raised the email-extraction eval gates after the relative-deadline improvement: raw deadline floors are now P>=0.74/R>=0.92 and high-confidence deadline floors are now P>=0.83/R>=0.51.
 - Raised the email-extraction eval gates after date-form expansion: raw deadline floors are now P>=0.75/R>=0.96 and high-confidence deadline floors are now P>=0.84/R>=0.55.
 - Raised the email-extraction eval gates after the non-dollar amount improvement: raw amount floors are now P>=0.77/R>=0.97 and high-confidence amount floors are now P>=0.79/R>=0.52.
@@ -208,6 +210,13 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Verified
 
+- `cd sentinel-desk && python3 -B -m unittest discover -s tests -q` passed with 264 tests after updating demo prep and recording docs for the Gmail-first flow.
+- `cd sentinel-desk && python3 -m compileall -q sentineldesk tests` passed after the email-first demo prep update.
+- `cd sentinel-desk && python3 -B -m sentineldesk --home /private/tmp/lifeagent-email-first-demo-prep-release-home privacy release-package --source . --output /private/tmp/lifeagent-email-first-demo-prep-20260611.release.zip` wrote a 118-file source release ZIP excluding 10 local runtime artifacts, and `privacy release-audit --require-clean` passed on the extracted package with 0 issues.
+- `cd sentinel-desk && python3 -B -m unittest tests.test_cli_db.CliDbTests.test_demo_record_prep_creates_recording_state -q` passed after updating demo prep to seed Gmail-first calendar data.
+- `cd sentinel-desk && SENTINEL_RECORD_DRY_RUN=1 SENTINEL_RECORD_HOME=/private/tmp/lifeagent-recording-email-first-dryrun-home SENTINEL_RECORD_PORT=8798 SENTINEL_RECORD_OUTPUT_DIR=/private/tmp/lifeagent-recordings bash scripts/record_portfolio_demo.sh` prepared the email-first demo state without recording: 4 sample messages, 8 extracted facts, 3 local calendar drafts, 8 tasks, 5 ops runs, 2 alerts, and critical/uncertain redacted share packages.
+- Local server verification on `127.0.0.1:8798` returned `200` for `/` and `/ops`; `/api/calendar/events` returned 3 email-derived draft events; `/api/ask` returned a cited `uncertain` latest-deadline answer with the safest earlier candidate.
+- `cd sentinel-desk && python3 -B -m sentineldesk --home /private/tmp/lifeagent-recording-email-first-dryrun-home privacy audit --require-clean` passed with 12 scanned redacted outputs and 0 issues.
 - `cd sentinel-desk && python3 -B -m unittest discover -s tests -q` passed with 264 tests after adding the redacted Gmail-first readiness package shape eval.
 - `cd sentinel-desk && python3 -m compileall -q sentineldesk tests` passed after the Gmail-first package shape eval update.
 - `cd sentinel-desk && python3 -B -m sentineldesk --home /private/tmp/lifeagent-gmail-package-shape-release-home privacy release-package --source . --output /private/tmp/lifeagent-gmail-package-shape-20260611.release.zip` wrote a 118-file source release ZIP excluding 10 local runtime artifacts, and `privacy release-audit --require-clean` passed on the extracted package with 0 issues.

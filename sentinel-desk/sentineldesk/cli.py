@@ -23,7 +23,7 @@ from .integrations.google_oauth import normalize_google_scopes, write_google_oau
 from .integrations.google_workspace import CALENDAR_EVENTS_SCOPE, GMAIL_READONLY_SCOPE, GoogleOAuthConfig, GoogleWorkspaceFactory
 from .integrations.live_verification import build_completion_audit, build_env_template, format_handoff_checklist, run_verification
 from .chrome import launch as launch_chrome
-from .config import ensure_config, ensure_dirs, file_url, get_paths, seed_demo_fixtures
+from .config import ensure_config, ensure_dirs, file_url, get_paths, project_root, seed_demo_fixtures
 from .extract import utc_now
 from .monitor import run_all
 from .plantracker import format_plan_summary, summarize_plan
@@ -111,6 +111,7 @@ def cmd_demo_record_prep(args: argparse.Namespace) -> int:
     ensure_config(paths)
     db.init_db(paths)
     copied = seed_demo_fixtures(paths)
+    sample_emails_path = project_root() / "fixtures" / "ui" / "sample_emails.json"
 
     apply_scenario(paths, "opt_baseline")
     apply_scenario(paths, "appointment_baseline")
@@ -120,6 +121,13 @@ def cmd_demo_record_prep(args: argparse.Namespace) -> int:
     critical_run = run_all(paths, name=critical_target["name"])[0]
     uncertain_target = apply_scenario(paths, "opt_session_expired")
     uncertain_run = run_all(paths, name=uncertain_target["name"])[0]
+    email_summary = ingest_messages(
+        paths,
+        load_email_json(sample_emails_path),
+        ingested_at="2026-06-25T12:00:00+00:00",
+    )
+    calendar_drafts = db.list_calendar_drafts(paths, limit=100)
+    tasks = list_tasks(paths, limit=100)
 
     package_paths: dict[str, str] = {}
     for label, run in [("critical", critical_run), ("uncertain", uncertain_run)]:
@@ -133,17 +141,24 @@ def cmd_demo_record_prep(args: argparse.Namespace) -> int:
         {
             "home": str(paths.home),
             "fixtures_copied": copied,
-            "dashboard_url": f"http://127.0.0.1:{args.port}/ops",
+            "dashboard_url": f"http://127.0.0.1:{args.port}/",
+            "calendar_dashboard_url": f"http://127.0.0.1:{args.port}/",
+            "ops_dashboard_url": f"http://127.0.0.1:{args.port}/ops",
             "serve_command": f"python3 -m sentineldesk --home {paths.home} serve --port {args.port}",
             "run_count": len(runs),
             "alert_count": len(alerts),
+            "email_fixture": "fixtures/ui/sample_emails.json",
+            "email_messages_persisted": email_summary["messages_persisted"],
+            "email_facts_extracted": email_summary["facts_extracted"],
+            "calendar_draft_count": len(calendar_drafts),
+            "task_count": len(tasks),
             "baseline_run_ids": [run["run_id"] for run in baseline_runs],
             "critical_run_id": critical_run["run_id"],
             "uncertain_run_id": uncertain_run["run_id"],
             "critical_report": critical_run["evidence"]["report_path"],
             "uncertain_report": uncertain_run["evidence"]["report_path"],
             "packages": package_paths,
-            "expected_states": ["baseline", "critical", "uncertain"],
+            "expected_states": ["email_calendar", "baseline", "critical", "uncertain"],
             "privacy_check": "Open redacted evidence/report/package outputs and confirm there are no real URLs, file:// URLs, local paths, screenshots, cookies, or databases.",
         }
     )
