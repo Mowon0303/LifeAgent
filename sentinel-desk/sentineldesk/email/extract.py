@@ -15,6 +15,57 @@ AMOUNT_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+SPELLED_NUMBER_WORDS = (
+    "zero",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+    "thirteen",
+    "fourteen",
+    "fifteen",
+    "sixteen",
+    "seventeen",
+    "eighteen",
+    "nineteen",
+    "twenty",
+    "thirty",
+    "forty",
+    "fifty",
+    "sixty",
+    "seventy",
+    "eighty",
+    "ninety",
+)
+SPELLED_AMOUNT_RE = re.compile(
+    r"\b(?:"
+    + "|".join(SPELLED_NUMBER_WORDS)
+    + r")(?:[-\s]+(?:"
+    + "|".join(SPELLED_NUMBER_WORDS + ("hundred", "thousand", "million", "and"))
+    + r"))*[-\s]+(?:dollars?|usd)\b",
+    re.IGNORECASE,
+)
+SPELLED_AMOUNT_CUE_RE = re.compile(
+    r"\b("
+    r"balance|bill|charge|charges|deposit|due|dues|fee|fine|invoice|owe|owed|payable|"
+    r"payment|premium|rent|tax|total|totals"
+    r")\b",
+    re.IGNORECASE,
+)
+SPELLED_AMOUNT_NEGATIVE_RE = re.compile(
+    r"\b("
+    r"cash back|coupon|deal|discount|gift|off|promo|refund|refunded|reward|save|saves|saving"
+    r")\b",
+    re.IGNORECASE,
+)
 BASE_ACTION_VERBS = (
     "submit",
     "send",
@@ -128,6 +179,23 @@ def extract_email_facts(message: EmailMessage) -> list[EmailFact]:
                 metadata=_metadata(message),
             )
         )
+    for match in SPELLED_AMOUNT_RE.finditer(text):
+        context = _context(text, match.start(), match.end())
+        if not _spelled_amount_context_allowed(context):
+            continue
+        facts.append(
+            EmailFact(
+                kind="amount",
+                value=normalize_text(match.group(0)),
+                source_id=message.source_id,
+                source_type=message.source_type,
+                trust_label=message.trust_label,
+                evidence=context,
+                confidence=0.78,
+                received_at=message.received_at,
+                metadata=_metadata(message),
+            )
+        )
     for match in ACTION_RE.finditer(text):
         verb = match.group("verb").lower()
         action = normalize_text(match.group(0))
@@ -170,6 +238,12 @@ def _remove_invisible_number_separators(text: str) -> str:
 def _near_risk_word(text: str, start: int) -> bool:
     before = text[max(0, start - 80) : start].lower()
     return any(term in before for term in ["due", "balance", "rent", "invoice", "amount", "pay"])
+
+
+def _spelled_amount_context_allowed(context: str) -> bool:
+    if SPELLED_AMOUNT_NEGATIVE_RE.search(context):
+        return False
+    return bool(SPELLED_AMOUNT_CUE_RE.search(context))
 
 
 def _action_context_allowed(text: str, start: int, verb: str, action: str) -> bool:

@@ -25,20 +25,20 @@ EXPECTED_CATEGORIES = {
 }
 
 # Regression floors sit just below the measured baseline (2026-06-11 after
-# relative-deadline, date-form, non-dollar amount, and action-lexicon support:
-# raw deadline P=0.763/R=0.975, raw amount P=0.781/R=0.987,
+# relative-deadline, date-form, non-dollar/spelled-out amount, and action-lexicon support:
+# raw deadline P=0.763/R=0.975, raw amount P=0.784/R=1.000,
 # raw action P=0.885/R=1.000,
-# high-conf deadline P=0.852/R=0.566, high-conf amount P=0.804/R=0.539).
+# high-conf deadline P=0.852/R=0.566, high-conf amount P=0.808/R=0.553).
 # A failure here means extraction quality regressed or the golden set drifted;
 # improvements should raise these floors deliberately.
 RAW_FLOORS = {
     "deadline": {"precision": 0.75, "recall": 0.96},
-    "amount": {"precision": 0.77, "recall": 0.97},
+    "amount": {"precision": 0.78, "recall": 0.99},
     "action": {"precision": 0.87, "recall": 0.98},
 }
 HIGH_CONFIDENCE_FLOORS = {
     "deadline": {"precision": 0.84, "recall": 0.55},
-    "amount": {"precision": 0.79, "recall": 0.52},
+    "amount": {"precision": 0.80, "recall": 0.54},
 }
 
 

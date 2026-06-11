@@ -29,7 +29,7 @@ One JSONL file per category. Each line is one case:
 
 ## Labeling Policy (semantic ground truth)
 
-Labels record what a life-admin assistant should surface, **not** what the current extractor happens to return. Several labels are intentionally outside or only partially inside the extractor's reach (spelled-out amounts, extraction-cap edge cases, and false-positive traps); those show up as recall or precision gaps in the report, which is the point.
+Labels record what a life-admin assistant should surface, **not** what the current extractor happens to return. Several labels are intentionally outside or only partially inside the extractor's reach (extraction-cap edge cases and false-positive traps); those show up as recall or precision gaps in the report, which is the point.
 
 ### deadlines
 
@@ -47,7 +47,7 @@ Relative deadlines ("within 10 days", "by the end of the month", "next Friday") 
 
 ### amounts
 
-Label amounts the user must pay, will be auto-charged, may be fined, or should track as their own at-risk funds (FSA balances, premium changes, suspicious charges under review). Use the exact string form per occurrence (`$89` and `$89.00` are distinct labels when both appear).
+Label amounts the user must pay, will be auto-charged, may be fined, or should track as their own at-risk funds (FSA balances, premium changes, suspicious charges under review). Use the exact string form per occurrence (`$89` and `$89.00` are distinct labels when both appear). Numeric currency amounts and spelled-out dollar amounts are both in scope when tied to an obligation.
 
 Do **not** label:
 
@@ -77,7 +77,7 @@ The assistant is a personal life-admin agent. Work-collaboration requests (code 
 | `subscription_services.jsonl` | 12 | renewals, trials, price increases, failed payments, cancellation confirmations |
 | `insurance_medical.jsonl` | 13 | open enrollment, claims, EOB amount traps, grace periods, FSA deadlines |
 | `tax_government.jsonl` | 13 | estimated tax, DMV, citations, jury duty, property tax, identity verification |
-| `edge_cases.jsonl` | 18 | relative dates, UK/no-year/ISO-datetime formats, non-dollar currencies, >10-date truncation, subject-only and attachment-only facts |
+| `edge_cases.jsonl` | 18 | relative dates, UK/no-year/ISO-datetime formats, non-dollar currencies, spelled-out amounts, >10-date truncation, subject-only and attachment-only facts |
 | `negatives.jsonl` | 15 | newsletters, marketing, receipts, social/work notifications — measures false-positive cost |
 | `adversarial.jsonl` | 10 | prompt injection (forging, suppression), phishing, zero-width obfuscation, repetition/stuffing attacks |
 

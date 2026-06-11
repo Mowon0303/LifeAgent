@@ -84,6 +84,30 @@ class EmailCalendarAgentTests(unittest.TestCase):
         self.assertIn("$1,250", amounts)
         self.assertNotIn("$47", amounts)
 
+    def test_extract_email_facts_finds_spelled_out_amounts(self) -> None:
+        message = EmailMessage(
+            "m-spelled-amount",
+            "t-spelled-amount",
+            "leasing@example.com",
+            "Security deposit",
+            "2026-06-24",
+            "Security deposit of one thousand two hundred dollars is due at lease signing.",
+        )
+        amounts = {fact.value for fact in extract_email_facts(message) if fact.kind == "amount"}
+        self.assertIn("one thousand two hundred dollars", amounts)
+
+    def test_extract_email_facts_filters_spelled_out_amount_marketing_noise(self) -> None:
+        message = EmailMessage(
+            "m-spelled-amount-noise",
+            "t-spelled-amount-noise",
+            "offers@example.com",
+            "Weekend promo",
+            "2026-06-24",
+            "Save two dollars on coffee this weekend with this coupon.",
+        )
+        amounts = [fact.value for fact in extract_email_facts(message) if fact.kind == "amount"]
+        self.assertEqual(amounts, [])
+
     def test_extract_email_facts_finds_expanded_action_verbs(self) -> None:
         message = EmailMessage(
             "m-expanded-actions",

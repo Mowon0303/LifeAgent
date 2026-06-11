@@ -397,8 +397,9 @@ def render_markdown_report(report: EvalReport) -> str:
     )
     lines.append(
         "- Labels are semantic ground truth for a life-admin assistant; expanded date forms, "
-        "relative deadlines, non-dollar currencies, and expanded action verbs stay labeled even "
-        "when extractor support is partial, so recall reflects true capability."
+        "relative deadlines, non-dollar currencies, spelled-out dollar amounts, and expanded "
+        "action verbs stay labeled even when extractor support is partial, so recall reflects "
+        "true capability."
     )
     lines.append("")
     lines.append("## Golden Set Composition")
