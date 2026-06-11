@@ -10,10 +10,14 @@ import tempfile
 import unittest
 import zipfile
 from pathlib import Path
+from unittest.mock import patch
 
 from sentineldesk import db
 from sentineldesk.cli import main
 from sentineldesk.config import ensure_config, ensure_dirs, get_paths
+from sentineldesk.email.connectors import EmailSyncRequest, GmailApiEmailConnector
+from sentineldesk.email.ingest import sync_connector
+from sentineldesk.integrations.google_workspace import GMAIL_READONLY_SCOPE
 from sentineldesk.integrations.live_verification import build_completion_audit, run_verification
 from sentineldesk.server import Handler
 
@@ -43,6 +47,27 @@ def parse_response(raw: bytes) -> tuple[int, dict[str, str], bytes]:
         key, value = line.split(":", 1)
         headers[key.lower()] = value.strip()
     return status, headers, body
+
+
+class _PackageShapeGmailClient:
+    account_id = "student.private@example.com"
+    scopes = (GMAIL_READONLY_SCOPE,)
+
+    def search_messages(self, query: str, since: str, limit: int) -> dict[str, object]:
+        return {
+            "cursor": "history-shape-123",
+            "raw_count": 1,
+            "messages": [
+                {
+                    "id": "gmail-shape-1",
+                    "thread_id": "thread-shape-1",
+                    "from": "school.private@example.com",
+                    "subject": "Package shape deadline",
+                    "date": "2026-06-11",
+                    "body": "Submit the housing form by July 15, 2026.",
+                }
+            ],
+        }
 
 
 class LiveVerificationTests(unittest.TestCase):
@@ -372,6 +397,143 @@ class LiveVerificationTests(unittest.TestCase):
                 self.assertIn("verification.redacted.json", archive.namelist())
             stored = db.list_integration_verifications(get_paths(home))
             self.assertEqual(stored[0]["verification_id"], payload["verification_id"])
+
+    def test_gmail_first_readiness_package_shape_after_sync(self) -> None:
+        credentials_env = "SENTINEL_TEST_GMAIL_SHAPE_CREDS"
+        token_env = "SENTINEL_TEST_GMAIL_SHAPE_TOKEN"
+        old_credentials = os.environ.get(credentials_env)
+        old_token = os.environ.get(token_env)
+        os.environ[credentials_env] = json.dumps(
+            {
+                "installed": {
+                    "client_id": "shape-client-id",
+                    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                    "token_uri": "https://oauth2.googleapis.com/token",
+                }
+            }
+        )
+        os.environ[token_env] = json.dumps(
+            {
+                "token": "shape-access-token",
+                "refresh_token": "shape-refresh-token",
+                "token_uri": "https://oauth2.googleapis.com/token",
+                "client_id": "shape-client-id",
+                "client_secret": "shape-client-secret",
+                "scopes": [GMAIL_READONLY_SCOPE],
+            }
+        )
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                home = Path(tmp) / "home"
+                paths = get_paths(home)
+                sync_connector(
+                    paths,
+                    GmailApiEmailConnector(_PackageShapeGmailClient()),
+                    EmailSyncRequest(query="deadline OR due", since="history-0", limit=10),
+                    account_id="student.private@example.com",
+                    ingested_at="2026-06-11T12:00:00Z",
+                )
+
+                output = io.StringIO()
+                with patch(
+                    "sentineldesk.integrations.live_verification.importlib.util.find_spec",
+                    return_value=object(),
+                ):
+                    with contextlib.redirect_stdout(output):
+                        code = main(
+                            [
+                                "--home",
+                                str(home),
+                                "integrations",
+                                "check",
+                                "--suite",
+                                "gmail",
+                                "--account",
+                                "student.private@example.com",
+                                "--google-credentials-env",
+                                credentials_env,
+                                "--google-token-env",
+                                token_env,
+                                "--require-ready",
+                                "--package",
+                            ]
+                        )
+
+                self.assertEqual(code, 0)
+                payload = json.loads(output.getvalue())
+                self.assertEqual(payload["suite"], "gmail")
+                self.assertEqual(payload["status"], "ready")
+                package_path = Path(payload["package_path"])
+                self.assertTrue(package_path.exists())
+                self.assertEqual(package_path.parent.name, "integrations")
+
+                with zipfile.ZipFile(package_path) as archive:
+                    names = set(archive.namelist())
+                    self.assertEqual(names, {"README.md", "manifest.json", "verification.redacted.json", "report.html"})
+                    manifest = json.loads(archive.read("manifest.json").decode("utf-8"))
+                    verification = json.loads(archive.read("verification.redacted.json").decode("utf-8"))
+                    combined = "\n".join(archive.read(name).decode("utf-8") for name in sorted(names))
+
+                self.assertEqual(manifest["package_format"], "sentineldesk-redacted-integration-verification-v1")
+                self.assertEqual(manifest["suite"], "gmail")
+                self.assertEqual(manifest["status"], "ready")
+                self.assertEqual(manifest["check_count"], 10)
+                self.assertEqual(
+                    manifest["files"],
+                    ["README.md", "manifest.json", "verification.redacted.json", "report.html"],
+                )
+                self.assertEqual(verification["artifact_path"], "[REDACTED_PATH]")
+                checks = {check["name"]: check for check in verification["checks"]}
+                self.assertEqual(
+                    set(checks),
+                    {
+                        "gmail.credentials",
+                        "gmail.credentials_format",
+                        "gmail.token",
+                        "gmail.token_format",
+                        "gmail.token_scope",
+                        "gmail.googleapiclient",
+                        "gmail.oauth_credentials",
+                        "gmail.oauth_flow",
+                        "gmail.scope",
+                        "gmail.cursor",
+                    },
+                )
+                self.assertTrue(all(check["status"] == "ready" for check in checks.values()))
+                self.assertEqual(checks["gmail.cursor"]["metadata"]["account_id"], "[REDACTED_CONNECTOR_METADATA]")
+                self.assertEqual(checks["gmail.cursor"]["metadata"]["connector"], "gmail_api")
+                self.assertTrue(checks["gmail.cursor"]["metadata"]["has_cursor"])
+                self.assertEqual(checks["gmail.credentials"]["metadata"]["redacted"], f"env:{credentials_env}:***")
+                self.assertEqual(checks["gmail.token"]["metadata"]["redacted"], f"env:{token_env}:***")
+                self.assertIn("Gmail readonly scope is configured.", combined)
+                for raw_value in [
+                    "shape-access-token",
+                    "shape-refresh-token",
+                    "shape-client-secret",
+                    "shape-client-id",
+                    "student.private@example.com",
+                    "school.private@example.com",
+                    "history-shape-123",
+                    str(home),
+                ]:
+                    self.assertNotIn(raw_value, combined)
+
+                audit_output = io.StringIO()
+                with contextlib.redirect_stdout(audit_output):
+                    audit_code = main(["--home", str(home), "privacy", "audit", "--require-clean"])
+                self.assertEqual(audit_code, 0)
+                audit = json.loads(audit_output.getvalue())
+                self.assertEqual(audit["status"], "clean")
+                self.assertEqual(audit["issue_count"], 0)
+        finally:
+            if old_credentials is None:
+                os.environ.pop(credentials_env, None)
+            else:
+                os.environ[credentials_env] = old_credentials
+            if old_token is None:
+                os.environ.pop(token_env, None)
+            else:
+                os.environ[token_env] = old_token
 
     def test_cli_integrations_check_package_requires_persistence(self) -> None:
         output = io.StringIO()

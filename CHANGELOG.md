@@ -6,6 +6,7 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Added
 
+- Added a Gmail-first readiness package shape eval: it seeds a fake readonly Gmail sync with a stored cursor, mocks optional Google dependency availability, runs `integrations check --suite gmail --require-ready --package`, verifies the redacted ZIP file set/manifest/check list, asserts account/cursor/token/client-secret/local-path values are absent, and runs `privacy audit --require-clean` on the generated package.
 - Added conservative relative-deadline extraction to `extract_deadlines`: `within N days`, `at least N business days before the ... date`, user-action `N-day grace period` windows, `next Friday`-style weekdays, and `by the end of the month`; added targeted tests proving positive extraction and skipping no-action refund/deposit processing windows.
 - Added expanded date-form extraction for day-month-year (`14 July 2026`), month-day without year (`June 5`), and ISO datetime `T` suffixes (`2026-07-12T22:00` -> `2026-07-12`), with tests proving full month dates are not split into shorter duplicates.
 - Added non-dollar and malformed amount extraction: common currency symbols (`€`, `£`, `¥`, `￥`), ISO-style prefixes (`USD`, `EUR`, `GBP`, `CNY`, `RMB`), single-decimal amounts such as `$47.5`, and zero-width separator cleanup for obfuscated numeric strings such as `$1\u200b,250`.
@@ -207,6 +208,9 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Verified
 
+- `cd sentinel-desk && python3 -B -m unittest discover -s tests -q` passed with 264 tests after adding the redacted Gmail-first readiness package shape eval.
+- `cd sentinel-desk && python3 -m compileall -q sentineldesk tests` passed after the Gmail-first package shape eval update.
+- `cd sentinel-desk && python3 -B -m sentineldesk --home /private/tmp/lifeagent-gmail-package-shape-release-home privacy release-package --source . --output /private/tmp/lifeagent-gmail-package-shape-20260611.release.zip` wrote a 118-file source release ZIP excluding 10 local runtime artifacts, and `privacy release-audit --require-clean` passed on the extracted package with 0 issues.
 - `cd sentinel-desk && python3 -B -m unittest discover -s tests -q` passed with 263 tests after adding action false-positive filters and raised raw action precision/recall gates.
 - `cd sentinel-desk && python3 -B -m sentineldesk eval email-extract --golden evals/golden --report-md docs/EVAL_REPORT.md` measured the action false-positive improvement: raw action P=1.000/R=1.000/F1=1.000 (tp=85/fp=0/fn=0), raw deadline P=1.000/R=1.000/F1=1.000, and raw amount P=1.000/R=1.000/F1=1.000; no raw deadline/amount/action false positives or false negatives remain in the current golden set.
 - `cd sentinel-desk && python3 -m compileall -q sentineldesk tests` passed after the action false-positive filter update.
