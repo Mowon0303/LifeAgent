@@ -6,6 +6,12 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Added
 
+- Added `sentinel-desk/evals/golden/` with 142 hand-labeled synthetic email cases across 10 categories (lease/rent, billing/utility, bank/card, immigration/school, subscriptions, insurance/medical, tax/government, edge cases, negatives, adversarial), including marketing/receipt/injection false-positive traps, relative-deadline and non-dollar-currency recall gaps, attachment-only and subject-only facts, zero-width obfuscation, and a 10-date stuffing attack against the extraction cap.
+- Added `evals/golden/README.md` documenting the semantic ground-truth labeling policy (which dates/amounts/actions count as life-admin obligations and which are deliberate traps or out-of-scope domains).
+- Added `sentineldesk/evals/email_extract.py`, a golden-set eval harness that scores field-level precision/recall/F1 for deadline/amount/action extraction on raw and high-confidence layers, computes confidence-bucket calibration, and renders text, JSON, and Markdown reports.
+- Added `sentineldesk eval email-extract --golden ... --report-md ... --json` CLI command and the generated committed report `docs/EVAL_REPORT.md`.
+- Added `tests/test_eval_email_extract.py` with 9 regression gates: golden-set integrity (size, categories, unique IDs, `.example` senders), raw and high-confidence metric floors set just below the measured baseline, risk-word calibration direction (high bucket must beat low bucket precision), action flat-confidence structure, suppression-injection resistance (`adv-010` real facts must survive), and negative-category purity.
+
 - Added `sentineldesk/email/` with local email message models, message search, and deadline/amount/action extraction from message and attachment text.
 - Added `sentineldesk/email/ingest.py` and `sentineldesk email scan --json ...` for local email JSON ingestion into persisted evidence.
 - Added email connector abstractions with local JSON and authenticated-client Gmail adapter boundaries.
@@ -147,6 +153,9 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Verified
 
+- `cd sentinel-desk && python3 -B -m unittest discover -s tests` passed with 200 tests after adding the email-extraction golden-set eval gates.
+- `cd sentinel-desk && python3 -B -m sentineldesk eval email-extract --golden evals/golden --report-md docs/EVAL_REPORT.md` measured the extraction baseline over 142 cases: raw deadline P=0.736/R=0.844/F1=0.786, raw amount P=0.755/R=0.934/F1=0.835, raw action P=0.875/R=0.805/F1=0.838; high-confidence layer deadline P=0.810, amount P=0.796; confidence calibration confirmed the risk-word heuristic beats the low bucket (deadline 0.810 vs 0.675, amount 0.796 vs 0.711); every false positive/negative in the report was audited against the labeling policy and matches a designed trap or known capability gap.
+- `cd sentinel-desk && python3 -B -m sentineldesk privacy release-package --source . --output ...` wrote a 108-file source release ZIP that includes all `evals/golden` fixtures and the eval harness while still excluding 10 local runtime artifacts.
 - `cd sentinel-desk && python3 -B -m unittest discover -s tests -q` passed with 191 tests after adding portal fallback citation chaining, uncertain portal-fallback coverage, CLI `ask` fallback assertions, workflow runtime-tool metadata coverage, task review backend/API coverage, Gmail-first integration readiness, privacy/release audit gates, RAG safety, and connector/calendar safety tests.
 - `cd sentinel-desk && python3 -m compileall -q sentineldesk tests` passed after the portal fallback citation update.
 - `cd sentinel-desk && python3 -B -m sentineldesk --home /private/tmp/lifeagent-fallback-release-home-v2 privacy release-package --source . --output /private/tmp/lifeagent-fallback-20260611-portal-citations-v2.release.zip` wrote a 93-file source release ZIP while excluding 9 local runtime artifacts including `.demo`, `.agent-venv`, egg-info, and caches.

@@ -17,6 +17,7 @@ from .calendar.source import events_from_calendar_rows
 from .email.models import EmailMessage
 from .email.connectors import EmailSyncRequest, GmailApiEmailConnector, LocalJsonEmailConnector
 from .email.ingest import ingest_messages, load_email_json, sync_connector
+from .evals.email_extract import evaluate_golden_path, render_markdown_report, render_text_summary
 from .integrations.apple_calendar import AppleCalendarClientFactory, AppleCalendarConfig
 from .integrations.google_oauth import normalize_google_scopes, write_google_oauth_token
 from .integrations.google_workspace import CALENDAR_EVENTS_SCOPE, GMAIL_READONLY_SCOPE, GoogleOAuthConfig, GoogleWorkspaceFactory
@@ -385,6 +386,21 @@ def cmd_model_status(args: argparse.Namespace) -> int:
     paths = paths_from_args(args)
     provider = load_model_provider(paths)
     print_json({**provider.__dict__, "adapter": adapter_status_dict(provider)})
+    return 0
+
+
+def cmd_eval_email_extract(args: argparse.Namespace) -> int:
+    report = evaluate_golden_path(args.golden)
+    if args.report_md:
+        output = Path(args.report_md)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(render_markdown_report(report), encoding="utf-8")
+    if args.json:
+        print_json(report.to_dict())
+    else:
+        print(render_text_summary(report))
+        if args.report_md:
+            print(f"report: {args.report_md}")
     return 0
 
 
@@ -834,6 +850,14 @@ def build_parser() -> argparse.ArgumentParser:
     model_sub = model.add_subparsers(dest="model_command", required=True)
     model_status = model_sub.add_parser("status", help="Show active model provider and optional dependency availability")
     model_status.set_defaults(func=cmd_model_status)
+
+    evals = sub.add_parser("eval", help="Run golden-set evals against extraction layers")
+    evals_sub = evals.add_subparsers(dest="eval_command", required=True)
+    eval_email = evals_sub.add_parser("email-extract", help="Score email fact extraction against the golden set")
+    eval_email.add_argument("--golden", default="evals/golden", help="Golden JSONL file or directory")
+    eval_email.add_argument("--report-md", help="Write a Markdown eval report to this path")
+    eval_email.add_argument("--json", action="store_true", help="Print the full JSON report")
+    eval_email.set_defaults(func=cmd_eval_email_extract)
 
     email = sub.add_parser("email", help="Ingest and inspect local email evidence")
     email_sub = email.add_subparsers(dest="email_command", required=True)
