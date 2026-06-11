@@ -14,7 +14,7 @@ The active implementation lives in:
 cd sentinel-desk
 ```
 
-Run tests (expected: 233 pass):
+Run tests (expected: 235 pass):
 
 ```bash
 cd sentinel-desk

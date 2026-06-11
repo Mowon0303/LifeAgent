@@ -76,6 +76,22 @@ class ExtractTests(unittest.TestCase):
         deadlines = extract_deadlines(fixture("lease_rent_due.html"))
         self.assertTrue(any(item["date_text"] == "06/05/2026" for item in deadlines))
 
+    def test_extract_relative_deadline_windows(self) -> None:
+        text = (
+            "Respond to this summons within 10 days of receipt. "
+            "Submit any remaining receipts before the cycle closes; "
+            "claims are processed by the end of the month."
+        )
+        deadlines = extract_deadlines(text)
+        values = {item["date_text"] for item in deadlines}
+        self.assertIn("within 10 days", values)
+        self.assertIn("by the end of the month", values)
+
+    def test_ignores_relative_company_processing_window(self) -> None:
+        text = "Your refund was approved and will be deposited within 21 days. No action is needed."
+        deadlines = extract_deadlines(text)
+        self.assertNotIn("within 21 days", {item["date_text"] for item in deadlines})
+
     def test_ok_health_for_portal_page(self) -> None:
         health = detect_health(fixture("opt_submitted.html"))
         self.assertEqual(health["state"], "ok")

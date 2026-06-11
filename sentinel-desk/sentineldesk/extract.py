@@ -18,6 +18,37 @@ DATE_RE = re.compile(
     re.IGNORECASE,
 )
 
+RELATIVE_DEADLINE_PATTERNS = (
+    re.compile(r"\bby the end of the month\b", re.IGNORECASE),
+    re.compile(
+        r"\bat least\s+\d{1,3}\s+(?:business\s+)?days\s+before\s+the\s+[a-z][a-z -]{0,40}?\b(?:date|end date)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(r"\bwithin\s+\d{1,3}\s+(?:business\s+)?days\b", re.IGNORECASE),
+    re.compile(r"(?<=\bduring the )\d{1,3}-day grace period\b", re.IGNORECASE),
+    re.compile(
+        r"\bnext\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b",
+        re.IGNORECASE,
+    ),
+)
+
+RELATIVE_DEADLINE_CUE_RE = re.compile(
+    r"\b("
+    r"must|need|needs|required|requirement|respond|report|submit|upload|send|pay|payable|"
+    r"remove|removed|make changes|cancel|freeze|update|dispute|notice|deadline|due|before|"
+    r"grace period|cycle closes|due back"
+    r")\b",
+    re.IGNORECASE,
+)
+
+RELATIVE_DEADLINE_NEGATIVE_RE = re.compile(
+    r"\b("
+    r"no action (?:is )?(?:needed|required)|not a bill|will be deposited|will be processed|"
+    r"company timeline"
+    r")\b",
+    re.IGNORECASE,
+)
+
 STATUS_PATTERNS = [
     ("action_required", r"\b(action required|request for evidence|rfe|missing document|needs your attention|respond by|payment due|rent due|(?<!no )balance due|past due|notice required|notice to vacate required|renewal required)\b"),
     ("interview_requested", r"\b(interview requested|schedule interview|interview invitation|selected an interview slot)\b"),
@@ -138,9 +169,57 @@ def extract_deadlines(text: str) -> list[dict[str, Any]]:
     for match in DATE_RE.finditer(normalized):
         start, end = match.span()
         context = normalized[max(0, start - 90) : min(len(normalized), end + 90)]
-        confidence = 0.82 if re.search(r"\b(deadline|due|respond by|before|interview|appointment|expires)\b", context, re.IGNORECASE) else 0.5
+        confidence = _deadline_confidence(context)
         deadlines.append({"date_text": match.group(0), "context": context, "confidence": confidence})
+    for match in _relative_deadline_matches(normalized):
+        start, end = match.span()
+        context = normalized[max(0, start - 90) : min(len(normalized), end + 90)]
+        deadlines.append(
+            {
+                "date_text": match.group(0),
+                "context": context,
+                "confidence": _deadline_confidence(context, relative=True),
+            }
+        )
     return deadlines[:10]
+
+
+def _deadline_confidence(context: str, *, relative: bool = False) -> float:
+    high_confidence = re.search(
+        r"\b(deadline|due|respond by|before|interview|appointment|expires|must|payable|grace period)\b",
+        context,
+        re.IGNORECASE,
+    )
+    if high_confidence:
+        return 0.82
+    return 0.58 if relative else 0.5
+
+
+def _relative_deadline_matches(text: str) -> list[re.Match[str]]:
+    matches: list[re.Match[str]] = []
+    seen_spans: set[tuple[int, int]] = set()
+    for pattern in RELATIVE_DEADLINE_PATTERNS:
+        for match in pattern.finditer(text):
+            span = match.span()
+            if span in seen_spans:
+                continue
+            context = text[max(0, span[0] - 90) : min(len(text), span[1] + 90)]
+            if not _is_relative_deadline_context(match.group(0), context):
+                continue
+            seen_spans.add(span)
+            matches.append(match)
+    matches.sort(key=lambda item: item.start())
+    return matches
+
+
+def _is_relative_deadline_context(value: str, context: str) -> bool:
+    if re.search(r"\bby the end of the month\b", value, re.IGNORECASE):
+        return bool(RELATIVE_DEADLINE_CUE_RE.search(context))
+    if RELATIVE_DEADLINE_NEGATIVE_RE.search(context):
+        return False
+    if re.search(r"\bnext\s+\w+\b|\bgrace period\b", value, re.IGNORECASE):
+        return bool(RELATIVE_DEADLINE_CUE_RE.search(context))
+    return bool(RELATIVE_DEADLINE_CUE_RE.search(context))
 
 
 def extract_page(html_text: str) -> Extraction:

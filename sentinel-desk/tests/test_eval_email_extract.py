@@ -24,18 +24,19 @@ EXPECTED_CATEGORIES = {
     "adversarial",
 }
 
-# Regression floors sit just below the measured baseline (2026-06-11:
-# raw deadline P=0.736/R=0.844, raw amount P=0.755/R=0.934, raw action
-# P=0.875/R=0.805, high-conf deadline P=0.810/R=0.418, high-conf amount
-# P=0.796/R=0.513). A failure here means extraction quality regressed or the
-# golden set drifted; improvements should raise these floors deliberately.
+# Regression floors sit just below the measured baseline (2026-06-11 after
+# relative-deadline support: raw deadline P=0.757/R=0.943, raw amount
+# P=0.755/R=0.934, raw action P=0.875/R=0.805, high-conf deadline
+# P=0.844/R=0.533, high-conf amount P=0.796/R=0.513). A failure here means
+# extraction quality regressed or the golden set drifted; improvements should
+# raise these floors deliberately.
 RAW_FLOORS = {
-    "deadline": {"precision": 0.70, "recall": 0.80},
+    "deadline": {"precision": 0.74, "recall": 0.92},
     "amount": {"precision": 0.72, "recall": 0.90},
     "action": {"precision": 0.84, "recall": 0.75},
 }
 HIGH_CONFIDENCE_FLOORS = {
-    "deadline": {"precision": 0.78, "recall": 0.38},
+    "deadline": {"precision": 0.83, "recall": 0.51},
     "amount": {"precision": 0.76, "recall": 0.48},
 }
 
