@@ -38,10 +38,10 @@ Agent layer:
 
 ## Current Evidence
 
-- `264` unittest cases pass.
+- `269` unittest cases pass.
 - Golden extraction eval: raw deadline, amount, and action are all `P=1.000 / R=1.000 / F1=1.000` on the current synthetic set.
 - Redacted Gmail-first readiness package shape is regression-tested.
-- Email-first demo dry run creates 4 synthetic messages, 8 extracted facts, 3 local calendar drafts, 8 reviewable tasks, and a cited uncertain latest-deadline answer.
+- Daily landing workflow creates 4 synthetic messages, 8 extracted facts, 3 local calendar drafts, 8 reviewable tasks, and a local audit record without external writes.
 - Source release packaging and release audit pass with runtime artifacts excluded.
 
 ## Portfolio Snapshot
@@ -70,18 +70,26 @@ Open:
 - `http://127.0.0.1:8787/` for the LifeAgent calendar assistant.
 - `http://127.0.0.1:8787/ops` for the SentinelDesk reliability/evidence dashboard.
 
+Run the repeatable daily landing workflow:
+
+```bash
+cd sentinel-desk
+python3 -B -m sentineldesk --home .demo daily run --email-json fixtures/ui/sample_emails.json
+```
+
+For a real inbox, generate the local Google token first, then explicitly opt into readonly Gmail refresh:
+
+```bash
+python3 -B -m sentineldesk --home .demo daily run --sync-gmail --account user@example.com
+```
+
+`daily run` summarizes stored mail, extracted task queue, local calendar drafts, connector readiness, and next safe actions. It never performs external calendar writes.
+
 Run the extraction eval:
 
 ```bash
 cd sentinel-desk
 python3 -B -m sentineldesk eval email-extract --golden evals/golden --report-md docs/EVAL_REPORT.md
-```
-
-Run the recording prep without starting screen capture:
-
-```bash
-cd sentinel-desk
-SENTINEL_RECORD_DRY_RUN=1 bash scripts/record_portfolio_demo.sh
 ```
 
 ## CI Gates

@@ -24,6 +24,7 @@ from .integrations.google_workspace import CALENDAR_EVENTS_SCOPE, GMAIL_READONLY
 from .integrations.live_verification import build_completion_audit, build_env_template, format_handoff_checklist, run_verification
 from .chrome import launch as launch_chrome
 from .config import ensure_config, ensure_dirs, file_url, get_paths, project_root, seed_demo_fixtures
+from .daily import build_daily_landing_summary
 from .extract import utc_now
 from .monitor import run_all
 from .plantracker import format_plan_summary, summarize_plan
@@ -306,6 +307,70 @@ def cmd_email_sync_gmail(args: argparse.Namespace) -> int:
     )
     print_json({"oauth": config.safe_summary(), "sync": summary})
     return 0
+
+
+def cmd_daily_run(args: argparse.Namespace) -> int:
+    paths = paths_from_args(args)
+    ensure_dirs(paths)
+    db.init_db(paths)
+    if args.email_json and args.sync_gmail:
+        print_json({"error": "Use either --email-json or --sync-gmail, not both."})
+        return 1
+    sync_summary: dict[str, object] | None = None
+    if args.email_json:
+        connector = LocalJsonEmailConnector(args.email_json)
+        messages = list(connector.search(EmailSyncRequest(query=args.query or "", limit=args.limit)).messages)
+        ingest_summary = ingest_messages(paths, messages)
+        sync_summary = {
+            "mode": "local_json",
+            "external_network": False,
+            "source": str(args.email_json),
+            "query": args.query or "",
+            **ingest_summary,
+        }
+    elif args.sync_gmail:
+        state = db.get_connector_state(paths, connector="gmail_api", account_id=args.account)
+        since = args.since if args.since is not None else str((state or {}).get("cursor") or "")
+        query = args.query or "deadline OR due OR payment OR notice OR required OR action"
+        config = GoogleOAuthConfig(
+            credentials_json=env_secret(args.credentials_env),
+            token_json=env_secret(args.token_env),
+            scopes=(GMAIL_READONLY_SCOPE,),
+            account_id=args.account,
+        )
+        client = GoogleWorkspaceFactory(config).gmail_client()
+        setattr(client, "account_id", args.account)
+        setattr(client, "scopes", config.scopes)
+        summary = sync_connector(
+            paths,
+            GmailApiEmailConnector(client),
+            EmailSyncRequest(query=query, since=since, limit=args.limit),
+            account_id=args.account,
+        )
+        sync_summary = {
+            "mode": "gmail_readonly",
+            "external_network": True,
+            "query": query,
+            "oauth": _redacted_daily_oauth_summary(config.safe_summary()),
+            **summary,
+        }
+    print_json(
+        build_daily_landing_summary(
+            paths,
+            sync_summary=sync_summary,
+            task_limit=args.task_limit,
+            calendar_limit=args.calendar_limit,
+            actor=args.actor,
+        )
+    )
+    return 0
+
+
+def _redacted_daily_oauth_summary(summary: dict[str, object]) -> dict[str, object]:
+    safe = dict(summary)
+    if safe.get("account_id"):
+        safe["account_id"] = "[REDACTED_CONNECTOR_METADATA]"
+    return safe
 
 
 def cmd_audit_list(args: argparse.Namespace) -> int:
@@ -854,6 +919,22 @@ def build_parser() -> argparse.ArgumentParser:
     ask.add_argument("question")
     ask.add_argument("--email-json", help="Local JSON file containing email messages for offline verification")
     ask.set_defaults(func=cmd_ask)
+
+    daily = sub.add_parser("daily", help="Run the Gmail-first daily landing workflow")
+    daily_sub = daily.add_subparsers(dest="daily_command", required=True)
+    daily_run = daily_sub.add_parser("run", help="Refresh optional email evidence and summarize tasks/calendar drafts")
+    daily_run.add_argument("--email-json", help="Optional local JSON email export to ingest before building the daily queue")
+    daily_run.add_argument("--sync-gmail", action="store_true", help="Explicitly refresh Gmail through readonly OAuth before summarizing")
+    daily_run.add_argument("--query", help="Optional email/Gmail search query for this refresh")
+    daily_run.add_argument("--since", help="Override incremental Gmail cursor/date. Defaults to stored connector cursor.")
+    daily_run.add_argument("--limit", type=int, default=50)
+    daily_run.add_argument("--task-limit", type=int, default=12)
+    daily_run.add_argument("--calendar-limit", type=int, default=20)
+    daily_run.add_argument("--account", default="default")
+    daily_run.add_argument("--actor", default="user")
+    daily_run.add_argument("--credentials-env", default="SENTINEL_GOOGLE_CREDENTIALS_JSON")
+    daily_run.add_argument("--token-env", default="SENTINEL_GOOGLE_TOKEN_JSON")
+    daily_run.set_defaults(func=cmd_daily_run)
 
     rag = sub.add_parser("rag", help="Build and search the local RAG index")
     rag_sub = rag.add_subparsers(dest="rag_command", required=True)

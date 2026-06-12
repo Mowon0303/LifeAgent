@@ -9,12 +9,14 @@ All notable project updates for LifeAgent are tracked here.
 - Deferred GitHub repository description/topics as a non-blocking public-metadata polish item after user direction.
 - Marked the final UI design reference as complete and shifted the active plan away from portfolio recording toward product landing.
 - Cancelled the screen-recording direction after user feedback; generated local recording files and temporary thumbnails were deleted, and `PLAN_TRACKER.md` now points the next practical work to the Gmail-first daily landing loop.
+- Switched CI product-state preparation away from the screen-recording helper script; CI now prepares the synthetic product state directly and runs `sentineldesk daily run`.
 
 ### Added
 
+- Added `sentineldesk daily run`, the repeatable Gmail-first landing workflow: optional local JSON or readonly Gmail refresh, stored evidence summary, task review queue, local calendar draft review, redacted connector readiness, safe next-action commands, and a local `daily.run` audit event with no external writes.
 - Rebuilt `sentinel-desk/docs/INTERVIEW_PROJECT.md` as a LifeAgent interview brief with resume bullets, a 45-second explanation, a 2-minute system design answer, architecture talking points, technical proof, tradeoffs/risks, demo checklist, and a concise interview close.
 - Added `sentinel-desk/docs/CASE_STUDY.md`, a portfolio-ready write-up covering the problem, email-first product decision, user flow, architecture, agent boundaries, safety model, evidence table, demo scenario, and recommended GitHub description/topics.
-- Added GitHub Actions CI at `.github/workflows/ci.yml`: Python 3.11 package metadata check, 264 unittests, `compileall`, golden email extraction eval JSON, email-first demo dry run, redacted-output privacy audit, clean source release packaging, and extracted release audit.
+- Added GitHub Actions CI at `.github/workflows/ci.yml`: Python 3.11 package metadata check, 269 unittests, `compileall`, golden email extraction eval JSON, direct email-first product-state prep, `daily run`, redacted-output privacy audit, clean source release packaging, and extracted release audit.
 - Added a Gmail-first readiness package shape eval: it seeds a fake readonly Gmail sync with a stored cursor, mocks optional Google dependency availability, runs `integrations check --suite gmail --require-ready --package`, verifies the redacted ZIP file set/manifest/check list, asserts account/cursor/token/client-secret/local-path values are absent, and runs `privacy audit --require-clean` on the generated package.
 - Added conservative relative-deadline extraction to `extract_deadlines`: `within N days`, `at least N business days before the ... date`, user-action `N-day grace period` windows, `next Friday`-style weekdays, and `by the end of the month`; added targeted tests proving positive extraction and skipping no-action refund/deposit processing windows.
 - Added expanded date-form extraction for day-month-year (`14 July 2026`), month-day without year (`June 5`), and ISO datetime `T` suffixes (`2026-07-12T22:00` -> `2026-07-12`), with tests proving full month dates are not split into shorter duplicates.

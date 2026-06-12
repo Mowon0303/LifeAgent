@@ -45,14 +45,11 @@ jobs:
         working-directory: sentinel-desk
         run: python -B -m sentineldesk eval email-extract --golden evals/golden --json > /tmp/lifeagent-email-eval.json
 
-      - name: Prepare email-first demo state
+      - name: Prepare email-first product state
         working-directory: sentinel-desk
         run: |
-          SENTINEL_RECORD_DRY_RUN=1 \
-          SENTINEL_RECORD_HOME=/tmp/lifeagent-ci-demo \
-          SENTINEL_RECORD_PORT=8787 \
-          SENTINEL_RECORD_OUTPUT_DIR=/tmp/lifeagent-recordings \
-          bash scripts/record_portfolio_demo.sh
+          python -B -m sentineldesk --home /tmp/lifeagent-ci-demo demo record-prep --port 8787
+          python -B -m sentineldesk --home /tmp/lifeagent-ci-demo daily run --email-json fixtures/ui/sample_emails.json > /tmp/lifeagent-daily.json
 
       - name: Audit redacted demo artifacts
         working-directory: sentinel-desk

@@ -40,6 +40,29 @@ Open `http://127.0.0.1:8787/ops` for the SentinelDesk reliability/evidence dashb
 - baseline, `critical`, and `uncertain` portal reliability runs
 - redacted report/package artifacts for the ops view
 
+## Run The Daily Workflow
+
+```bash
+cd sentinel-desk
+python3 -B -m sentineldesk --home .demo daily run --email-json fixtures/ui/sample_emails.json
+```
+
+Expected result: JSON with `mode: "daily_landing"`, a task review queue, local calendar drafts, safe next actions, and `external_writes_performed: false`.
+
+For a real inbox, first configure Google OAuth token env vars, then explicitly opt into readonly Gmail refresh:
+
+```bash
+python3 -B -m sentineldesk --home .demo daily run --sync-gmail --account user@example.com
+```
+
+The command can also run without a refresh and summarize the currently stored local evidence:
+
+```bash
+python3 -B -m sentineldesk --home .demo daily run
+```
+
+`daily run` is the product landing loop: refresh inbox evidence when requested, extract or reuse tasks, show calendar drafts, show connector readiness without raw cursors/account values, and keep calendar writes behind separate confirmation-gated commands.
+
 ## Show A Meaningful Change
 
 ```bash
@@ -106,6 +129,8 @@ python3 -m sentineldesk evidence RUN_ID --report
 python3 -m sentineldesk evidence RUN_ID --package
 python3 -m sentineldesk plan status
 python3 -m sentineldesk plan status --json
+python3 -m sentineldesk daily run --email-json fixtures/ui/sample_emails.json
+python3 -m sentineldesk daily run --sync-gmail --account user@example.com
 python3 -m sentineldesk privacy audit --path .demo/artifacts --require-clean
 python3 -m sentineldesk privacy release-audit --path . --require-clean
 python3 -m sentineldesk privacy release-package --source . --output /tmp/sentineldesk.release.zip
@@ -120,7 +145,9 @@ python3 -m sentineldesk chrome launch
 
 The `ask` command is the first skeleton of the email-first LifeAgent assistant layer. It supports offline local JSON email fixtures, deterministic intent routing, email fact extraction, local RAG policy lookup, latest-run evidence lookup, and citation-bearing answers for deadline, amount, alert explanation, status meaning, next-step, and policy questions. It is intentionally tool-first: if no evidence is provided for a latest-fact or policy question, it returns `uncertain` instead of guessing.
 
-The `tasks` commands expose the non-UI review layer for extracted LifeAgent work items. `tasks list` merges email facts and local calendar drafts into stable task IDs, and `tasks review` records `new`, `reviewed`, `ignored`, `needs_verification`, or `done` status with an audit event. The same backend is available through `/api/tasks` and `/api/tasks/review` for the future UI.
+The `daily run` command is the repeatable landing workflow for real use. It optionally refreshes readonly Gmail, summarizes stored email evidence, task review state, local calendar drafts, connector readiness, and next safe actions. It writes only local audit state; external calendar sync still requires a separate confirmation-gated `calendar sync`.
+
+The `tasks` commands expose the review layer for extracted LifeAgent work items. `tasks list` merges email facts and local calendar drafts into stable task IDs, and `tasks review` records `new`, `reviewed`, `ignored`, `needs_verification`, or `done` status with an audit event. The same backend is available through `/api/tasks` and `/api/tasks/review`.
 
 `chrome launch` starts a detached dedicated Chrome profile under `~/.sentineldesk/chrome-profile` and opens a blank page for the DevTools endpoint. SentinelDesk refuses default Chrome profile paths for remote debugging.
 
@@ -148,9 +175,7 @@ The dashboard exposes the same privacy-safe package through `/api/package/<run_i
 
 ## Architecture
 
-For the interview-ready diagram and talking points, see `docs/ARCHITECTURE.md`. For recording prep, use `docs/DEMO_VIDEO_SCRIPT.md` and `docs/RECORDING_CHECKLIST.md`. For the public sharing boundary, see `docs/PRIVACY_AUDIT.md`.
-
-On macOS, `bash scripts/record_portfolio_demo.sh` prepares the demo, starts the dashboard, opens the browser, asks for explicit confirmation, and records a local `.mov` under `recordings/`.
+For the interview-ready diagram and talking points, see `docs/ARCHITECTURE.md`. For the public sharing boundary, see `docs/PRIVACY_AUDIT.md`.
 
 For real Gmail/Calendar handoff, `python3 -m sentineldesk --home .demo integrations handoff --account user@example.com --output .demo/live-verification-handoff.md` writes the human checklist, and `bash scripts/live_verification_preflight.sh` runs the redacted live-readiness checks, package export, completion audit, redacted-output privacy audit, and final clean source release-package audit. Gmail sync, Google OAuth token flow, local verification draft seeding, and external calendar writes stay disabled unless explicitly enabled through `SENTINEL_LIVE_*` environment variables.
 
