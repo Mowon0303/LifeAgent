@@ -143,11 +143,19 @@
   .dD-sumrow .sub { font-size:12px; color:#9A8E7B; margin-top:1px; }
   .dD-embed.ev { border-left-color:#6A5BD0; }
   .dD-embed.daily { border-left-color:#4F7A4A; }
+  .dD-embed.task { border-left-color:#B14228; }
   .dD-embed .etitle { font-size:15px; font-weight:700; color:#2B2622; display:flex; align-items:center; gap:8px; }
   .dD-embed .etitle .pin { width:8px; height:8px; border-radius:50%; background:#6A5BD0; flex:none; }
   .dD-embed .ewhen { font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6A5BD0; margin:7px 0 1px; }
   .dD-embed .esrc { font-size:11.5px; color:#A89A86; }
   .dD-embed .enote { font-size:13.5px; color:#5A5247; line-height:1.5; margin-top:9px; }
+  .dD-taskline { font-size:11.5px; color:#9A8E7B; line-height:1.35; border-top:1px solid #F1EADB; padding-top:9px; margin-top:3px; }
+  .dD-task-kind { font-family:'IBM Plex Mono',monospace; font-size:10.5px; font-weight:700; letter-spacing:.08em;
+    color:#B14228; text-transform:uppercase; margin-bottom:6px; }
+  .dD-task-values { display:flex; flex-wrap:wrap; gap:5px; margin-top:9px; }
+  .dD-task-values span { font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:#5C5446; background:#F1EADB;
+    border-radius:5px; padding:3px 7px; max-width:154px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dD-task-actions { flex-wrap:wrap; }
   .dD-cites { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
   .dD-cite { font-family:'IBM Plex Mono',monospace; font-size:10px; color:#6A5BD0; background:#EAE6FA;
     border-radius:5px; padding:2px 7px; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -156,6 +164,7 @@
     display:flex; align-items:center; gap:6px; font-family:inherit; }
   .dD-cbtn.prim { background:#2A6FDB; color:#fff; }
   .dD-cbtn.sec { background:#E6DECD; color:#5C5446; }
+  .dD-cbtn.warn { background:#F6E4DC; color:#B14228; }
   .dD-cbtn:disabled { opacity:.5; cursor:default; }
 
   /* composer */
@@ -231,6 +240,19 @@
     trusted_doc_context: '可信文档',
     local_evidence: '本地证据'
   };
+  var TASK_KIND_LABEL = { deadline: '截止', amount: '金额', action: '动作' };
+  var REVIEW_STATUS_LABEL = {
+    done: '完成',
+    ignored: '忽略',
+    reviewed: '已审阅',
+    needs_verification: '需核对'
+  };
+  var TASK_ACTION_STATUS = {
+    'task-done': 'done',
+    'task-ignored': 'ignored',
+    'task-reviewed': 'reviewed',
+    'task-needs-verification': 'needs_verification'
+  };
   var WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']; // Mon-first
   var MONTH_CN = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
   var START_H = 7, END_H = 21, HPX = 50;
@@ -241,8 +263,11 @@
     events: [],          // mapped calendar items
     undated: [],         // items with no parseable date_key
     ignored: {},         // task_id -> true (calendar:<event_id> ignored via review)
+    tasks: [],           // raw task review rows from /api/tasks
     daily: null,         // local daily landing summary
     queue: [],           // pending suggestion queue for the assistant panel
+    taskQueue: [],       // non-calendar email tasks exposed as review cards
+    offeredTaskIds: {},
     busy: false
   };
 
@@ -266,6 +291,10 @@
     var d = new Date();
     return '今天 ' + String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
   }
+  function clip(text, limit) {
+    var s = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
+    return s.length > limit ? s.slice(0, limit - 1) + '…' : s;
+  }
 
   // ---------- data ----------
   function mapItem(raw) {
@@ -287,20 +316,31 @@
   function loadData() {
     return Promise.all([
       fetch('/api/calendar/events').then(function (r) { return r.json(); }),
-      fetch('/api/tasks?status=ignored').then(function (r) { return r.json(); }),
+      fetch('/api/tasks').then(function (r) { return r.json(); }),
       fetch('/api/daily/summary').then(function (r) { return r.json(); })
     ]).then(function (results) {
-      var events = results[0], ignoredTasks = results[1];
+      var events = results[0], tasks = results[1] || [];
       state.daily = results[2];
+      state.tasks = tasks;
       state.ignored = {};
-      (ignoredTasks || []).forEach(function (t) { state.ignored[t.task_id] = true; });
+      tasks.forEach(function (t) {
+        if (t.status === 'ignored') state.ignored[t.task_id] = true;
+      });
       var mapped = (events || []).map(mapItem).filter(function (item) {
         return !(item.pending && state.ignored['calendar:' + item.eventId]);
       });
       state.events = mapped.filter(function (item) { return item.dateKey; });
       state.undated = mapped.filter(function (item) { return !item.dateKey; });
       state.queue = mapped.filter(function (item) { return item.pending; });
+      state.taskQueue = tasks.filter(isReviewTask);
     });
+  }
+
+  function isReviewTask(task) {
+    var status = String(task.status || 'new');
+    var taskId = String(task.task_id || '');
+    return !taskId.startsWith('calendar:') &&
+      ['new', 'needs_verification', 'reviewed'].indexOf(status) >= 0;
   }
 
   function byDate() {
@@ -519,7 +559,9 @@
       '<div class="dD-sumrow"><div class="n' + ((tasks.queue_count || 0) ? ' u' : '') + '">' + (tasks.queue_count || 0) + '</div><div><div class="lab">待处理任务</div><div class="sub">总计 ' + (tasks.total || 0) + ' · 按邮件聚合</div></div></div>' +
       '<div class="dD-sumrow"><div class="n' + ((calendar.pending_count || 0) ? ' u' : '') + '">' + (calendar.pending_count || 0) + '</div><div><div class="lab">本地日历草稿</div><div class="sub">总计 ' + (calendar.total_drafts || 0) + ' · 待核对 ' + (calendar.uncertain_count || 0) + '</div></div></div>' +
       '<div class="dD-sumrow"><div class="n">' + (safety.external_writes_performed ? '!' : '0') + '</div><div><div class="lab">外部写入</div><div class="sub">' + escapeHtml(connectorText) + ' · Gmail 只读</div></div></div>' +
-      '<div class="dD-btns"><button class="dD-cbtn sec" data-act="daily-run">刷新今日检查</button></div></div>';
+      '<div class="dD-taskline" id="taskReviewQueue">任务操作只写本地 review 状态和 audit，不会发送邮件或写外部日历。</div>' +
+      '<div class="dD-btns"><button class="dD-cbtn sec" data-act="daily-run">刷新今日检查</button>' +
+      '<button class="dD-cbtn sec" data-act="show-task">查看下一条任务</button></div></div>';
   }
 
   function suggestionCard(item) {
@@ -534,9 +576,44 @@
       '<button class="dD-cbtn sec" data-act="ignore">忽略</button></div>';
   }
 
+  function taskReviewCard(task) {
+    var kind = TASK_KIND_LABEL[task.kind] || task.kind || '任务';
+    var status = REVIEW_STATUS_LABEL[task.status] || task.status || 'new';
+    var values = Array.isArray(task.values) && task.values.length ? task.values : (task.value ? [task.value] : []);
+    var valueHtml = values.slice(0, 4).map(function (value) {
+      return '<span title="' + escapeHtml(value) + '">' + escapeHtml(value) + '</span>';
+    }).join('');
+    if (values.length > 4) valueHtml += '<span>+' + (values.length - 4) + '</span>';
+    return '<div class="dD-body">这条邮件证据需要你处理。操作只更新本地任务状态。</div>' +
+      '<div class="dD-embed task">' +
+      '<div class="dD-task-kind">' + escapeHtml(kind) + ' · ' + escapeHtml(status) + '</div>' +
+      '<div class="etitle">' + escapeHtml(task.title || 'Review task') + '</div>' +
+      (valueHtml ? '<div class="dD-task-values">' + valueHtml + '</div>' : '') +
+      '<div class="esrc">来源 · ' + escapeHtml(task.subject || task.primary_source || task.source_type || '本地证据') +
+      ' · 置信 ' + Number(task.confidence || 0).toFixed(2) + '</div>' +
+      (task.needs_verification ? '<div class="enote">这条证据置信度较低，建议先核对原始邮件或门户。</div>' : '') +
+      (task.evidence ? '<div class="enote">' + escapeHtml(clip(task.evidence, 160)) + '</div>' : '') +
+      '</div>' +
+      '<div class="dD-btns dD-task-actions" data-task-id="' + escapeHtml(task.task_id) + '">' +
+      '<button class="dD-cbtn prim" data-act="task-done">完成</button>' +
+      '<button class="dD-cbtn warn" data-act="task-needs-verification">需核对</button>' +
+      '<button class="dD-cbtn sec" data-act="task-reviewed">已审阅</button>' +
+      '<button class="dD-cbtn sec" data-act="task-ignored">忽略</button></div>';
+  }
+
   function offerNextSuggestion() {
     if (!state.queue.length) return;
     botMessage(suggestionCard(state.queue[0]), { ghost: true });
+  }
+
+  function offerNextTaskSuggestion() {
+    var next = state.taskQueue.find(function (task) { return !state.offeredTaskIds[task.task_id]; });
+    if (!next) {
+      botMessage('<div class="dD-body">当前没有新的金额/动作任务卡需要显示。</div>', { ghost: true });
+      return;
+    }
+    state.offeredTaskIds[next.task_id] = true;
+    botMessage(taskReviewCard(next), { ghost: true });
   }
 
   function updateSummary() {
@@ -558,6 +635,7 @@
       '<div class="dD-body">早上好。本地证据中目前有 <b>' + total + '</b> 条带日期的事项，其中 <b>' + pending +
       '</b> 条等你确认——日历里虚线显示的就是。外部写入永远先问你。</div>' + dailyEmbed() + summaryEmbed());
     offerNextSuggestion();
+    offerNextTaskSuggestion();
   }
 
   function handleDailyRun(button) {
@@ -618,6 +696,26 @@
       .finally(function () { state.busy = false; });
   }
 
+  function handleTaskReview(taskId, status, buttons) {
+    if (state.busy) return;
+    state.busy = true;
+    buttons.querySelectorAll('button').forEach(function (button) { button.disabled = true; });
+    fetch('/api/tasks/review?task_id=' + encodeURIComponent(taskId) +
+      '&status=' + encodeURIComponent(status) +
+      '&note=' + encodeURIComponent('reviewed from calendar assistant: ' + status), { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (result) {
+        if (result.error) throw new Error(result.error);
+        botMessage('<div class="dD-body">已把任务标记为 <b>' +
+          escapeHtml(REVIEW_STATUS_LABEL[status] || status) +
+          '</b>。这只写入本地 task.review audit，没有外部副作用。</div>');
+        buttons.remove();
+        return refresh();
+      })
+      .catch(function (err) { botMessage('<div class="dD-body uncertain">任务状态更新失败：' + escapeHtml(err) + '</div>'); })
+      .finally(function () { state.busy = false; });
+  }
+
   function askAssistant(question) {
     userMessage(question);
     fetch('/api/ask', {
@@ -664,6 +762,16 @@
     if (!btn) return;
     if (btn.dataset.act === 'daily-run') {
       handleDailyRun(btn);
+      return;
+    }
+    if (btn.dataset.act === 'show-task') {
+      offerNextTaskSuggestion();
+      return;
+    }
+    var reviewStatus = TASK_ACTION_STATUS[btn.dataset.act];
+    if (reviewStatus) {
+      var taskWrap = btn.closest('.dD-btns');
+      if (taskWrap && taskWrap.dataset.taskId) handleTaskReview(taskWrap.dataset.taskId, reviewStatus, taskWrap);
       return;
     }
     var wrap = btn.closest('.dD-btns');

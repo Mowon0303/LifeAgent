@@ -38,13 +38,14 @@ Agent layer:
 
 ## Current Evidence
 
-- `275` unittest cases pass.
+- `276` unittest cases pass.
 - Golden extraction eval: raw deadline, amount, and action are all `P=1.000 / R=1.000 / F1=1.000` on the current synthetic set.
 - Redacted Gmail-first readiness package shape is regression-tested.
 - Daily landing workflow creates 4 synthetic messages, 8 extracted facts, 3 local calendar drafts, 8 reviewable tasks, and a local audit record without external writes.
 - Stored evidence reprocessing applies extractor fixes to already-synced mail without another Gmail call or external calendar writes.
 - Task review groups same-email, same-kind facts into one UI item with `values` and `fact_count`, reducing a real `.demo` queue from 468 raw fact tasks to 112 grouped review items.
 - Calendar assistant now reads `/api/daily/summary` on load and can run a local audited `/api/daily/run` from the UI without Gmail refresh or external calendar writes.
+- Calendar assistant exposes amount/action task review cards with local-only `done`, `needs_verification`, `reviewed`, and `ignored` actions.
 - Source release packaging and release audit pass with runtime artifacts excluded.
 
 ## Portfolio Snapshot

@@ -70,6 +70,8 @@ Common fields present on every task (calendar-derived tasks additionally carry `
 
 Sets the review state (audited, local-only). Response: `{task_id, status, note, actor, updated_at, task}` where `task` is the refreshed Task or `null`. Invalid status → HTTP 400 `{error}`.
 
+The calendar assistant reads the full `/api/tasks` queue. Calendar-derived tasks drive pending calendar suggestion visibility; non-calendar email tasks (`amount` and `action`, plus any future email-only deadline tasks) render as review cards. Buttons map to `status=done`, `status=needs_verification`, `status=reviewed`, and `status=ignored`. These calls write only local `task.review` audit events and must not trigger email sends, portal writes, or external calendar writes.
+
 ### GET `/api/daily/summary?task_limit=&calendar_limit=` → daily landing snapshot
 
 Read-only daily landing summary for the assistant panel. It returns stored email counts, fact counts, grouped task queue counts and optional queue rows, local calendar draft counts and optional calendar items, redacted connector readiness, safety flags, and safe next actions. This endpoint does **not** write a `daily.run` audit event; it is safe for page load and refresh polling.
@@ -130,6 +132,7 @@ How backend fields drive the B′ visual spec:
 | **确认加入日历** button | `POST /api/calendar/sync?confirm=1&confirmation_id=ui-<event_id>-<epoch>&event_id=<event_id>&destination=ics`; on `allowed: true` re-fetch events (chip turns solid) |
 | **忽略** button | `POST /api/tasks/review?task_id=calendar:<event_id>&status=ignored`; UI hides the pending suggestion; the draft itself stays in local storage (retention controls own deletion) |
 | Assistant daily embed | computed from `/api/daily/summary`: stored mail, grouped review queue, local calendar drafts, connector readiness, and external-write boundary |
+| Assistant task review card | computed from `/api/tasks`: non-calendar amount/action tasks render with value chips, evidence snippet, confidence, and local-only `done`, `needs_verification`, `reviewed`, `ignored` controls |
 | Assistant calendar embed | computed client-side from `/api/calendar/events` + `/api/tasks`: counts of pending/confirmed/uncertain in the visible range |
 | Composer | sends to `/api/ask`; render `citations` as evidence chips and `uncertain` answers with the uncertainty style |
 | Now line | client clock; render only in today's column within 07:00–21:00 |

@@ -206,6 +206,24 @@ class TaskContractTests(UiContractBase):
         self.assertEqual(status, 200)
         self.assertIn(task_id, {task["task_id"] for task in ignored})
 
+    def test_email_task_done_review_flow_records_local_audit(self) -> None:
+        _, tasks = self.json_request("GET", "/api/tasks")
+        email_task = next(task for task in tasks if str(task["task_id"]).startswith("email:"))
+        task_id = email_task["task_id"]
+        before = db.list_audit_events(self.paths, limit=20)
+        status, receipt = self.json_request(
+            "POST", f"/api/tasks/review?task_id={task_id}&status=done&note=ui-done"
+        )
+        after = db.list_audit_events(self.paths, limit=20)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(receipt["status"], "done")
+        self.assertEqual(receipt["task_id"], task_id)
+        self.assertEqual(receipt["task"]["status"], "done")
+        review_events = [event for event in after if event["action"] == "task.review"]
+        self.assertGreater(len(review_events), len([event for event in before if event["action"] == "task.review"]))
+        self.assertEqual(review_events[0]["subject"], task_id)
+
     def test_invalid_review_status_is_rejected(self) -> None:
         status, payload = self.json_request("POST", "/api/tasks/review?task_id=calendar:x&status=bogus")
         self.assertEqual(status, 400)
@@ -376,14 +394,20 @@ class CalendarPageTests(UiContractBase):
             'data-view="day"',
             'data-view="agenda"',
             "/api/calendar/events",
-            "/api/tasks?status=ignored",
+            "/api/tasks",
             "/api/daily/summary",
             "/api/daily/run",
             "/api/tasks/review?task_id=",
             "/api/calendar/sync?destination=ics&confirm=1",
             "/api/ask",
             'id="dailySummary"',
+            'id="taskReviewQueue"',
             'data-act="daily-run"',
+            'data-act="show-task"',
+            'data-act="task-done"',
+            'data-act="task-needs-verification"',
+            'data-act="task-reviewed"',
+            'data-act="task-ignored"',
             "approval_state",
             "confirmation_id",
         ):
@@ -397,6 +421,9 @@ class CalendarPageTests(UiContractBase):
         self.assertIn("function updateSummary()", html)
         self.assertIn("function dailyEmbed()", html)
         self.assertIn("function handleDailyRun", html)
+        self.assertIn("function taskReviewCard", html)
+        self.assertIn("function offerNextTaskSuggestion", html)
+        self.assertIn("function handleTaskReview", html)
         refresh_body = html.split("function refresh()", 1)[1].split("// ---------- boot ----------", 1)[0]
         self.assertIn("updateSummary()", refresh_body, "refresh() must recompute the assistant summary and topic")
 
