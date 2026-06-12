@@ -145,6 +145,7 @@
   .dD-embed.daily { border-left-color:#4F7A4A; }
   .dD-embed.task { border-left-color:#B14228; }
   .dD-embed.session { border-left-color:#6A5BD0; }
+  .dD-embed.receipt { border-left-color:#C47A30; }
   .dD-embed .etitle { font-size:15px; font-weight:700; color:#2B2622; display:flex; align-items:center; gap:8px; }
   .dD-embed .etitle .pin { width:8px; height:8px; border-radius:50%; background:#6A5BD0; flex:none; }
   .dD-embed .ewhen { font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6A5BD0; margin:7px 0 1px; }
@@ -628,6 +629,35 @@
       emptyNote + nextHtml + '</div>';
   }
 
+  function receiptStatusText(counts) {
+    counts = counts || {};
+    var parts = ['done', 'needs_verification', 'reviewed', 'ignored'].map(function (status) {
+      var count = Number(counts[status] || 0);
+      return count ? (REVIEW_STATUS_LABEL[status] + ' ' + count) : '';
+    }).filter(Boolean);
+    return parts.length ? parts.join(' · ') : '暂无本地审查变更';
+  }
+
+  function reviewReceiptPanel() {
+    var receipt = (state.daily && state.daily.review_receipt) || {};
+    var eventCount = Number(receipt.review_event_count || 0);
+    var netCount = Number(receipt.net_changed_task_count || 0);
+    var latest = receipt.latest_reviewed_at || '暂无';
+    var recent = Array.isArray(receipt.recent) ? receipt.recent : [];
+    var recentNote = recent.length
+      ? '<div class="dD-session-note">最近：' + escapeHtml(clip(recent[0].summary || '', 96)) + '</div>'
+      : '<div class="dD-empty compact">还没有本地任务审查动作。完成、已阅、需核对或忽略后会出现在这里。</div>';
+    return '<div class="dD-embed receipt" id="taskReviewReceipt"><h4>审查回执 · 本地变更</h4>' +
+      '<div class="dD-sumrow"><div class="n' + (netCount ? ' u' : '') + '">' + netCount + '</div><div><div class="lab">当前有效变更</div><div class="sub">' +
+        escapeHtml(receiptStatusText(receipt.counts_by_status)) + '</div></div></div>' +
+      '<div class="dD-sumrow"><div class="n">' + eventCount + '</div><div><div class="lab">审查记录</div><div class="sub">可撤销 ' +
+        escapeHtml(receipt.undoable_count || 0) + ' · 已撤销 ' + escapeHtml(receipt.undone_count || 0) + '</div></div></div>' +
+      '<div class="dD-sumrow"><div class="n">↺</div><div><div class="lab">最新变更</div><div class="sub">' +
+        escapeHtml(latest) + '</div></div></div>' +
+      '<div class="dD-session-note">回执只聚合本地 review audit，不刷新 Gmail、发送邮件或写外部日历。</div>' +
+      recentNote + '</div>';
+  }
+
   function taskCardMeta(queue) {
     var stats = taskSessionStats();
     return (state.taskCursor + 1) + '/' + queue.length + ' · 已归类 ' + stats.classified + '/' + stats.total;
@@ -872,6 +902,7 @@
       '<div class="dD-taskline" id="taskReviewQueue">任务操作只写本地 review 状态和 audit，不会发送邮件或写外部日历。</div>' +
       taskFilterControls() +
       taskSessionPanel() +
+      reviewReceiptPanel() +
       '<div class="dD-bulkbar" id="taskBulkActions">' +
       '<button class="dD-cbtn prim" data-act="task-bulk-done"' + bulkDisabled + '>批量完成</button>' +
       '<button class="dD-cbtn sec" data-act="task-bulk-reviewed"' + bulkDisabled + '>批量已阅</button>' +

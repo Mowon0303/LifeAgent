@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
@@ -136,6 +137,45 @@ def list_review_history(paths: Paths, *, limit: int = 20) -> list[dict[str, Any]
         if len(history) >= limit:
             break
     return history
+
+
+def build_review_receipt_summary(paths: Paths, *, limit: int = 50, recent_limit: int = 5) -> dict[str, Any]:
+    """Summarize local task review history without external reads or writes."""
+    db.init_db(paths)
+    limit = max(0, int(limit))
+    recent_limit = max(0, int(recent_limit))
+    history = list_review_history(paths, limit=limit)
+    effective = [item for item in history if item.get("undo_status") != "undone"]
+    counts_by_status: Counter[str] = Counter()
+    counts_by_action: Counter[str] = Counter()
+    reviewed_task_count = 0
+    net_changed_task_count = 0
+    for item in history:
+        count = int(item.get("reviewed_count") or 0)
+        reviewed_task_count += count
+        counts_by_action[str(item.get("action") or "unknown")] += 1
+    for item in effective:
+        count = int(item.get("reviewed_count") or 0)
+        net_changed_task_count += count
+        status = str(item.get("status") or "unknown")
+        counts_by_status[status] += count
+    return {
+        "status": "ready",
+        "generated_at": utc_now(),
+        "mode": "local_review_receipt",
+        "history_limit": limit,
+        "review_event_count": len(history),
+        "reviewed_task_count": reviewed_task_count,
+        "net_changed_task_count": net_changed_task_count,
+        "counts_by_status": dict(sorted(counts_by_status.items())),
+        "counts_by_action": dict(sorted(counts_by_action.items())),
+        "undoable_count": sum(1 for item in history if item.get("undoable")),
+        "undone_count": sum(1 for item in history if item.get("undo_status") == "undone"),
+        "latest_reviewed_at": str(history[0].get("created_at") or "") if history else "",
+        "recent": history[:recent_limit],
+        "external_network": False,
+        "external_writes_performed": False,
+    }
 
 
 def undo_task_review(

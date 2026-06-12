@@ -79,6 +79,7 @@ DAILY_SUMMARY_FIELDS = {
     "tasks",
     "calendar",
     "connectors",
+    "review_receipt",
     "safety",
     "next_actions",
 }
@@ -117,6 +118,23 @@ TASK_REVIEW_HISTORY_FIELDS = {
     "undoable",
     "undo_status",
     "summary",
+    "external_writes_performed",
+}
+TASK_REVIEW_RECEIPT_FIELDS = {
+    "status",
+    "generated_at",
+    "mode",
+    "history_limit",
+    "review_event_count",
+    "reviewed_task_count",
+    "net_changed_task_count",
+    "counts_by_status",
+    "counts_by_action",
+    "undoable_count",
+    "undone_count",
+    "latest_reviewed_at",
+    "recent",
+    "external_network",
     "external_writes_performed",
 }
 TASK_REVIEW_UNDO_FIELDS = {
@@ -399,6 +417,30 @@ class TaskContractTests(UiContractBase):
         self.assertEqual(item["task_ids"], [receipt["task_id"]])
         self.assertTrue(item["undoable"])
 
+    def test_task_review_receipt_summary_is_local_readonly(self) -> None:
+        _, tasks = self.json_request("GET", "/api/tasks")
+        email_task = next(task for task in tasks if str(task["task_id"]).startswith("email:"))
+        status, receipt = self.json_request(
+            "POST", f"/api/tasks/review?task_id={email_task['task_id']}&status=done&note=receipt"
+        )
+        self.assertEqual(status, 200)
+        before = db.list_audit_events(self.paths, limit=20)
+        status, payload = self.json_request("GET", "/api/tasks/review/summary?limit=10&recent_limit=3")
+        after = db.list_audit_events(self.paths, limit=20)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(set(payload), TASK_REVIEW_RECEIPT_FIELDS)
+        self.assertEqual(before, after)
+        self.assertEqual(payload["mode"], "local_review_receipt")
+        self.assertEqual(payload["history_limit"], 10)
+        self.assertEqual(payload["review_event_count"], 1)
+        self.assertEqual(payload["reviewed_task_count"], 1)
+        self.assertEqual(payload["net_changed_task_count"], 1)
+        self.assertEqual(payload["counts_by_status"]["done"], 1)
+        self.assertFalse(payload["external_network"])
+        self.assertFalse(payload["external_writes_performed"])
+        self.assertEqual(payload["recent"][0]["task_ids"], [receipt["task_id"]])
+
     def test_task_review_undo_requires_confirmation_and_restores_locally(self) -> None:
         _, tasks = self.json_request("GET", "/api/tasks")
         email_task = next(task for task in tasks if str(task["task_id"]).startswith("email:"))
@@ -471,6 +513,7 @@ class DailyContractTests(UiContractBase):
         self.assertEqual(summary["mode"], "daily_landing")
         self.assertEqual(summary["sync"]["mode"], "stored_only")
         self.assertFalse(summary["sync"]["external_network"])
+        self.assertEqual(summary["review_receipt"]["mode"], "local_review_receipt")
         self.assertFalse(summary["safety"]["external_writes_performed"])
         self.assertFalse(summary["safety"]["local_audit_written"])
         self.assertEqual(before, after)
@@ -482,6 +525,7 @@ class DailyContractTests(UiContractBase):
         self.assertEqual(set(summary), DAILY_SUMMARY_FIELDS)
         self.assertGreaterEqual(summary["tasks"]["queue_count"], 1)
         self.assertGreaterEqual(summary["calendar"]["pending_count"], 1)
+        self.assertEqual(summary["review_receipt"]["status"], "ready")
         self.assertFalse(summary["safety"]["external_writes_performed"])
         self.assertTrue(summary["safety"]["local_audit_written"])
         audit = next(event for event in db.list_audit_events(self.paths, limit=10) if event["action"] == "daily.run")
@@ -642,6 +686,7 @@ class CalendarPageTests(UiContractBase):
             'id="taskQueueFilters"',
             'id="taskNavState"',
             'id="taskSessionSummary"',
+            'id="taskReviewReceipt"',
             'id="taskBulkActions"',
             'data-act="task-view"',
             'data-act="task-sort"',
@@ -666,6 +711,8 @@ class CalendarPageTests(UiContractBase):
             'data-act="task-ignored"',
             "approval_state",
             "confirmation_id",
+            "function reviewReceiptPanel",
+            "function receiptStatusText",
         ):
             self.assertIn(marker, html)
 

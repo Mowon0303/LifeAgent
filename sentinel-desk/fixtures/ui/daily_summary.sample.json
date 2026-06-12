@@ -33,6 +33,23 @@
     "items": []
   },
   "connectors": [],
+  "review_receipt": {
+    "status": "ready",
+    "generated_at": "2026-06-25T10:00:00+00:00",
+    "mode": "local_review_receipt",
+    "history_limit": 50,
+    "review_event_count": 0,
+    "reviewed_task_count": 0,
+    "net_changed_task_count": 0,
+    "counts_by_status": {},
+    "counts_by_action": {},
+    "undoable_count": 0,
+    "undone_count": 0,
+    "latest_reviewed_at": "",
+    "recent": [],
+    "external_network": false,
+    "external_writes_performed": false
+  },
   "safety": {
     "external_writes_performed": false,
     "calendar_writes_require_confirmation": true,

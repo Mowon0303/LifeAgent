@@ -23,7 +23,15 @@ from .monitor import run_all
 from .reports import package_path_for, redact_data, write_evidence_package
 from .retention import plan_purge, purge, result_to_dict
 from .scenarios import apply_scenario, list_scenarios
-from .tasks import bulk_review_tasks, list_review_history, list_tasks, review_task, task_evidence, undo_task_review
+from .tasks import (
+    build_review_receipt_summary,
+    bulk_review_tasks,
+    list_review_history,
+    list_tasks,
+    review_task,
+    task_evidence,
+    undo_task_review,
+)
 
 
 def json_bytes(value: object) -> bytes:
@@ -102,6 +110,16 @@ class Handler(BaseHTTPRequestHandler):
                     "external_network": False,
                     "external_writes_performed": False,
                 }
+            )
+            return
+        if path == "/api/tasks/review/summary":
+            query = parse_qs(parsed.query)
+            self.send_json(
+                build_review_receipt_summary(
+                    self.paths,
+                    limit=_query_int(query, "limit", 50),
+                    recent_limit=_query_int(query, "recent_limit", 5),
+                )
             )
             return
         if path == "/api/tasks/evidence":

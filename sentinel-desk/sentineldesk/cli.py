@@ -46,7 +46,14 @@ from .reports import (
 from .scenarios import apply_scenario, list_scenarios
 from .server import serve
 from .secrets import env_secret
-from .tasks import bulk_review_tasks, list_review_history, list_tasks, review_task, undo_task_review
+from .tasks import (
+    build_review_receipt_summary,
+    bulk_review_tasks,
+    list_review_history,
+    list_tasks,
+    review_task,
+    undo_task_review,
+)
 
 
 def print_json(value: object) -> None:
@@ -567,6 +574,12 @@ def cmd_tasks_review(args: argparse.Namespace) -> int:
 def cmd_tasks_history(args: argparse.Namespace) -> int:
     paths = paths_from_args(args)
     print_json(list_review_history(paths, limit=args.limit))
+    return 0
+
+
+def cmd_tasks_receipt(args: argparse.Namespace) -> int:
+    paths = paths_from_args(args)
+    print_json(build_review_receipt_summary(paths, limit=args.limit, recent_limit=args.recent_limit))
     return 0
 
 
@@ -1096,6 +1109,10 @@ def build_parser() -> argparse.ArgumentParser:
     tasks_history = tasks_sub.add_parser("history", help="List recent local task review actions and undo availability")
     tasks_history.add_argument("--limit", type=int, default=20)
     tasks_history.set_defaults(func=cmd_tasks_history)
+    tasks_receipt = tasks_sub.add_parser("receipt", help="Summarize recent local task review changes")
+    tasks_receipt.add_argument("--limit", type=int, default=50)
+    tasks_receipt.add_argument("--recent-limit", type=int, default=5)
+    tasks_receipt.set_defaults(func=cmd_tasks_receipt)
     tasks_bulk = tasks_sub.add_parser("bulk-review", help="Set review status for a filtered task queue after confirmation")
     tasks_bulk.add_argument("--status", required=True, choices=["new", "reviewed", "ignored", "needs_verification", "done"])
     tasks_bulk.add_argument("--kind", default="all", choices=["all", "deadline", "amount", "action"])

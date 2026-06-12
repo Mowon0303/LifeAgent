@@ -7,7 +7,7 @@ from . import db
 from .calendar.view import build_calendar_items
 from .config import Paths
 from .extract import utc_now
-from .tasks import list_tasks
+from .tasks import build_review_receipt_summary, list_tasks
 
 
 LANDING_STATUSES = {"new", "needs_verification", "reviewed"}
@@ -76,6 +76,7 @@ def build_daily_landing_summary(
             "items": visible_calendar,
         },
         "connectors": connector_states,
+        "review_receipt": build_review_receipt_summary(paths, limit=50, recent_limit=5),
         "safety": {
             "external_writes_performed": False,
             "calendar_writes_require_confirmation": True,

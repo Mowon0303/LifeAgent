@@ -11,7 +11,14 @@ from sentineldesk.cli import main
 from sentineldesk.config import get_paths
 from sentineldesk.email.ingest import ingest_messages
 from sentineldesk.email.models import EmailMessage
-from sentineldesk.tasks import bulk_review_tasks, list_review_history, list_tasks, review_task, undo_task_review
+from sentineldesk.tasks import (
+    build_review_receipt_summary,
+    bulk_review_tasks,
+    list_review_history,
+    list_tasks,
+    review_task,
+    undo_task_review,
+)
 
 
 def task_message() -> EmailMessage:
@@ -260,6 +267,48 @@ class TaskReviewTests(unittest.TestCase):
             self.assertFalse(replay.allowed)
             self.assertEqual(replay.reason, "source_audit_already_undone")
 
+    def test_review_receipt_summary_counts_net_effective_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+            task_ids = [task["task_id"] for task in list_tasks(paths) if task["kind"] in {"amount", "action"}]
+            review_task(
+                paths,
+                task_id=task_ids[0],
+                status="done",
+                actor="tester",
+                updated_at="2026-06-10T12:05:00Z",
+            )
+            review_task(
+                paths,
+                task_id=task_ids[1],
+                status="needs_verification",
+                actor="tester",
+                updated_at="2026-06-10T12:06:00Z",
+            )
+            first_audit_id = db.list_audit_events(paths, limit=10)[1]["id"]
+            undo_task_review(
+                paths,
+                audit_id=first_audit_id,
+                actor="tester",
+                confirmed=True,
+                confirmation_id="receipt-undo-1",
+                updated_at="2026-06-10T12:07:00Z",
+            )
+
+            summary = build_review_receipt_summary(paths, limit=10, recent_limit=2)
+
+            self.assertEqual(summary["mode"], "local_review_receipt")
+            self.assertEqual(summary["review_event_count"], 2)
+            self.assertEqual(summary["reviewed_task_count"], 2)
+            self.assertEqual(summary["net_changed_task_count"], 1)
+            self.assertEqual(summary["counts_by_status"], {"needs_verification": 1})
+            self.assertEqual(summary["undoable_count"], 1)
+            self.assertEqual(summary["undone_count"], 1)
+            self.assertEqual(len(summary["recent"]), 2)
+            self.assertFalse(summary["external_network"])
+            self.assertFalse(summary["external_writes_performed"])
+
     def test_cli_tasks_list_and_review(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             paths = get_paths(tmp)
@@ -459,6 +508,14 @@ class TaskReviewTests(unittest.TestCase):
             history = json.loads(output.getvalue())
             self.assertEqual(history[0]["audit_id"], audit_id)
             self.assertTrue(history[0]["undoable"])
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = main(["--home", tmp, "tasks", "receipt", "--limit", "5", "--recent-limit", "2"])
+            self.assertEqual(code, 0)
+            receipt = json.loads(output.getvalue())
+            self.assertEqual(receipt["mode"], "local_review_receipt")
+            self.assertEqual(receipt["counts_by_status"]["done"], 1)
 
             output = io.StringIO()
             with contextlib.redirect_stdout(output):

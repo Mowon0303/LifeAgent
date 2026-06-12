@@ -119,6 +119,12 @@ Each `history[]` item contains:
 
 The CLI mirrors this with `sentineldesk tasks history --limit ...`.
 
+### GET `/api/tasks/review/summary?limit=&recent_limit=` → daily review receipt summary
+
+Read-only local review receipt built from the same `task.review` / `task.review.bulk` audit events as history. It returns `status: "ready"`, `mode: "local_review_receipt"`, `history_limit`, `review_event_count`, `reviewed_task_count`, `net_changed_task_count`, `counts_by_status`, `counts_by_action`, `undoable_count`, `undone_count`, `latest_reviewed_at`, bounded `recent` history rows, `external_network: false`, and `external_writes_performed: false`.
+
+`reviewed_task_count` counts all recent reviewed tasks, while `net_changed_task_count` and `counts_by_status` exclude review audits that have since been undone. This endpoint does not write an audit event, refresh Gmail, send email, or write an external calendar. The CLI mirrors this with `sentineldesk tasks receipt --limit ... --recent-limit ...`.
+
 ### POST `/api/tasks/review/undo` → undo receipt
 
 Confirmation-gated local undo for a previous `task.review` or `task.review.bulk` audit event. Preferred UI request body:
@@ -143,9 +149,9 @@ Read-only source drill-down for a review task. Returns `{task_id, task, sources,
 
 ### GET `/api/daily/summary?task_limit=&calendar_limit=` → daily landing snapshot
 
-Read-only daily landing summary for the assistant panel. It returns stored email counts, fact counts, grouped task queue counts and optional queue rows, local calendar draft counts and optional calendar items, redacted connector readiness, safety flags, and safe next actions. This endpoint does **not** write a `daily.run` audit event; it is safe for page load and refresh polling.
+Read-only daily landing summary for the assistant panel. It returns stored email counts, fact counts, grouped task queue counts and optional queue rows, local calendar draft counts and optional calendar items, redacted connector readiness, a local review receipt, safety flags, and safe next actions. This endpoint does **not** write a `daily.run` audit event; it is safe for page load and refresh polling.
 
-Top-level fields: `status`, `generated_at`, `mode`, `sync`, `email`, `tasks`, `calendar`, `connectors`, `safety`, `next_actions`.
+Top-level fields: `status`, `generated_at`, `mode`, `sync`, `email`, `tasks`, `calendar`, `connectors`, `review_receipt`, `safety`, `next_actions`.
 
 ### POST `/api/daily/run?task_limit=&calendar_limit=` → daily landing run
 
@@ -200,10 +206,11 @@ How backend fields drive the B′ visual spec:
 | All-day vs timed | current extraction has no time-of-day → all events render as all-day chips; the week/day time grid renders the layout (hours, gridlines, now line) with all-day strip populated |
 | **确认加入日历** button | `POST /api/calendar/sync?confirm=1&confirmation_id=ui-<event_id>-<epoch>&event_id=<event_id>&destination=ics`; on `allowed: true` re-fetch events (chip turns solid) |
 | **忽略** button | `POST /api/tasks/review?task_id=calendar:<event_id>&status=ignored`; UI hides the pending suggestion; the draft itself stays in local storage (retention controls own deletion) |
-| Assistant daily embed | computed from `/api/daily/summary`: stored mail, grouped review queue, local calendar drafts, connector readiness, and external-write boundary |
+| Assistant daily embed | computed from `/api/daily/summary`: stored mail, grouped review queue, local calendar drafts, connector readiness, review receipt, and external-write boundary |
 | Assistant task review card | computed from `/api/tasks`: visible tasks render with value chips, evidence snippet, confidence, priority band/score/reasons, a local-only `查看证据` drill-down from `/api/tasks/evidence`, and local-only `done`, `needs_verification`, `reviewed`, `ignored` controls |
 | Assistant saved task views | `task-view` chips call `/api/tasks?view=...&sort=...` for `all`, `needs_verification`, `payments`, `deadlines_soon`, and `recently_changed`; each view also resets kind/status/sort to its default review preset |
 | Assistant review session summary | `taskSessionSummary` is computed client-side from current view rows plus read-only `view=all` rows; it shows total/current queue/classified counts, explains empty saved views, and offers up to three non-empty saved-view chips without external reads or writes |
+| Assistant review receipt summary | `taskReviewReceipt` is computed from `review_receipt` inside `/api/daily/summary`; it shows effective changed tasks, status distribution, review record count, undo state, latest change time, and the most recent local review action without external reads or writes |
 | Assistant task queue controls | server-side saved view and sort over `/api/tasks?view=...&sort=...` (`priority/due_date/recent`), client-side filters over the loaded rows by kind (`all/deadline/amount/action`) and status (`active/new/needs_verification/reviewed/done/ignored/all`), plus cursor navigation (`task-prev`, `task-next`, `show-task`) so large queues can be reviewed without cycling one unfiltered card at a time |
 | Assistant bulk task controls | `task-bulk-done`, `task-bulk-reviewed`, `task-bulk-ignored`, and `task-bulk-needs-verification` use `window.confirm`, send the currently filtered `task_ids` plus view/kind/status/sort metadata to `/api/tasks/review/bulk`, and re-fetch local state after `allowed: true` |
 | Assistant review history/undo | `task-history` reads `/api/tasks/review/history`; each undoable row renders `task-undo`, which uses `window.confirm`, sends `{audit_id, confirm: true, confirmation_id}` to `/api/tasks/review/undo`, and re-fetches local state after `allowed: true` |
