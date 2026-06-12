@@ -44,6 +44,10 @@ Agent layer:
 - Email-first demo dry run creates 4 synthetic messages, 8 extracted facts, 3 local calendar drafts, 8 reviewable tasks, and a cited uncertain latest-deadline answer.
 - Source release packaging and release audit pass with runtime artifacts excluded.
 
+## Portfolio Snapshot
+
+Start with the [case study](sentinel-desk/docs/CASE_STUDY.md) for the product problem, architecture, agent boundaries, safety model, eval evidence, and GitHub repository description/topics.
+
 ## Quickstart
 
 The implementation lives in `sentinel-desk/`.
@@ -112,6 +116,7 @@ python3 -B -m sentineldesk privacy release-audit --path "$EXTRACT_DIR" --require
 
 - [PLAN_TRACKER.md](PLAN_TRACKER.md) - architecture boundary, status table, safety matrix, next plan
 - [sentinel-desk/README.md](sentinel-desk/README.md) - detailed CLI and developer workflow
+- [sentinel-desk/docs/CASE_STUDY.md](sentinel-desk/docs/CASE_STUDY.md) - portfolio case study and GitHub surface copy
 - [sentinel-desk/docs/ARCHITECTURE.md](sentinel-desk/docs/ARCHITECTURE.md) - system diagram and safety boundaries
 - [sentinel-desk/docs/UI_CONTRACT.md](sentinel-desk/docs/UI_CONTRACT.md) - backend to calendar UI handoff contract
 - [sentinel-desk/docs/EVAL_REPORT.md](sentinel-desk/docs/EVAL_REPORT.md) - extraction golden-set eval report
