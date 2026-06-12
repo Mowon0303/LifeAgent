@@ -6,7 +6,9 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Changed
 
-- Deferred GitHub repository description/topics as a non-blocking public-metadata polish item after user direction; `PLAN_TRACKER.md` now points the next practical work to the UI reference package or explicit screen-recording approval instead.
+- Deferred GitHub repository description/topics as a non-blocking public-metadata polish item after user direction.
+- Marked the final UI design reference as complete and shifted the active plan away from portfolio recording toward product landing.
+- Cancelled the screen-recording direction after user feedback; generated local recording files and temporary thumbnails were deleted, and `PLAN_TRACKER.md` now points the next practical work to the Gmail-first daily landing loop.
 
 ### Added
 
