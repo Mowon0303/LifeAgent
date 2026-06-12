@@ -4,6 +4,10 @@ All notable project updates for LifeAgent are tracked here.
 
 ## [Unreleased]
 
+### Changed
+
+- Deferred GitHub repository description/topics as a non-blocking public-metadata polish item after user direction; `PLAN_TRACKER.md` now points the next practical work to the UI reference package or explicit screen-recording approval instead.
+
 ### Added
 
 - Rebuilt `sentinel-desk/docs/INTERVIEW_PROJECT.md` as a LifeAgent interview brief with resume bullets, a 45-second explanation, a 2-minute system design answer, architecture talking points, technical proof, tradeoffs/risks, demo checklist, and a concise interview close.
