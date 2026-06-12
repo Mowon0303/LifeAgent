@@ -283,6 +283,20 @@
     due_date: '日期',
     recent: '最近'
   };
+  var TASK_VIEW_LABEL = {
+    all: '全部',
+    needs_verification: '需核对',
+    payments: '付款',
+    deadlines_soon: '临近截止',
+    recently_changed: '最近变化'
+  };
+  var TASK_VIEW_CONFIG = {
+    all: { kind: 'all', status: 'active', sort: 'priority' },
+    needs_verification: { kind: 'all', status: 'active', sort: 'priority' },
+    payments: { kind: 'all', status: 'active', sort: 'priority' },
+    deadlines_soon: { kind: 'deadline', status: 'active', sort: 'due_date' },
+    recently_changed: { kind: 'all', status: 'active', sort: 'recent' }
+  };
   var TASK_ACTION_STATUS = {
     'task-done': 'done',
     'task-ignored': 'ignored',
@@ -310,6 +324,7 @@
     queue: [],           // pending suggestion queue for the assistant panel
     taskQueue: [],       // non-calendar email tasks exposed as review cards
     reviewHistory: [],   // recent local task review audit rows
+    taskView: 'all',
     taskFilterKind: 'all',
     taskFilterStatus: 'active',
     taskSort: 'priority',
@@ -344,7 +359,8 @@
 
   // ---------- data ----------
   function taskApiUrl() {
-    return '/api/tasks?sort=' + encodeURIComponent(state.taskSort || 'priority');
+    return '/api/tasks?view=' + encodeURIComponent(state.taskView || 'all') +
+      '&sort=' + encodeURIComponent(state.taskSort || 'priority');
   }
 
   function mapItem(raw) {
@@ -382,7 +398,7 @@
       state.events = mapped.filter(function (item) { return item.dateKey; });
       state.undated = mapped.filter(function (item) { return !item.dateKey; });
       state.queue = mapped.filter(function (item) { return item.pending; });
-      state.taskQueue = tasks.filter(isReviewTask);
+      state.taskQueue = tasks;
       clampTaskCursor();
     });
   }
@@ -396,13 +412,19 @@
     return ['new', 'needs_verification', 'reviewed'].indexOf(String(status || 'new')) >= 0;
   }
 
+  function shouldShowTaskInReview(task) {
+    if (state.taskView === 'deadlines_soon') return String(task.kind || '') === 'deadline';
+    return isReviewTask(task);
+  }
+
   function filteredTaskQueue() {
     return state.taskQueue.filter(function (task) {
+      var reviewOk = shouldShowTaskInReview(task);
       var kindOk = state.taskFilterKind === 'all' || task.kind === state.taskFilterKind;
       var status = String(task.status || 'new');
       var statusOk = state.taskFilterStatus === 'all' ||
         (state.taskFilterStatus === 'active' ? isActiveTaskStatus(status) : status === state.taskFilterStatus);
-      return kindOk && statusOk;
+      return reviewOk && kindOk && statusOk;
     });
   }
 
@@ -418,15 +440,17 @@
 
   function taskFilterCount(kind, statusFilter) {
     return state.taskQueue.filter(function (task) {
+      var reviewOk = shouldShowTaskInReview(task);
       var kindOk = kind === 'all' || task.kind === kind;
       var status = String(task.status || 'new');
       var statusOk = statusFilter === 'all' ||
         (statusFilter === 'active' ? isActiveTaskStatus(status) : status === statusFilter);
-      return kindOk && statusOk;
+      return reviewOk && kindOk && statusOk;
     }).length;
   }
 
   function taskFilterControls() {
+    var views = ['all', 'needs_verification', 'payments', 'deadlines_soon', 'recently_changed'];
     var kinds = ['all', 'amount', 'action', 'deadline'];
     var statuses = ['active', 'new', 'needs_verification', 'reviewed', 'done', 'ignored', 'all'];
     var sorts = ['priority', 'due_date', 'recent'];
@@ -450,13 +474,20 @@
       return '<button class="' + selected.trim() + '" data-act="task-sort" data-sort="' +
         escapeHtml(sort) + '">' + escapeHtml(TASK_SORT_LABEL[sort]) + '</button>';
     }).join('');
+    var viewButtons = views.map(function (view) {
+      var selected = state.taskView === view ? ' on' : '';
+      return '<button class="' + selected.trim() + '" data-act="task-view" data-view="' +
+        escapeHtml(view) + '">' + escapeHtml(TASK_VIEW_LABEL[view]) + '</button>';
+    }).join('');
     return '<div id="taskQueueFilters">' +
+      '<div class="dD-filterbar" data-task-filter="view">' + viewButtons + '</div>' +
       '<div class="dD-filterbar" data-task-filter="kind">' + kindButtons + '</div>' +
       '<div class="dD-filterbar" data-task-filter="status">' + statusButtons + '</div>' +
       '<div class="dD-filterbar" data-task-filter="sort">' + sortButtons + '</div>' +
       '<div class="dD-tasknav" id="taskNavState">' +
       '<button class="dD-mini" data-act="task-prev"' + (queue.length ? '' : ' disabled') + '>‹</button>' +
       '<div class="meta">' + escapeHtml(current) + ' · ' +
+        escapeHtml(TASK_VIEW_LABEL[state.taskView] || state.taskView) + ' · ' +
         escapeHtml(TASK_KIND_FILTER_LABEL[state.taskFilterKind] || state.taskFilterKind) + ' · ' +
         escapeHtml(TASK_STATUS_FILTER_LABEL[state.taskFilterStatus] || state.taskFilterStatus) + ' · ' +
         escapeHtml(TASK_SORT_LABEL[state.taskSort] || state.taskSort) + '</div>' +
@@ -825,6 +856,21 @@
     updateSummary();
   }
 
+  function handleTaskView(view) {
+    if (!TASK_VIEW_LABEL[view] || state.busy) return;
+    var config = TASK_VIEW_CONFIG[view] || TASK_VIEW_CONFIG.all;
+    state.taskView = view;
+    state.taskFilterKind = config.kind;
+    state.taskFilterStatus = config.status;
+    state.taskSort = config.sort;
+    state.taskCursor = 0;
+    state.busy = true;
+    refresh()
+      .then(offerNextTaskSuggestion)
+      .catch(function (err) { botMessage('<div class="dD-body uncertain">预设视图刷新失败：' + escapeHtml(err) + '</div>'); })
+      .finally(function () { state.busy = false; });
+  }
+
   function handleTaskSort(sort) {
     if (!TASK_SORT_LABEL[sort] || state.busy) return;
     state.taskSort = sort;
@@ -944,7 +990,8 @@
       return;
     }
     var label = REVIEW_STATUS_LABEL[status] || status;
-    var scope = (TASK_KIND_FILTER_LABEL[state.taskFilterKind] || state.taskFilterKind) + ' / ' +
+    var scope = (TASK_VIEW_LABEL[state.taskView] || state.taskView) + ' / ' +
+      (TASK_KIND_FILTER_LABEL[state.taskFilterKind] || state.taskFilterKind) + ' / ' +
       (TASK_STATUS_FILTER_LABEL[state.taskFilterStatus] || state.taskFilterStatus);
     var ok = window.confirm('将当前筛选下 ' + queue.length + ' 条任务批量标记为“' + label + '”？\n筛选：' + scope + '\n这个操作只写本地 review 状态和 audit。');
     if (!ok) return;
@@ -961,7 +1008,7 @@
         note: 'bulk reviewed from calendar assistant: ' + status,
         confirm: true,
         confirmation_id: confirmationId,
-        filter: { kind: state.taskFilterKind, status: state.taskFilterStatus }
+        filter: { view: state.taskView, kind: state.taskFilterKind, status: state.taskFilterStatus, sort: state.taskSort }
       })
     })
       .then(function (r) { return r.json(); })
@@ -1113,6 +1160,10 @@
     }
     if (btn.dataset.act === 'task-filter-status') {
       handleTaskFilter(null, btn.dataset.status || 'active');
+      return;
+    }
+    if (btn.dataset.act === 'task-view') {
+      handleTaskView(btn.dataset.view || 'all');
       return;
     }
     if (btn.dataset.act === 'task-sort') {

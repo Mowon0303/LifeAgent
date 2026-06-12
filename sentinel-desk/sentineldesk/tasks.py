@@ -15,6 +15,14 @@ from .extract import utc_now
 TASK_STATUSES = {"new", "reviewed", "ignored", "needs_verification", "done"}
 TASK_KINDS = {"deadline", "amount", "action"}
 TASK_SORTS = {"priority", "due_date", "recent"}
+TASK_VIEWS = {"all", "needs_verification", "payments", "deadlines_soon", "recently_changed"}
+TASK_VIEW_DEFAULT_SORT = {
+    "all": "priority",
+    "needs_verification": "priority",
+    "payments": "priority",
+    "deadlines_soon": "due_date",
+    "recently_changed": "recent",
+}
 AMOUNT_RE = re.compile(r"[$\u20ac\u00a3\u00a5\uffe5]?\s*(\d[\d,]*(?:\.\d{1,2})?)")
 
 
@@ -82,10 +90,13 @@ def list_tasks(
     *,
     status: str | None = None,
     kind: str | None = None,
-    sort: str = "priority",
+    sort: str | None = None,
+    view: str = "all",
     limit: int = 100,
 ) -> list[dict[str, Any]]:
     db.init_db(paths)
+    _validate_view(view)
+    sort = sort or TASK_VIEW_DEFAULT_SORT[view]
     _validate_sort(sort)
     reviews = {item["task_id"]: item for item in db.list_task_reviews(paths, limit=1000)}
     tasks = _calendar_tasks(paths, reviews)
@@ -98,6 +109,7 @@ def list_tasks(
     tasks.extend(_email_fact_tasks(paths, reviews, covered_source_ids=covered_source_ids))
     for task in tasks:
         _apply_priority(task)
+    tasks = _apply_view(tasks, view=view)
     tasks.sort(key=lambda task: _task_sort_key(task, sort=sort))
     if status:
         _validate_status(status)
@@ -578,7 +590,7 @@ def _calendar_tasks(paths: Paths, reviews: dict[str, dict[str, Any]]) -> list[di
                     "fact_count": 1 if row.get("date_text") else 0,
                     "due_date": str(row.get("date_text") or ""),
                     "severity": str(row.get("severity") or "medium"),
-                    "confidence": float(row.get("confidence") or 0.0),
+                    "confidence": _confidence_value(row.get("confidence")),
                     "source_type": "calendar_draft",
                     "source_refs": source_refs,
                     "primary_source": source_refs[0] if source_refs else f"calendar:{event_id}",
@@ -627,7 +639,7 @@ def _email_fact_tasks(
                     "fact_count": len(values),
                     "due_date": value if kind == "deadline" else "",
                     "severity": _severity_for_fact(kind),
-                    "confidence": max(float(fact.get("confidence") or 0.0) for fact in facts),
+                    "confidence": max(_confidence_value(fact.get("confidence")) for fact in facts),
                     "source_type": str(primary.get("source_type") or "email"),
                     "source_refs": [source_id] if source_id else [],
                     "primary_source": source_id,
@@ -663,7 +675,7 @@ def _apply_priority(task: dict[str, Any]) -> None:
     status = str(task.get("status") or "new")
     kind = str(task.get("kind") or "")
     severity = str(task.get("severity") or "medium")
-    confidence = float(task.get("confidence") or 0.0)
+    confidence = _confidence_value(task.get("confidence"))
 
     if status == "needs_verification":
         score += 100
@@ -756,7 +768,7 @@ def _primary_fact(facts: list[dict[str, Any]]) -> dict[str, Any]:
     return max(
         enumerate(facts),
         key=lambda item: (
-            float(item[1].get("confidence") or 0.0),
+            _confidence_value(item[1].get("confidence")),
             str(item[1].get("message_received_at") or item[1].get("received_at") or ""),
             -item[0],
         ),
@@ -817,10 +829,14 @@ def _severity_for_fact(kind: str) -> str:
 def _needs_verification(source_refs: list[str], confidence: str) -> bool:
     if not source_refs:
         return True
+    return _confidence_value(confidence) < 0.7
+
+
+def _confidence_value(value: Any) -> float:
     try:
-        return float(confidence) < 0.7
-    except ValueError:
-        return False
+        return float(value or 0.0)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _task_sort_key(task: dict[str, Any], *, sort: str) -> tuple[Any, ...]:
@@ -842,6 +858,43 @@ def _task_sort_key(task: dict[str, Any], *, sort: str) -> tuple[Any, ...]:
         return (-updated_at, -priority, status_rank, due_date, task_id)
     _validate_sort(sort)
     return (-priority, status_rank, due_date, -updated_at, task_id)
+
+
+def _apply_view(tasks: list[dict[str, Any]], *, view: str) -> list[dict[str, Any]]:
+    if view == "all":
+        return tasks
+    if view == "needs_verification":
+        return [task for task in tasks if _is_verification_task(task)]
+    if view == "payments":
+        return [task for task in tasks if _is_payment_task(task)]
+    if view == "deadlines_soon":
+        return [task for task in tasks if str(task.get("kind") or "") == "deadline" and _task_due_key(task)]
+    if view == "recently_changed":
+        return [task for task in tasks if _task_has_timestamp(task) and _is_active_status(str(task.get("status") or "new"))]
+    _validate_view(view)
+    return tasks
+
+
+def _is_verification_task(task: dict[str, Any]) -> bool:
+    status = str(task.get("status") or "new")
+    return (
+        status == "needs_verification"
+        or bool(task.get("needs_verification"))
+        or _confidence_value(task.get("confidence")) < 0.7
+        or "low_trust_or_missing_source" in set(task.get("priority_reasons") or [])
+    )
+
+
+def _is_payment_task(task: dict[str, Any]) -> bool:
+    return (
+        str(task.get("kind") or "") == "amount"
+        or "payment_context" in set(task.get("priority_reasons") or [])
+        or _has_payment_context(task)
+    )
+
+
+def _task_has_timestamp(task: dict[str, Any]) -> bool:
+    return any(str(task.get(key) or "") for key in ("updated_at", "received_at", "reviewed_at", "created_at"))
 
 
 def _task_due_key(task: dict[str, Any]) -> str:
@@ -961,7 +1014,7 @@ def _evidence_fact(fact: dict[str, Any]) -> dict[str, Any]:
     return {
         "kind": str(fact.get("kind") or ""),
         "value": str(fact.get("value") or ""),
-        "confidence": float(fact.get("confidence") or 0.0),
+        "confidence": _confidence_value(fact.get("confidence")),
         "evidence": _clip(str(fact.get("evidence") or ""), 500),
         "source_id": str(fact.get("source_id") or ""),
         "source_type": str(fact.get("source_type") or ""),
@@ -998,6 +1051,12 @@ def _validate_sort(sort: str) -> None:
     if sort not in TASK_SORTS:
         allowed = ", ".join(sorted(TASK_SORTS))
         raise ValueError(f"Unsupported task sort: {sort}. Expected one of: {allowed}")
+
+
+def _validate_view(view: str) -> None:
+    if view not in TASK_VIEWS:
+        allowed = ", ".join(sorted(TASK_VIEWS))
+        raise ValueError(f"Unsupported task view: {view}. Expected one of: {allowed}")
 
 
 def _bulk_filters(*, kind: str | None, status_filter: str | None, limit: int) -> dict[str, Any]:

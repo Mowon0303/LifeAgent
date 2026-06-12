@@ -160,7 +160,7 @@ def _next_actions(
             {
                 "kind": "review_tasks",
                 "label": "Review extracted tasks",
-                "command": "sentineldesk tasks list --status new",
+                "command": "sentineldesk tasks list --view all --sort priority --status new",
                 "side_effect": "local_read",
             }
         )

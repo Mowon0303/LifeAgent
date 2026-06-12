@@ -86,7 +86,8 @@ class Handler(BaseHTTPRequestHandler):
                         self.paths,
                         status=query.get("status", [None])[0],
                         kind=query.get("kind", [None])[0],
-                        sort=query.get("sort", ["priority"])[0],
+                        sort=query.get("sort", [None])[0],
+                        view=query.get("view", ["all"])[0],
                         limit=_query_int(query, "limit", 100),
                     )
                 )

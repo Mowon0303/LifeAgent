@@ -265,6 +265,21 @@ class TaskContractTests(UiContractBase):
         due_dates = [task["due_date"] for task in due_tasks if task["due_date"]]
         self.assertEqual(due_dates, sorted(due_dates))
 
+    def test_task_view_presets_filter_review_slices(self) -> None:
+        status, payment_tasks = self.json_request("GET", "/api/tasks?view=payments")
+        self.assertEqual(status, 200)
+        self.assertTrue(payment_tasks)
+        self.assertTrue(all(task["kind"] == "amount" or "payment_context" in task["priority_reasons"] for task in payment_tasks))
+
+        status, deadline_tasks = self.json_request("GET", "/api/tasks?view=deadlines_soon")
+        self.assertEqual(status, 200)
+        self.assertTrue(deadline_tasks)
+        self.assertTrue(all(task["kind"] == "deadline" and task["due_date"] for task in deadline_tasks))
+
+        status, recent_tasks = self.json_request("GET", "/api/tasks?view=recently_changed")
+        self.assertEqual(status, 200)
+        self.assertTrue(recent_tasks)
+
     def test_invalid_task_kind_filter_is_rejected(self) -> None:
         status, payload = self.json_request("GET", "/api/tasks?kind=bogus")
         self.assertEqual(status, 400)
@@ -272,6 +287,11 @@ class TaskContractTests(UiContractBase):
 
     def test_invalid_task_sort_is_rejected(self) -> None:
         status, payload = self.json_request("GET", "/api/tasks?sort=bogus")
+        self.assertEqual(status, 400)
+        self.assertIn("error", payload)
+
+    def test_invalid_task_view_is_rejected(self) -> None:
+        status, payload = self.json_request("GET", "/api/tasks?view=bogus")
         self.assertEqual(status, 400)
         self.assertIn("error", payload)
 
@@ -605,7 +625,8 @@ class CalendarPageTests(UiContractBase):
             'data-view="agenda"',
             "/api/calendar/events",
             "/api/tasks",
-            "/api/tasks?sort=",
+            "/api/tasks?view=",
+            "&sort=",
             "/api/daily/summary",
             "/api/daily/run",
             "/api/tasks/evidence?task_id=",
@@ -620,7 +641,9 @@ class CalendarPageTests(UiContractBase):
             'id="taskQueueFilters"',
             'id="taskNavState"',
             'id="taskBulkActions"',
+            'data-act="task-view"',
             'data-act="task-sort"',
+            "var views = ['all', 'needs_verification', 'payments', 'deadlines_soon', 'recently_changed'];",
             "var sorts = ['priority', 'due_date', 'recent'];",
             'data-act="task-history"',
             'data-act="task-undo"',
@@ -656,6 +679,7 @@ class CalendarPageTests(UiContractBase):
         self.assertIn("function filteredTaskQueue", html)
         self.assertIn("function taskFilterControls", html)
         self.assertIn("function handleTaskFilter", html)
+        self.assertIn("function handleTaskView", html)
         self.assertIn("function handleTaskSort", html)
         self.assertIn("function taskApiUrl", html)
         self.assertIn("function moveTaskCursor", html)

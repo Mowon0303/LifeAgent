@@ -117,6 +117,62 @@ class TaskReviewTests(unittest.TestCase):
             self.assertEqual(deadlines[0]["due_date"], "July 1, 2026")
             self.assertEqual(deadlines[1]["due_date"], "July 20, 2026")
 
+    def test_saved_task_views_filter_repeat_review_slices(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+
+            verification = list_tasks(paths, view="needs_verification")
+            payments = list_tasks(paths, view="payments")
+            deadlines = list_tasks(paths, view="deadlines_soon")
+            recent = list_tasks(paths, view="recently_changed")
+
+            self.assertTrue(verification)
+            self.assertTrue(all(task["needs_verification"] or task["status"] == "needs_verification" for task in verification))
+            self.assertTrue(payments)
+            self.assertTrue(all(task["kind"] == "amount" or "payment_context" in task["priority_reasons"] for task in payments))
+            self.assertTrue(deadlines)
+            self.assertTrue(all(task["kind"] == "deadline" and task["due_date"] for task in deadlines))
+            self.assertTrue(recent)
+
+    def test_task_views_tolerate_malformed_confidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            db.init_db(paths)
+            message = EmailMessage(
+                message_id="m-bad-confidence",
+                thread_id="t-bad-confidence",
+                sender="admin@example.com",
+                subject="Portal action",
+                received_at="2026-06-10T09:00:00Z",
+                body_text="Please upload the form.",
+            )
+            db.upsert_email_message(
+                paths,
+                message=message,
+                facts=[
+                    {
+                        "kind": "action",
+                        "value": "upload the form",
+                        "source_id": "email:m-bad-confidence",
+                        "source_type": "email",
+                        "trust_label": "email_unverified",
+                        "evidence": "Please upload the form.",
+                        "confidence": "unknown",
+                        "received_at": "2026-06-10T09:00:00Z",
+                        "metadata": {},
+                    }
+                ],
+                ingested_at="2026-06-10T12:00:00Z",
+            )
+
+            tasks = list_tasks(paths, view="needs_verification")
+
+            self.assertEqual(len(tasks), 1)
+            self.assertEqual(tasks[0]["confidence"], 0.0)
+            self.assertTrue(tasks[0]["needs_verification"])
+            self.assertIn("low_confidence", tasks[0]["priority_reasons"])
+
     def test_review_task_persists_status_and_audit_event(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             paths = get_paths(tmp)
@@ -225,6 +281,14 @@ class TaskReviewTests(unittest.TestCase):
             sorted_payload = json.loads(output.getvalue())
             self.assertTrue(sorted_payload)
             self.assertEqual(sorted_payload[0]["kind"], "deadline")
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = main(["--home", tmp, "tasks", "list", "--view", "payments"])
+            self.assertEqual(code, 0)
+            view_payload = json.loads(output.getvalue())
+            self.assertTrue(view_payload)
+            self.assertTrue(any(task["kind"] == "amount" for task in view_payload))
 
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
