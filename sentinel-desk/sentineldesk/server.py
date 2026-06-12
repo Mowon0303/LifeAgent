@@ -81,7 +81,14 @@ class Handler(BaseHTTPRequestHandler):
         if path == "/api/tasks":
             query = parse_qs(parsed.query)
             try:
-                self.send_json(list_tasks(self.paths, status=query.get("status", [None])[0], limit=100))
+                self.send_json(
+                    list_tasks(
+                        self.paths,
+                        status=query.get("status", [None])[0],
+                        kind=query.get("kind", [None])[0],
+                        limit=_query_int(query, "limit", 100),
+                    )
+                )
             except ValueError as error:
                 self.send_json({"error": str(error)}, status=400)
             return

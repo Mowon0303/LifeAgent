@@ -150,6 +150,17 @@
   .dD-embed .esrc { font-size:11.5px; color:#A89A86; }
   .dD-embed .enote { font-size:13.5px; color:#5A5247; line-height:1.5; margin-top:9px; }
   .dD-taskline { font-size:11.5px; color:#9A8E7B; line-height:1.35; border-top:1px solid #F1EADB; padding-top:9px; margin-top:3px; }
+  .dD-filterbar { display:flex; flex-wrap:wrap; gap:5px; max-width:340px; margin-top:8px; }
+  .dD-filterbar button { border:1px solid transparent; background:#EFE7D8; color:#6B6253; border-radius:7px;
+    height:27px; padding:0 9px; font-size:11.5px; font-weight:700; cursor:pointer; font-family:inherit; }
+  .dD-filterbar button.on { background:#2A6FDB; border-color:#2A6FDB; color:#fff; }
+  .dD-filterbar button:disabled { opacity:.5; cursor:default; }
+  .dD-tasknav { display:flex; align-items:center; gap:7px; max-width:340px; margin-top:8px; }
+  .dD-tasknav .meta { flex:1; font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:#9A8E7B; white-space:nowrap;
+    overflow:hidden; text-overflow:ellipsis; }
+  .dD-mini { width:32px; height:28px; border-radius:7px; border:0; background:#E6DECD; color:#5C5446;
+    font-size:15px; font-weight:700; cursor:pointer; font-family:inherit; }
+  .dD-mini:disabled { opacity:.45; cursor:default; }
   .dD-task-kind { font-family:'IBM Plex Mono',monospace; font-size:10.5px; font-weight:700; letter-spacing:.08em;
     color:#B14228; text-transform:uppercase; margin-bottom:6px; }
   .dD-task-values { display:flex; flex-wrap:wrap; gap:5px; margin-top:9px; }
@@ -249,11 +260,22 @@
     local_evidence: '本地证据'
   };
   var TASK_KIND_LABEL = { deadline: '截止', amount: '金额', action: '动作' };
+  var TASK_KIND_FILTER_LABEL = { all: '全部', deadline: '截止', amount: '金额', action: '动作' };
   var REVIEW_STATUS_LABEL = {
+    new: '新',
     done: '完成',
     ignored: '忽略',
     reviewed: '已审阅',
     needs_verification: '需核对'
+  };
+  var TASK_STATUS_FILTER_LABEL = {
+    active: '活跃',
+    new: '新',
+    needs_verification: '核对',
+    reviewed: '已阅',
+    done: '完成',
+    ignored: '忽略',
+    all: '全部'
   };
   var TASK_ACTION_STATUS = {
     'task-done': 'done',
@@ -275,7 +297,9 @@
     daily: null,         // local daily landing summary
     queue: [],           // pending suggestion queue for the assistant panel
     taskQueue: [],       // non-calendar email tasks exposed as review cards
-    offeredTaskIds: {},
+    taskFilterKind: 'all',
+    taskFilterStatus: 'active',
+    taskCursor: 0,
     busy: false
   };
 
@@ -341,14 +365,77 @@
       state.undated = mapped.filter(function (item) { return !item.dateKey; });
       state.queue = mapped.filter(function (item) { return item.pending; });
       state.taskQueue = tasks.filter(isReviewTask);
+      clampTaskCursor();
     });
   }
 
   function isReviewTask(task) {
-    var status = String(task.status || 'new');
     var taskId = String(task.task_id || '');
-    return !taskId.startsWith('calendar:') &&
-      ['new', 'needs_verification', 'reviewed'].indexOf(status) >= 0;
+    return !taskId.startsWith('calendar:');
+  }
+
+  function isActiveTaskStatus(status) {
+    return ['new', 'needs_verification', 'reviewed'].indexOf(String(status || 'new')) >= 0;
+  }
+
+  function filteredTaskQueue() {
+    return state.taskQueue.filter(function (task) {
+      var kindOk = state.taskFilterKind === 'all' || task.kind === state.taskFilterKind;
+      var status = String(task.status || 'new');
+      var statusOk = state.taskFilterStatus === 'all' ||
+        (state.taskFilterStatus === 'active' ? isActiveTaskStatus(status) : status === state.taskFilterStatus);
+      return kindOk && statusOk;
+    });
+  }
+
+  function clampTaskCursor(items) {
+    var queue = items || filteredTaskQueue();
+    if (!queue.length) {
+      state.taskCursor = 0;
+      return;
+    }
+    if (state.taskCursor < 0) state.taskCursor = queue.length - 1;
+    if (state.taskCursor >= queue.length) state.taskCursor = queue.length - 1;
+  }
+
+  function taskFilterCount(kind, statusFilter) {
+    return state.taskQueue.filter(function (task) {
+      var kindOk = kind === 'all' || task.kind === kind;
+      var status = String(task.status || 'new');
+      var statusOk = statusFilter === 'all' ||
+        (statusFilter === 'active' ? isActiveTaskStatus(status) : status === statusFilter);
+      return kindOk && statusOk;
+    }).length;
+  }
+
+  function taskFilterControls() {
+    var kinds = ['all', 'amount', 'action', 'deadline'];
+    var statuses = ['active', 'new', 'needs_verification', 'reviewed', 'done', 'ignored', 'all'];
+    var queue = filteredTaskQueue();
+    clampTaskCursor(queue);
+    var current = queue.length ? (state.taskCursor + 1) + '/' + queue.length : '0/0';
+    var kindButtons = kinds.map(function (kind) {
+      var selected = state.taskFilterKind === kind ? ' on' : '';
+      return '<button class="' + selected.trim() + '" data-act="task-filter-kind" data-kind="' +
+        escapeHtml(kind) + '">' + escapeHtml(TASK_KIND_FILTER_LABEL[kind]) + ' ' +
+        taskFilterCount(kind, state.taskFilterStatus) + '</button>';
+    }).join('');
+    var statusButtons = statuses.map(function (status) {
+      var selected = state.taskFilterStatus === status ? ' on' : '';
+      return '<button class="' + selected.trim() + '" data-act="task-filter-status" data-status="' +
+        escapeHtml(status) + '">' + escapeHtml(TASK_STATUS_FILTER_LABEL[status]) + ' ' +
+        taskFilterCount(state.taskFilterKind, status) + '</button>';
+    }).join('');
+    return '<div id="taskQueueFilters">' +
+      '<div class="dD-filterbar" data-task-filter="kind">' + kindButtons + '</div>' +
+      '<div class="dD-filterbar" data-task-filter="status">' + statusButtons + '</div>' +
+      '<div class="dD-tasknav" id="taskNavState">' +
+      '<button class="dD-mini" data-act="task-prev"' + (queue.length ? '' : ' disabled') + '>‹</button>' +
+      '<div class="meta">' + escapeHtml(current) + ' · ' +
+        escapeHtml(TASK_KIND_FILTER_LABEL[state.taskFilterKind] || state.taskFilterKind) + ' · ' +
+        escapeHtml(TASK_STATUS_FILTER_LABEL[state.taskFilterStatus] || state.taskFilterStatus) + '</div>' +
+      '<button class="dD-mini" data-act="task-next"' + (queue.length ? '' : ' disabled') + '>›</button>' +
+      '</div></div>';
   }
 
   function byDate() {
@@ -568,8 +655,9 @@
       '<div class="dD-sumrow"><div class="n' + ((calendar.pending_count || 0) ? ' u' : '') + '">' + (calendar.pending_count || 0) + '</div><div><div class="lab">本地日历草稿</div><div class="sub">总计 ' + (calendar.total_drafts || 0) + ' · 待核对 ' + (calendar.uncertain_count || 0) + '</div></div></div>' +
       '<div class="dD-sumrow"><div class="n">' + (safety.external_writes_performed ? '!' : '0') + '</div><div><div class="lab">外部写入</div><div class="sub">' + escapeHtml(connectorText) + ' · Gmail 只读</div></div></div>' +
       '<div class="dD-taskline" id="taskReviewQueue">任务操作只写本地 review 状态和 audit，不会发送邮件或写外部日历。</div>' +
+      taskFilterControls() +
       '<div class="dD-btns"><button class="dD-cbtn sec" data-act="daily-run">刷新今日检查</button>' +
-      '<button class="dD-cbtn sec" data-act="show-task">查看下一条任务</button></div></div>';
+      '<button class="dD-cbtn sec" data-act="show-task">打开当前任务</button></div></div>';
   }
 
   function suggestionCard(item) {
@@ -584,7 +672,7 @@
       '<button class="dD-cbtn sec" data-act="ignore">忽略</button></div>';
   }
 
-  function taskReviewCard(task) {
+  function taskReviewCard(task, meta) {
     var kind = TASK_KIND_LABEL[task.kind] || task.kind || '任务';
     var status = REVIEW_STATUS_LABEL[task.status] || task.status || 'new';
     var values = Array.isArray(task.values) && task.values.length ? task.values : (task.value ? [task.value] : []);
@@ -594,7 +682,8 @@
     if (values.length > 4) valueHtml += '<span>+' + (values.length - 4) + '</span>';
     return '<div class="dD-body">这条邮件证据需要你处理。操作只更新本地任务状态。</div>' +
       '<div class="dD-embed task">' +
-      '<div class="dD-task-kind">' + escapeHtml(kind) + ' · ' + escapeHtml(status) + '</div>' +
+      '<div class="dD-task-kind">' + (meta ? escapeHtml(meta) + ' · ' : '') +
+      escapeHtml(kind) + ' · ' + escapeHtml(status) + '</div>' +
       '<div class="etitle">' + escapeHtml(task.title || 'Review task') + '</div>' +
       (valueHtml ? '<div class="dD-task-values">' + valueHtml + '</div>' : '') +
       '<div class="esrc">来源 · ' + escapeHtml(task.subject || task.primary_source || task.source_type || '本地证据') +
@@ -643,13 +732,34 @@
   }
 
   function offerNextTaskSuggestion() {
-    var next = state.taskQueue.find(function (task) { return !state.offeredTaskIds[task.task_id]; });
-    if (!next) {
-      botMessage('<div class="dD-body">当前没有新的金额/动作任务卡需要显示。</div>', { ghost: true });
+    var queue = filteredTaskQueue();
+    clampTaskCursor(queue);
+    if (!queue.length) {
+      botMessage('<div class="dD-body">当前筛选下没有任务卡。</div>', { ghost: true });
       return;
     }
-    state.offeredTaskIds[next.task_id] = true;
-    botMessage(taskReviewCard(next), { ghost: true });
+    var task = queue[state.taskCursor];
+    botMessage(taskReviewCard(task, (state.taskCursor + 1) + '/' + queue.length), { ghost: true });
+  }
+
+  function moveTaskCursor(offset) {
+    var queue = filteredTaskQueue();
+    if (!queue.length) {
+      state.taskCursor = 0;
+      updateSummary();
+      botMessage('<div class="dD-body">当前筛选下没有任务卡。</div>', { ghost: true });
+      return;
+    }
+    state.taskCursor = (state.taskCursor + offset + queue.length) % queue.length;
+    updateSummary();
+    offerNextTaskSuggestion();
+  }
+
+  function handleTaskFilter(kind, status) {
+    if (kind) state.taskFilterKind = kind;
+    if (status) state.taskFilterStatus = status;
+    state.taskCursor = 0;
+    updateSummary();
   }
 
   function updateSummary() {
@@ -815,6 +925,22 @@
     if (!btn) return;
     if (btn.dataset.act === 'daily-run') {
       handleDailyRun(btn);
+      return;
+    }
+    if (btn.dataset.act === 'task-filter-kind') {
+      handleTaskFilter(btn.dataset.kind || 'all', null);
+      return;
+    }
+    if (btn.dataset.act === 'task-filter-status') {
+      handleTaskFilter(null, btn.dataset.status || 'active');
+      return;
+    }
+    if (btn.dataset.act === 'task-prev') {
+      moveTaskCursor(-1);
+      return;
+    }
+    if (btn.dataset.act === 'task-next') {
+      moveTaskCursor(1);
       return;
     }
     if (btn.dataset.act === 'show-task') {

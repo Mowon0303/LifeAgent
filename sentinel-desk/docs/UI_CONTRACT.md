@@ -37,9 +37,11 @@ Source of truth for every calendar surface (month/week/day/agenda). One item per
 | `evidence_uri` | string | primary evidence reference |
 | `reminders` | array | reminder policy entries (opaque to the UI) |
 
-### GET `/api/tasks?status=<optional>` → `Task[]`
+### GET `/api/tasks?status=<optional>&kind=<optional>&limit=<optional>` → `Task[]`
 
 Reviewable work items aggregated from calendar drafts and email facts (deadline facts already represented by a draft are deduplicated into the `calendar:` task). Email facts are grouped by message and kind, so a single bill with multiple amounts produces one review card with all values instead of several near-duplicate cards.
+
+Optional filters are applied server-side before the list is returned: `status` must be one of `new`, `reviewed`, `ignored`, `needs_verification`, or `done`; `kind` must be one of `deadline`, `amount`, or `action`; `limit` defaults to 100. Invalid filters return HTTP 400 `{error}`. The CLI mirrors this shape with `sentineldesk tasks list --status ... --kind ... --limit ...`.
 
 Common fields present on every task (calendar-derived tasks additionally carry `created_at`; email-derived tasks additionally carry `subject`, `sender`, `received_at`):
 
@@ -137,6 +139,7 @@ How backend fields drive the B′ visual spec:
 | **忽略** button | `POST /api/tasks/review?task_id=calendar:<event_id>&status=ignored`; UI hides the pending suggestion; the draft itself stays in local storage (retention controls own deletion) |
 | Assistant daily embed | computed from `/api/daily/summary`: stored mail, grouped review queue, local calendar drafts, connector readiness, and external-write boundary |
 | Assistant task review card | computed from `/api/tasks`: non-calendar amount/action tasks render with value chips, evidence snippet, confidence, a local-only `查看证据` drill-down from `/api/tasks/evidence`, and local-only `done`, `needs_verification`, `reviewed`, `ignored` controls |
+| Assistant task queue controls | client-side filters over the loaded `/api/tasks` rows: kind (`all/deadline/amount/action`), status (`active/new/needs_verification/reviewed/done/ignored/all`), plus cursor navigation (`task-prev`, `task-next`, `show-task`) so large queues can be reviewed without cycling one unfiltered card at a time |
 | Assistant calendar embed | computed client-side from `/api/calendar/events` + `/api/tasks`: counts of pending/confirmed/uncertain in the visible range |
 | Composer | sends to `/api/ask`; render `citations` as evidence chips and `uncertain` answers with the uncertainty style |
 | Now line | client clock; render only in today's column within 07:00–21:00 |

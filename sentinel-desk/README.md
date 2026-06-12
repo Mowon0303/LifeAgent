@@ -49,7 +49,7 @@ python3 -B -m sentineldesk --home .demo daily run --email-json fixtures/ui/sampl
 
 Expected result: JSON with `mode: "daily_landing"`, a task review queue, local calendar drafts, safe next actions, and `external_writes_performed: false`.
 
-The calendar assistant uses the same local queue: it reads `/api/tasks`, shows amount/action review cards, expands local source evidence through `/api/tasks/evidence`, and writes only local `task.review` audit records for `done`, `needs_verification`, `reviewed`, and `ignored`.
+The calendar assistant uses the same local queue: it reads `/api/tasks`, shows filtered amount/action/deadline review cards, expands local source evidence through `/api/tasks/evidence`, and writes only local `task.review` audit records for `done`, `needs_verification`, `reviewed`, and `ignored`.
 
 For a real inbox, first configure Google OAuth token env vars, then explicitly opt into readonly Gmail refresh:
 
@@ -151,7 +151,7 @@ The `daily run` command is the repeatable landing workflow for real use. It opti
 
 The calendar assistant uses the same landing shape through `/api/daily/summary` and `/api/daily/run`. The summary endpoint is read-only for page load; the run endpoint writes a local `daily.run` audit event and still performs no Gmail refresh or external calendar write from the browser.
 
-The `tasks` commands expose the review layer for extracted LifeAgent work items. `tasks list` merges email facts and local calendar drafts into stable task IDs, groups same-message same-kind email facts into one review card with `values` and `fact_count`, and `tasks review` records `new`, `reviewed`, `ignored`, `needs_verification`, or `done` status with an audit event. The same backend is available through `/api/tasks` and `/api/tasks/review`.
+The `tasks` commands expose the review layer for extracted LifeAgent work items. `tasks list` merges email facts and local calendar drafts into stable task IDs, groups same-message same-kind email facts into one review card with `values` and `fact_count`, and supports `--status`, `--kind`, and `--limit` filters. `tasks review` records `new`, `reviewed`, `ignored`, `needs_verification`, or `done` status with an audit event. The same backend is available through `/api/tasks`, `/api/tasks/evidence`, and `/api/tasks/review`.
 
 `chrome launch` starts a detached dedicated Chrome profile under `~/.sentineldesk/chrome-profile` and opens a blank page for the DevTools endpoint. SentinelDesk refuses default Chrome profile paths for remote debugging.
 

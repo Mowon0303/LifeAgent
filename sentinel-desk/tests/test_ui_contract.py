@@ -212,6 +212,18 @@ class TaskContractTests(UiContractBase):
         for task in calendar_tasks:
             self.assertIn(str(task["task_id"]).split(":", 1)[1], event_ids)
 
+    def test_tasks_filter_by_kind_status_and_limit(self) -> None:
+        status, amount_tasks = self.json_request("GET", "/api/tasks?kind=amount&status=new&limit=1")
+        self.assertEqual(status, 200)
+        self.assertEqual(len(amount_tasks), 1)
+        self.assertEqual(amount_tasks[0]["kind"], "amount")
+        self.assertEqual(amount_tasks[0]["status"], "new")
+
+    def test_invalid_task_kind_filter_is_rejected(self) -> None:
+        status, payload = self.json_request("GET", "/api/tasks?kind=bogus")
+        self.assertEqual(status, 400)
+        self.assertIn("error", payload)
+
     def test_ignore_review_flow(self) -> None:
         _, tasks = self.json_request("GET", "/api/tasks")
         calendar_task = next(task for task in tasks if str(task["task_id"]).startswith("calendar:"))
@@ -451,8 +463,14 @@ class CalendarPageTests(UiContractBase):
             "/api/ask",
             'id="dailySummary"',
             'id="taskReviewQueue"',
+            'id="taskQueueFilters"',
+            'id="taskNavState"',
             'data-act="daily-run"',
             'data-act="show-task"',
+            'data-act="task-filter-kind"',
+            'data-act="task-filter-status"',
+            'data-act="task-prev"',
+            'data-act="task-next"',
             'data-act="task-evidence"',
             'data-act="task-done"',
             'data-act="task-needs-verification"',
@@ -472,6 +490,10 @@ class CalendarPageTests(UiContractBase):
         self.assertIn("function dailyEmbed()", html)
         self.assertIn("function handleDailyRun", html)
         self.assertIn("function taskReviewCard", html)
+        self.assertIn("function filteredTaskQueue", html)
+        self.assertIn("function taskFilterControls", html)
+        self.assertIn("function handleTaskFilter", html)
+        self.assertIn("function moveTaskCursor", html)
         self.assertIn("function taskEvidenceEmbed", html)
         self.assertIn("function offerNextTaskSuggestion", html)
         self.assertIn("function handleTaskReview", html)

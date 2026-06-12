@@ -10,6 +10,7 @@ from .extract import utc_now
 
 
 TASK_STATUSES = {"new", "reviewed", "ignored", "needs_verification", "done"}
+TASK_KINDS = {"deadline", "amount", "action"}
 
 
 @dataclass(frozen=True)
@@ -39,7 +40,13 @@ def task_evidence(paths: Paths, *, task_id: str) -> dict[str, Any]:
     }
 
 
-def list_tasks(paths: Paths, *, status: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
+def list_tasks(
+    paths: Paths,
+    *,
+    status: str | None = None,
+    kind: str | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
     db.init_db(paths)
     reviews = {item["task_id"]: item for item in db.list_task_reviews(paths, limit=1000)}
     tasks = _calendar_tasks(paths, reviews)
@@ -54,6 +61,9 @@ def list_tasks(paths: Paths, *, status: str | None = None, limit: int = 100) -> 
     if status:
         _validate_status(status)
         tasks = [task for task in tasks if task.get("status") == status]
+    if kind:
+        _validate_kind(kind)
+        tasks = [task for task in tasks if task.get("kind") == kind]
     return tasks[:limit]
 
 
@@ -360,3 +370,9 @@ def _validate_status(status: str) -> None:
     if status not in TASK_STATUSES:
         allowed = ", ".join(sorted(TASK_STATUSES))
         raise ValueError(f"Unsupported task status: {status}. Expected one of: {allowed}")
+
+
+def _validate_kind(kind: str) -> None:
+    if kind not in TASK_KINDS:
+        allowed = ", ".join(sorted(TASK_KINDS))
+        raise ValueError(f"Unsupported task kind: {kind}. Expected one of: {allowed}")
