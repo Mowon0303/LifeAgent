@@ -120,8 +120,8 @@ def _landing_task_sort_key(task: dict[str, Any]) -> tuple[int, str, str, str]:
     status = str(task.get("status") or "new")
     status_rank = {"needs_verification": 0, "new": 1, "reviewed": 2}.get(status, 3)
     due_date = str(task.get("due_date") or "9999-99-99")
-    severity_rank = {"critical": "0", "medium": "1", "low": "2"}.get(str(task.get("severity") or ""), "3")
-    return (status_rank, due_date, severity_rank, str(task.get("task_id") or ""))
+    priority = int(task.get("priority_score") or 0)
+    return (-priority, status_rank, due_date, str(task.get("task_id") or ""))
 
 
 def _safe_connector_state(state: dict[str, Any]) -> dict[str, Any]:

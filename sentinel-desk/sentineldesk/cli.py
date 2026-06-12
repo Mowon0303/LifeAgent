@@ -534,7 +534,7 @@ def cmd_connectors_state(args: argparse.Namespace) -> int:
 
 def cmd_tasks_list(args: argparse.Namespace) -> int:
     paths = paths_from_args(args)
-    print_json(list_tasks(paths, status=args.status, kind=args.kind, limit=args.limit))
+    print_json(list_tasks(paths, status=args.status, kind=args.kind, sort=args.sort, limit=args.limit))
     return 0
 
 
@@ -1079,6 +1079,7 @@ def build_parser() -> argparse.ArgumentParser:
     tasks_list = tasks_sub.add_parser("list", help="List task-review items derived from email facts and local drafts")
     tasks_list.add_argument("--status", choices=["new", "reviewed", "ignored", "needs_verification", "done"])
     tasks_list.add_argument("--kind", choices=["deadline", "amount", "action"])
+    tasks_list.add_argument("--sort", default="priority", choices=["priority", "due_date", "recent"])
     tasks_list.add_argument("--limit", type=int, default=100)
     tasks_list.set_defaults(func=cmd_tasks_list)
     tasks_review = tasks_sub.add_parser("review", help="Set review status for one task")

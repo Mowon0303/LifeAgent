@@ -56,6 +56,9 @@ TASK_FIELDS = {
     "review_note",
     "review_actor",
     "reviewed_at",
+    "priority_score",
+    "priority_band",
+    "priority_reasons",
 }
 ASK_FIELDS = {
     "intent",
@@ -246,9 +249,29 @@ class TaskContractTests(UiContractBase):
         self.assertEqual(len(amount_tasks), 1)
         self.assertEqual(amount_tasks[0]["kind"], "amount")
         self.assertEqual(amount_tasks[0]["status"], "new")
+        self.assertIsInstance(amount_tasks[0]["priority_score"], int)
+        self.assertIn(amount_tasks[0]["priority_band"], {"high", "medium", "low", "closed"})
+        self.assertIsInstance(amount_tasks[0]["priority_reasons"], list)
+
+    def test_tasks_sort_modes_are_stable(self) -> None:
+        status, priority_tasks = self.json_request("GET", "/api/tasks?sort=priority")
+        self.assertEqual(status, 200)
+        self.assertGreaterEqual(len(priority_tasks), 2)
+        scores = [task["priority_score"] for task in priority_tasks]
+        self.assertEqual(scores, sorted(scores, reverse=True))
+
+        status, due_tasks = self.json_request("GET", "/api/tasks?sort=due_date&kind=deadline")
+        self.assertEqual(status, 200)
+        due_dates = [task["due_date"] for task in due_tasks if task["due_date"]]
+        self.assertEqual(due_dates, sorted(due_dates))
 
     def test_invalid_task_kind_filter_is_rejected(self) -> None:
         status, payload = self.json_request("GET", "/api/tasks?kind=bogus")
+        self.assertEqual(status, 400)
+        self.assertIn("error", payload)
+
+    def test_invalid_task_sort_is_rejected(self) -> None:
+        status, payload = self.json_request("GET", "/api/tasks?sort=bogus")
         self.assertEqual(status, 400)
         self.assertIn("error", payload)
 
@@ -582,6 +605,7 @@ class CalendarPageTests(UiContractBase):
             'data-view="agenda"',
             "/api/calendar/events",
             "/api/tasks",
+            "/api/tasks?sort=",
             "/api/daily/summary",
             "/api/daily/run",
             "/api/tasks/evidence?task_id=",
@@ -596,6 +620,8 @@ class CalendarPageTests(UiContractBase):
             'id="taskQueueFilters"',
             'id="taskNavState"',
             'id="taskBulkActions"',
+            'data-act="task-sort"',
+            "var sorts = ['priority', 'due_date', 'recent'];",
             'data-act="task-history"',
             'data-act="task-undo"',
             'data-act="daily-run"',
@@ -630,6 +656,8 @@ class CalendarPageTests(UiContractBase):
         self.assertIn("function filteredTaskQueue", html)
         self.assertIn("function taskFilterControls", html)
         self.assertIn("function handleTaskFilter", html)
+        self.assertIn("function handleTaskSort", html)
+        self.assertIn("function taskApiUrl", html)
         self.assertIn("function moveTaskCursor", html)
         self.assertIn("function handleTaskBulkReview", html)
         self.assertIn("function taskEvidenceEmbed", html)

@@ -278,6 +278,11 @@
     ignored: '忽略',
     all: '全部'
   };
+  var TASK_SORT_LABEL = {
+    priority: '优先级',
+    due_date: '日期',
+    recent: '最近'
+  };
   var TASK_ACTION_STATUS = {
     'task-done': 'done',
     'task-ignored': 'ignored',
@@ -307,6 +312,7 @@
     reviewHistory: [],   // recent local task review audit rows
     taskFilterKind: 'all',
     taskFilterStatus: 'active',
+    taskSort: 'priority',
     taskCursor: 0,
     busy: false
   };
@@ -337,6 +343,10 @@
   }
 
   // ---------- data ----------
+  function taskApiUrl() {
+    return '/api/tasks?sort=' + encodeURIComponent(state.taskSort || 'priority');
+  }
+
   function mapItem(raw) {
     var pending = raw.approval_state === 'draft';
     return {
@@ -356,7 +366,7 @@
   function loadData() {
     return Promise.all([
       fetch('/api/calendar/events').then(function (r) { return r.json(); }),
-      fetch('/api/tasks').then(function (r) { return r.json(); }),
+      fetch(taskApiUrl()).then(function (r) { return r.json(); }),
       fetch('/api/daily/summary').then(function (r) { return r.json(); })
     ]).then(function (results) {
       var events = results[0], tasks = results[1] || [];
@@ -419,6 +429,7 @@
   function taskFilterControls() {
     var kinds = ['all', 'amount', 'action', 'deadline'];
     var statuses = ['active', 'new', 'needs_verification', 'reviewed', 'done', 'ignored', 'all'];
+    var sorts = ['priority', 'due_date', 'recent'];
     var queue = filteredTaskQueue();
     clampTaskCursor(queue);
     var current = queue.length ? (state.taskCursor + 1) + '/' + queue.length : '0/0';
@@ -434,14 +445,21 @@
         escapeHtml(status) + '">' + escapeHtml(TASK_STATUS_FILTER_LABEL[status]) + ' ' +
         taskFilterCount(state.taskFilterKind, status) + '</button>';
     }).join('');
+    var sortButtons = sorts.map(function (sort) {
+      var selected = state.taskSort === sort ? ' on' : '';
+      return '<button class="' + selected.trim() + '" data-act="task-sort" data-sort="' +
+        escapeHtml(sort) + '">' + escapeHtml(TASK_SORT_LABEL[sort]) + '</button>';
+    }).join('');
     return '<div id="taskQueueFilters">' +
       '<div class="dD-filterbar" data-task-filter="kind">' + kindButtons + '</div>' +
       '<div class="dD-filterbar" data-task-filter="status">' + statusButtons + '</div>' +
+      '<div class="dD-filterbar" data-task-filter="sort">' + sortButtons + '</div>' +
       '<div class="dD-tasknav" id="taskNavState">' +
       '<button class="dD-mini" data-act="task-prev"' + (queue.length ? '' : ' disabled') + '>‹</button>' +
       '<div class="meta">' + escapeHtml(current) + ' · ' +
         escapeHtml(TASK_KIND_FILTER_LABEL[state.taskFilterKind] || state.taskFilterKind) + ' · ' +
-        escapeHtml(TASK_STATUS_FILTER_LABEL[state.taskFilterStatus] || state.taskFilterStatus) + '</div>' +
+        escapeHtml(TASK_STATUS_FILTER_LABEL[state.taskFilterStatus] || state.taskFilterStatus) + ' · ' +
+        escapeHtml(TASK_SORT_LABEL[state.taskSort] || state.taskSort) + '</div>' +
       '<button class="dD-mini" data-act="task-next"' + (queue.length ? '' : ' disabled') + '>›</button>' +
       '</div></div>';
   }
@@ -691,6 +709,8 @@
   function taskReviewCard(task, meta) {
     var kind = TASK_KIND_LABEL[task.kind] || task.kind || '任务';
     var status = REVIEW_STATUS_LABEL[task.status] || task.status || 'new';
+    var priority = task.priority_band ? (task.priority_band + ' · ' + (task.priority_score || 0)) : '';
+    var reasons = Array.isArray(task.priority_reasons) ? task.priority_reasons.slice(0, 3).join(', ') : '';
     var values = Array.isArray(task.values) && task.values.length ? task.values : (task.value ? [task.value] : []);
     var valueHtml = values.slice(0, 4).map(function (value) {
       return '<span title="' + escapeHtml(value) + '">' + escapeHtml(value) + '</span>';
@@ -699,11 +719,13 @@
     return '<div class="dD-body">这条邮件证据需要你处理。操作只更新本地任务状态。</div>' +
       '<div class="dD-embed task">' +
       '<div class="dD-task-kind">' + (meta ? escapeHtml(meta) + ' · ' : '') +
-      escapeHtml(kind) + ' · ' + escapeHtml(status) + '</div>' +
+      escapeHtml(kind) + ' · ' + escapeHtml(status) +
+      (priority ? ' · 优先 ' + escapeHtml(priority) : '') + '</div>' +
       '<div class="etitle">' + escapeHtml(task.title || 'Review task') + '</div>' +
       (valueHtml ? '<div class="dD-task-values">' + valueHtml + '</div>' : '') +
       '<div class="esrc">来源 · ' + escapeHtml(task.subject || task.primary_source || task.source_type || '本地证据') +
       ' · 置信 ' + Number(task.confidence || 0).toFixed(2) + '</div>' +
+      (reasons ? '<div class="enote">排序原因：' + escapeHtml(reasons) + '</div>' : '') +
       (task.needs_verification ? '<div class="enote">这条证据置信度较低，建议先核对原始邮件或门户。</div>' : '') +
       (task.evidence ? '<div class="enote">' + escapeHtml(clip(task.evidence, 160)) + '</div>' : '') +
       '</div>' +
@@ -801,6 +823,17 @@
     if (status) state.taskFilterStatus = status;
     state.taskCursor = 0;
     updateSummary();
+  }
+
+  function handleTaskSort(sort) {
+    if (!TASK_SORT_LABEL[sort] || state.busy) return;
+    state.taskSort = sort;
+    state.taskCursor = 0;
+    state.busy = true;
+    refresh()
+      .then(offerNextTaskSuggestion)
+      .catch(function (err) { botMessage('<div class="dD-body uncertain">排序刷新失败：' + escapeHtml(err) + '</div>'); })
+      .finally(function () { state.busy = false; });
   }
 
   function updateSummary() {
@@ -1080,6 +1113,10 @@
     }
     if (btn.dataset.act === 'task-filter-status') {
       handleTaskFilter(null, btn.dataset.status || 'active');
+      return;
+    }
+    if (btn.dataset.act === 'task-sort') {
+      handleTaskSort(btn.dataset.sort || 'priority');
       return;
     }
     if (btn.dataset.act === 'task-prev') {

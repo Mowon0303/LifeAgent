@@ -25,7 +25,96 @@
     "status": "new",
     "review_note": "",
     "review_actor": "",
-    "reviewed_at": ""
+    "reviewed_at": "",
+    "priority_score": 165,
+    "priority_band": "high",
+    "priority_reasons": [
+      "new_item",
+      "critical_severity",
+      "deadline",
+      "dated_deadline",
+      "payment_context"
+    ]
+  },
+  {
+    "task_id": "email:9db795229ff5cd5a",
+    "kind": "action",
+    "title": "Review action: Rent payment reminder for July",
+    "value": "pay online through the resident portal. Parkview Residences",
+    "values": [
+      "pay online through the resident portal. Parkview Residences"
+    ],
+    "fact_count": 1,
+    "due_date": "",
+    "severity": "medium",
+    "confidence": 0.68,
+    "source_type": "email",
+    "source_refs": [
+      "email:ui-sample-rent-001"
+    ],
+    "primary_source": "email:ui-sample-rent-001",
+    "evidence": "reminder for July Hello, Your July rent payment of $1,850.00 is due by 07/01/2026. Please pay online through the resident portal. Parkview Residences",
+    "calendar_event_id": "",
+    "sync_state": "",
+    "subject": "Rent payment reminder for July",
+    "sender": "billing@parkview-residences.example",
+    "received_at": "2026-06-25T09:00:00+00:00",
+    "updated_at": "2026-06-25T09:00:00+00:00",
+    "needs_verification": true,
+    "status": "new",
+    "review_note": "",
+    "review_actor": "",
+    "reviewed_at": "",
+    "priority_score": 160,
+    "priority_band": "high",
+    "priority_reasons": [
+      "new_item",
+      "medium_severity",
+      "action",
+      "low_trust_or_missing_source",
+      "low_confidence",
+      "payment_context"
+    ]
+  },
+  {
+    "task_id": "email:fcd1d57aedd7b64e",
+    "kind": "action",
+    "title": "Review action: Request for Evidence issued",
+    "value": "respond by September 3, 2026. Review the RFE notice and submit the requested documents.",
+    "values": [
+      "respond by September 3, 2026. Review the RFE notice and submit the requested documents."
+    ],
+    "fact_count": 1,
+    "due_date": "",
+    "severity": "medium",
+    "confidence": 0.68,
+    "source_type": "email",
+    "source_refs": [
+      "email:ui-sample-opt-001"
+    ],
+    "primary_source": "email:ui-sample-opt-001",
+    "evidence": "for Evidence issued USCIS has issued a Request for Evidence for your Form I-765. You must respond by September 3, 2026. Review the RFE notice and submit the requested documents.",
+    "calendar_event_id": "",
+    "sync_state": "",
+    "subject": "Request for Evidence issued",
+    "sender": "case-updates@uscis-notices.example",
+    "received_at": "2026-06-12T15:00:00+00:00",
+    "updated_at": "2026-06-12T15:00:00+00:00",
+    "needs_verification": true,
+    "status": "new",
+    "review_note": "",
+    "review_actor": "",
+    "reviewed_at": "",
+    "priority_score": 155,
+    "priority_band": "high",
+    "priority_reasons": [
+      "new_item",
+      "medium_severity",
+      "action",
+      "low_trust_or_missing_source",
+      "low_confidence",
+      "action_context"
+    ]
   },
   {
     "task_id": "calendar:f87f8e455e3b564e",
@@ -53,7 +142,91 @@
     "status": "new",
     "review_note": "",
     "review_actor": "",
-    "reviewed_at": ""
+    "reviewed_at": "",
+    "priority_score": 150,
+    "priority_band": "high",
+    "priority_reasons": [
+      "new_item",
+      "critical_severity",
+      "deadline",
+      "dated_deadline"
+    ]
+  },
+  {
+    "task_id": "calendar:c2eaaa22af3f4fdb",
+    "kind": "deadline",
+    "title": "Deadline: Request for Evidence issued",
+    "value": "September 3, 2026",
+    "values": [
+      "September 3, 2026"
+    ],
+    "fact_count": 1,
+    "due_date": "September 3, 2026",
+    "severity": "critical",
+    "confidence": 0.82,
+    "source_type": "calendar_draft",
+    "source_refs": [
+      "email:ui-sample-opt-001"
+    ],
+    "primary_source": "email:ui-sample-opt-001",
+    "evidence": "email:ui-sample-opt-001",
+    "calendar_event_id": "c2eaaa22af3f4fdb",
+    "sync_state": "local_draft",
+    "created_at": "2026-06-25T10:00:00+00:00",
+    "updated_at": "2026-06-25T10:00:00+00:00",
+    "needs_verification": false,
+    "status": "new",
+    "review_note": "",
+    "review_actor": "",
+    "reviewed_at": "",
+    "priority_score": 150,
+    "priority_band": "high",
+    "priority_reasons": [
+      "new_item",
+      "critical_severity",
+      "deadline",
+      "dated_deadline"
+    ]
+  },
+  {
+    "task_id": "email:4950200c2b74bb2e",
+    "kind": "amount",
+    "title": "Review amount: Rent payment reminder for July",
+    "value": "$1,850.00",
+    "values": [
+      "$1,850.00"
+    ],
+    "fact_count": 1,
+    "due_date": "",
+    "severity": "medium",
+    "confidence": 0.78,
+    "source_type": "email",
+    "source_refs": [
+      "email:ui-sample-rent-001"
+    ],
+    "primary_source": "email:ui-sample-rent-001",
+    "evidence": "rkview-residences.example Rent payment reminder for July Hello, Your July rent payment of $1,850.00 is due by 07/01/2026. Please pay online through the resident portal. Parkview Residences",
+    "calendar_event_id": "",
+    "sync_state": "",
+    "subject": "Rent payment reminder for July",
+    "sender": "billing@parkview-residences.example",
+    "received_at": "2026-06-25T09:00:00+00:00",
+    "updated_at": "2026-06-25T09:00:00+00:00",
+    "needs_verification": false,
+    "status": "new",
+    "review_note": "",
+    "review_actor": "",
+    "reviewed_at": "",
+    "priority_score": 130,
+    "priority_band": "high",
+    "priority_reasons": [
+      "new_item",
+      "medium_severity",
+      "amount",
+      "medium_confidence",
+      "large_amount",
+      "payment_context"
+    ]
   },
   {
     "task_id": "email:02a3d0e5955acb41",
@@ -84,124 +257,16 @@
     "status": "new",
     "review_note": "",
     "review_actor": "",
-    "reviewed_at": ""
-  },
-  {
-    "task_id": "email:fcd1d57aedd7b64e",
-    "kind": "action",
-    "title": "Review action: Request for Evidence issued",
-    "value": "respond by September 3, 2026. Review the RFE notice and submit the requested documents.",
-    "values": [
-      "respond by September 3, 2026. Review the RFE notice and submit the requested documents."
-    ],
-    "fact_count": 1,
-    "due_date": "",
-    "severity": "medium",
-    "confidence": 0.68,
-    "source_type": "email",
-    "source_refs": [
-      "email:ui-sample-opt-001"
-    ],
-    "primary_source": "email:ui-sample-opt-001",
-    "evidence": "for Evidence issued USCIS has issued a Request for Evidence for your Form I-765. You must respond by September 3, 2026. Review the RFE notice and submit the requested documents.",
-    "calendar_event_id": "",
-    "sync_state": "",
-    "subject": "Request for Evidence issued",
-    "sender": "case-updates@uscis-notices.example",
-    "received_at": "2026-06-12T15:00:00+00:00",
-    "updated_at": "2026-06-12T15:00:00+00:00",
-    "needs_verification": true,
-    "status": "new",
-    "review_note": "",
-    "review_actor": "",
-    "reviewed_at": ""
-  },
-  {
-    "task_id": "email:4950200c2b74bb2e",
-    "kind": "amount",
-    "title": "Review amount: Rent payment reminder for July",
-    "value": "$1,850.00",
-    "values": [
-      "$1,850.00"
-    ],
-    "fact_count": 1,
-    "due_date": "",
-    "severity": "medium",
-    "confidence": 0.78,
-    "source_type": "email",
-    "source_refs": [
-      "email:ui-sample-rent-001"
-    ],
-    "primary_source": "email:ui-sample-rent-001",
-    "evidence": "rkview-residences.example Rent payment reminder for July Hello, Your July rent payment of $1,850.00 is due by 07/01/2026. Please pay online through the resident portal. Parkview Residences",
-    "calendar_event_id": "",
-    "sync_state": "",
-    "subject": "Rent payment reminder for July",
-    "sender": "billing@parkview-residences.example",
-    "received_at": "2026-06-25T09:00:00+00:00",
-    "updated_at": "2026-06-25T09:00:00+00:00",
-    "needs_verification": false,
-    "status": "new",
-    "review_note": "",
-    "review_actor": "",
-    "reviewed_at": ""
-  },
-  {
-    "task_id": "email:9db795229ff5cd5a",
-    "kind": "action",
-    "title": "Review action: Rent payment reminder for July",
-    "value": "pay online through the resident portal. Parkview Residences",
-    "values": [
-      "pay online through the resident portal. Parkview Residences"
-    ],
-    "fact_count": 1,
-    "due_date": "",
-    "severity": "medium",
-    "confidence": 0.68,
-    "source_type": "email",
-    "source_refs": [
-      "email:ui-sample-rent-001"
-    ],
-    "primary_source": "email:ui-sample-rent-001",
-    "evidence": "reminder for July Hello, Your July rent payment of $1,850.00 is due by 07/01/2026. Please pay online through the resident portal. Parkview Residences",
-    "calendar_event_id": "",
-    "sync_state": "",
-    "subject": "Rent payment reminder for July",
-    "sender": "billing@parkview-residences.example",
-    "received_at": "2026-06-25T09:00:00+00:00",
-    "updated_at": "2026-06-25T09:00:00+00:00",
-    "needs_verification": true,
-    "status": "new",
-    "review_note": "",
-    "review_actor": "",
-    "reviewed_at": ""
-  },
-  {
-    "task_id": "calendar:c2eaaa22af3f4fdb",
-    "kind": "deadline",
-    "title": "Deadline: Request for Evidence issued",
-    "value": "September 3, 2026",
-    "values": [
-      "September 3, 2026"
-    ],
-    "fact_count": 1,
-    "due_date": "September 3, 2026",
-    "severity": "critical",
-    "confidence": 0.82,
-    "source_type": "calendar_draft",
-    "source_refs": [
-      "email:ui-sample-opt-001"
-    ],
-    "primary_source": "email:ui-sample-opt-001",
-    "evidence": "email:ui-sample-opt-001",
-    "calendar_event_id": "c2eaaa22af3f4fdb",
-    "sync_state": "local_draft",
-    "created_at": "2026-06-25T10:00:00+00:00",
-    "updated_at": "2026-06-25T10:00:00+00:00",
-    "needs_verification": false,
-    "status": "new",
-    "review_note": "",
-    "review_actor": "",
-    "reviewed_at": ""
+    "reviewed_at": "",
+    "priority_score": 130,
+    "priority_band": "high",
+    "priority_reasons": [
+      "new_item",
+      "medium_severity",
+      "amount",
+      "medium_confidence",
+      "large_amount",
+      "payment_context"
+    ]
   }
 ]

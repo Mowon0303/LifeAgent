@@ -1,16 +1,21 @@
 from __future__ import annotations
 
 import hashlib
+import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 from . import db
+from .calendar.view import parse_deadline_date
 from .config import Paths
 from .extract import utc_now
 
 
 TASK_STATUSES = {"new", "reviewed", "ignored", "needs_verification", "done"}
 TASK_KINDS = {"deadline", "amount", "action"}
+TASK_SORTS = {"priority", "due_date", "recent"}
+AMOUNT_RE = re.compile(r"[$\u20ac\u00a3\u00a5\uffe5]?\s*(\d[\d,]*(?:\.\d{1,2})?)")
 
 
 @dataclass(frozen=True)
@@ -77,9 +82,11 @@ def list_tasks(
     *,
     status: str | None = None,
     kind: str | None = None,
+    sort: str = "priority",
     limit: int = 100,
 ) -> list[dict[str, Any]]:
     db.init_db(paths)
+    _validate_sort(sort)
     reviews = {item["task_id"]: item for item in db.list_task_reviews(paths, limit=1000)}
     tasks = _calendar_tasks(paths, reviews)
     covered_source_ids = {
@@ -89,7 +96,9 @@ def list_tasks(
         if source_id
     }
     tasks.extend(_email_fact_tasks(paths, reviews, covered_source_ids=covered_source_ids))
-    tasks.sort(key=_task_sort_key)
+    for task in tasks:
+        _apply_priority(task)
+    tasks.sort(key=lambda task: _task_sort_key(task, sort=sort))
     if status:
         _validate_status(status)
         tasks = [task for task in tasks if task.get("status") == status]
@@ -648,6 +657,101 @@ def _apply_review(task: dict[str, Any], review: dict[str, Any]) -> dict[str, Any
     return task
 
 
+def _apply_priority(task: dict[str, Any]) -> None:
+    score = 0
+    reasons: list[str] = []
+    status = str(task.get("status") or "new")
+    kind = str(task.get("kind") or "")
+    severity = str(task.get("severity") or "medium")
+    confidence = float(task.get("confidence") or 0.0)
+
+    if status == "needs_verification":
+        score += 100
+        reasons.append("needs_verification_status")
+    elif status == "new":
+        score += 25
+        reasons.append("new_item")
+    elif status == "reviewed":
+        score += 5
+        reasons.append("already_reviewed")
+    elif status in {"done", "ignored"}:
+        reasons.append("closed")
+
+    severity_score = {"critical": 75, "high": 60, "medium": 30, "low": 10}.get(severity, 20)
+    score += severity_score
+    reasons.append(f"{severity if severity in {'critical', 'high', 'medium', 'low'} else 'unknown'}_severity")
+
+    if kind == "deadline":
+        score += 35
+        reasons.append("deadline")
+    elif kind == "amount":
+        score += 25
+        reasons.append("amount")
+    elif kind == "action":
+        score += 20
+        reasons.append("action")
+
+    if bool(task.get("needs_verification")):
+        score += 35
+        reasons.append("low_trust_or_missing_source")
+    if confidence < 0.7:
+        score += 35
+        reasons.append("low_confidence")
+    elif confidence < 0.8:
+        score += 15
+        reasons.append("medium_confidence")
+
+    due_key = _task_due_key(task)
+    if kind == "deadline" and due_key:
+        score += 15
+        reasons.append("dated_deadline")
+    elif kind == "deadline" and task.get("due_date"):
+        score += 10
+        reasons.append("relative_or_unparsed_deadline")
+
+    if kind == "amount":
+        amount = _max_amount(task)
+        if amount >= 1000:
+            score += 20
+            reasons.append("large_amount")
+        elif amount >= 100:
+            score += 10
+            reasons.append("meaningful_amount")
+    if _has_payment_context(task):
+        score += 15
+        reasons.append("payment_context")
+    if _has_action_context(task):
+        score += 10
+        reasons.append("action_context")
+
+    if status in {"done", "ignored"}:
+        score = min(score, 20)
+    task["priority_score"] = max(0, int(score))
+    task["priority_band"] = _priority_band(task["priority_score"], status=status)
+    task["priority_reasons"] = _unique_reasons(reasons)
+
+
+def _priority_band(score: int, *, status: str) -> str:
+    if status in {"done", "ignored"}:
+        return "closed"
+    if score >= 120:
+        return "high"
+    if score >= 80:
+        return "medium"
+    return "low"
+
+
+def _unique_reasons(reasons: list[str]) -> list[str]:
+    unique: list[str] = []
+    seen: set[str] = set()
+    for reason in reasons:
+        if not reason or reason in seen:
+            continue
+        seen.add(reason)
+        unique.append(reason)
+    return unique
+
+
 def _primary_fact(facts: list[dict[str, Any]]) -> dict[str, Any]:
     return max(
         enumerate(facts),
@@ -719,10 +823,87 @@ def _needs_verification(source_refs: list[str], confidence: str) -> bool:
         return False
 
 
-def _task_sort_key(task: dict[str, Any]) -> tuple[str, str, str]:
-    due_date = str(task.get("due_date") or "9999-99-99")
-    updated_at = str(task.get("updated_at") or task.get("received_at") or "")
-    return (due_date, str(task.get("status") or ""), updated_at)
+def _task_sort_key(task: dict[str, Any], *, sort: str) -> tuple[Any, ...]:
+    priority = int(task.get("priority_score") or 0)
+    due_date = _task_due_key(task) or "9999-99-99"
+    updated_at = _timestamp_value(
+        str(task.get("updated_at") or task.get("received_at") or task.get("reviewed_at") or "")
+    )
+    status_rank = {"needs_verification": 0, "new": 1, "reviewed": 2, "done": 3, "ignored": 4}.get(
+        str(task.get("status") or "new"),
+        5,
+    )
+    task_id = str(task.get("task_id") or "")
+    if sort == "priority":
+        return (-priority, status_rank, due_date, -updated_at, task_id)
+    if sort == "due_date":
+        return (due_date, -priority, status_rank, -updated_at, task_id)
+    if sort == "recent":
+        return (-updated_at, -priority, status_rank, due_date, task_id)
+    _validate_sort(sort)
+    return (-priority, status_rank, due_date, -updated_at, task_id)
+
+
+def _task_due_key(task: dict[str, Any]) -> str:
+    return parse_deadline_date(str(task.get("due_date") or task.get("value") or ""))
+
+
+def _timestamp_value(value: str) -> float:
+    text = str(value or "").strip()
+    if not text:
+        return 0.0
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return 0.0
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.timestamp()
+
+
+def _max_amount(task: dict[str, Any]) -> float:
+    values = task.get("values") if isinstance(task.get("values"), list) else []
+    candidates = [str(value) for value in values]
+    candidates.append(str(task.get("value") or ""))
+    found: list[float] = []
+    for candidate in candidates:
+        for match in AMOUNT_RE.finditer(candidate):
+            try:
+                found.append(float(match.group(1).replace(",", "")))
+            except ValueError:
+                continue
+    return max(found, default=0.0)
+
+
+def _has_payment_context(task: dict[str, Any]) -> bool:
+    text = " ".join(
+        str(task.get(key) or "")
+        for key in ("title", "subject", "evidence", "due_date", "value")
+    ).lower()
+    return any(term in text for term in ("payment", "balance", "amount due", "minimum", "pay ", "due"))
+
+
+def _has_action_context(task: dict[str, Any]) -> bool:
+    if str(task.get("kind") or "") != "action":
+        return False
+    text = " ".join(str(task.get(key) or "") for key in ("title", "subject", "evidence", "value")).lower()
+    return any(
+        term in text
+        for term in (
+            "submit",
+            "schedule",
+            "register",
+            "apply",
+            "verify",
+            "reply",
+            "contact",
+            "cancel",
+            "renew",
+            "upload",
+        )
+    )
 
 
 def _source_messages(paths: Paths, task: dict[str, Any]) -> list[dict[str, Any]]:
@@ -811,6 +992,12 @@ def _validate_kind(kind: str) -> None:
     if kind not in TASK_KINDS:
         allowed = ", ".join(sorted(TASK_KINDS))
         raise ValueError(f"Unsupported task kind: {kind}. Expected one of: {allowed}")
+
+
+def _validate_sort(sort: str) -> None:
+    if sort not in TASK_SORTS:
+        allowed = ", ".join(sorted(TASK_SORTS))
+        raise ValueError(f"Unsupported task sort: {sort}. Expected one of: {allowed}")
 
 
 def _bulk_filters(*, kind: str | None, status_filter: str | None, limit: int) -> dict[str, Any]:

@@ -37,11 +37,11 @@ Source of truth for every calendar surface (month/week/day/agenda). One item per
 | `evidence_uri` | string | primary evidence reference |
 | `reminders` | array | reminder policy entries (opaque to the UI) |
 
-### GET `/api/tasks?status=<optional>&kind=<optional>&limit=<optional>` → `Task[]`
+### GET `/api/tasks?sort=<optional>&status=<optional>&kind=<optional>&limit=<optional>` → `Task[]`
 
 Reviewable work items aggregated from calendar drafts and email facts (deadline facts already represented by a draft are deduplicated into the `calendar:` task). Email facts are grouped by message and kind, so a single bill with multiple amounts produces one review card with all values instead of several near-duplicate cards.
 
-Optional filters are applied server-side before the list is returned: `status` must be one of `new`, `reviewed`, `ignored`, `needs_verification`, or `done`; `kind` must be one of `deadline`, `amount`, or `action`; `limit` defaults to 100. Invalid filters return HTTP 400 `{error}`. The CLI mirrors this shape with `sentineldesk tasks list --status ... --kind ... --limit ...`.
+Optional controls are applied server-side before the list is returned: `sort` defaults to `priority` and must be one of `priority`, `due_date`, or `recent`; `status` must be one of `new`, `reviewed`, `ignored`, `needs_verification`, or `done`; `kind` must be one of `deadline`, `amount`, or `action`; `limit` defaults to 100. Invalid controls return HTTP 400 `{error}`. The CLI mirrors this shape with `sentineldesk tasks list --sort ... --status ... --kind ... --limit ...`.
 
 Common fields present on every task (calendar-derived tasks additionally carry `created_at`; email-derived tasks additionally carry `subject`, `sender`, `received_at`):
 
@@ -67,6 +67,9 @@ Common fields present on every task (calendar-derived tasks additionally carry `
 | `status` | string | review state: `new \| reviewed \| ignored \| needs_verification \| done` |
 | `review_note` | string | last review note |
 | `review_actor` / `reviewed_at` | string | last review actor/timestamp (empty when never reviewed) |
+| `priority_score` | number | deterministic local ranking score; higher means review first |
+| `priority_band` | string | `high \| medium \| low \| closed` |
+| `priority_reasons` | string[] | explainable score factors such as `deadline`, `low_confidence`, `payment_context`, or `needs_verification_status` |
 
 ### POST `/api/tasks/review?task_id=&status=&note=` → review receipt
 
@@ -198,8 +201,8 @@ How backend fields drive the B′ visual spec:
 | **确认加入日历** button | `POST /api/calendar/sync?confirm=1&confirmation_id=ui-<event_id>-<epoch>&event_id=<event_id>&destination=ics`; on `allowed: true` re-fetch events (chip turns solid) |
 | **忽略** button | `POST /api/tasks/review?task_id=calendar:<event_id>&status=ignored`; UI hides the pending suggestion; the draft itself stays in local storage (retention controls own deletion) |
 | Assistant daily embed | computed from `/api/daily/summary`: stored mail, grouped review queue, local calendar drafts, connector readiness, and external-write boundary |
-| Assistant task review card | computed from `/api/tasks`: non-calendar amount/action tasks render with value chips, evidence snippet, confidence, a local-only `查看证据` drill-down from `/api/tasks/evidence`, and local-only `done`, `needs_verification`, `reviewed`, `ignored` controls |
-| Assistant task queue controls | client-side filters over the loaded `/api/tasks` rows: kind (`all/deadline/amount/action`), status (`active/new/needs_verification/reviewed/done/ignored/all`), plus cursor navigation (`task-prev`, `task-next`, `show-task`) so large queues can be reviewed without cycling one unfiltered card at a time |
+| Assistant task review card | computed from `/api/tasks`: non-calendar amount/action tasks render with value chips, evidence snippet, confidence, priority band/score/reasons, a local-only `查看证据` drill-down from `/api/tasks/evidence`, and local-only `done`, `needs_verification`, `reviewed`, `ignored` controls |
+| Assistant task queue controls | server-side sort over `/api/tasks?sort=...` (`priority/due_date/recent`), client-side filters over the loaded rows by kind (`all/deadline/amount/action`) and status (`active/new/needs_verification/reviewed/done/ignored/all`), plus cursor navigation (`task-prev`, `task-next`, `show-task`) so large queues can be reviewed without cycling one unfiltered card at a time |
 | Assistant bulk task controls | `task-bulk-done`, `task-bulk-reviewed`, `task-bulk-ignored`, and `task-bulk-needs-verification` use `window.confirm`, send the currently filtered `task_ids` to `/api/tasks/review/bulk`, and re-fetch local state after `allowed: true` |
 | Assistant review history/undo | `task-history` reads `/api/tasks/review/history`; each undoable row renders `task-undo`, which uses `window.confirm`, sends `{audit_id, confirm: true, confirmation_id}` to `/api/tasks/review/undo`, and re-fetches local state after `allowed: true` |
 | Assistant calendar embed | computed client-side from `/api/calendar/events` + `/api/tasks`: counts of pending/confirmed/uncertain in the visible range |

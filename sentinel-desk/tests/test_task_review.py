@@ -42,6 +42,9 @@ class TaskReviewTests(unittest.TestCase):
             self.assertEqual(deadline["status"], "new")
             self.assertEqual(deadline["source_refs"], ["email:m-task"])
             self.assertEqual(deadline["due_date"], "July 2, 2026")
+            self.assertIsInstance(deadline["priority_score"], int)
+            self.assertIn(deadline["priority_band"], {"high", "medium", "low", "closed"})
+            self.assertIn("deadline", deadline["priority_reasons"])
 
     def test_list_tasks_groups_same_message_facts_by_kind(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -63,6 +66,56 @@ class TaskReviewTests(unittest.TestCase):
             self.assertEqual(amount_tasks[0]["fact_count"], 2)
             self.assertEqual(set(amount_tasks[0]["values"]), {"$25.00", "$30.00"})
             self.assertIn("2 amount facts", amount_tasks[0]["title"])
+
+    def test_priority_sort_surfaces_verification_work_first(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+            amount_id = list_tasks(paths, kind="amount")[0]["task_id"]
+            review_task(
+                paths,
+                task_id=amount_id,
+                status="needs_verification",
+                note="Check the bill.",
+                actor="tester",
+                updated_at="2026-06-10T12:05:00Z",
+            )
+
+            tasks = list_tasks(paths, sort="priority")
+
+            self.assertEqual(tasks[0]["task_id"], amount_id)
+            self.assertEqual(tasks[0]["status"], "needs_verification")
+            self.assertIn("needs_verification_status", tasks[0]["priority_reasons"])
+            self.assertGreaterEqual(tasks[0]["priority_score"], tasks[-1]["priority_score"])
+
+    def test_due_date_sort_orders_deadlines_by_date(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            messages = [
+                EmailMessage(
+                    message_id="m-late",
+                    thread_id="t-late",
+                    sender="leasing@example.com",
+                    subject="Late notice",
+                    received_at="2026-06-10T09:00:00Z",
+                    body_text="Please submit renewal paperwork by July 20, 2026.",
+                ),
+                EmailMessage(
+                    message_id="m-early",
+                    thread_id="t-early",
+                    sender="school@example.com",
+                    subject="Early deadline",
+                    received_at="2026-06-10T10:00:00Z",
+                    body_text="Please submit the form by July 1, 2026.",
+                ),
+            ]
+            ingest_messages(paths, messages, ingested_at="2026-06-10T12:00:00Z")
+
+            deadlines = list_tasks(paths, kind="deadline", sort="due_date")
+
+            self.assertGreaterEqual(len(deadlines), 2)
+            self.assertEqual(deadlines[0]["due_date"], "July 1, 2026")
+            self.assertEqual(deadlines[1]["due_date"], "July 20, 2026")
 
     def test_review_task_persists_status_and_audit_event(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -163,6 +216,15 @@ class TaskReviewTests(unittest.TestCase):
             self.assertEqual(code, 0)
             payload = json.loads(output.getvalue())
             self.assertTrue(payload)
+            self.assertIn("priority_score", payload[0])
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = main(["--home", tmp, "tasks", "list", "--sort", "due_date", "--kind", "deadline"])
+            self.assertEqual(code, 0)
+            sorted_payload = json.loads(output.getvalue())
+            self.assertTrue(sorted_payload)
+            self.assertEqual(sorted_payload[0]["kind"], "deadline")
 
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
