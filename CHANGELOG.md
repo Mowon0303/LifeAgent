@@ -14,6 +14,7 @@ All notable project updates for LifeAgent are tracked here.
 - Converted a real Gmail action-noise pattern into synthetic regression coverage: link/HTML artifacts such as `email&amp;...`, `mailto:`, `href=`, tracking query strings, and `%recipient` placeholders are filtered as action false positives while real `email the office` actions are preserved.
 - Reprocessed already stored local Gmail evidence after the extractor fix without another inbox call: 54 stored messages went from 1052 facts to 517 facts, action facts dropped from 732 to 197, deadline and amount counts stayed at 102 and 218, and no calendar drafts or external writes were performed.
 - Grouped task review items by email message and fact kind so multiple amounts/actions from the same message become one UI card with `values` and `fact_count`; the real `.demo` queue dropped from 468 raw fact tasks to 112 grouped review items.
+- Updated GitHub Actions from `actions/checkout@v4` / `actions/setup-python@v5` to `v6` to avoid the Node.js 20 action-runtime deprecation warning.
 
 ### Added
 
