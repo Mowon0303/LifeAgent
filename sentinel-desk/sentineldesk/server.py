@@ -23,7 +23,7 @@ from .monitor import run_all
 from .reports import package_path_for, redact_data, write_evidence_package
 from .retention import plan_purge, purge, result_to_dict
 from .scenarios import apply_scenario, list_scenarios
-from .tasks import bulk_review_tasks, list_tasks, review_task, task_evidence
+from .tasks import bulk_review_tasks, list_review_history, list_tasks, review_task, task_evidence, undo_task_review
 
 
 def json_bytes(value: object) -> bytes:
@@ -91,6 +91,16 @@ class Handler(BaseHTTPRequestHandler):
                 )
             except ValueError as error:
                 self.send_json({"error": str(error)}, status=400)
+            return
+        if path == "/api/tasks/review/history":
+            query = parse_qs(parsed.query)
+            self.send_json(
+                {
+                    "history": list_review_history(self.paths, limit=_query_int(query, "limit", 20)),
+                    "external_network": False,
+                    "external_writes_performed": False,
+                }
+            )
             return
         if path == "/api/tasks/evidence":
             query = parse_qs(parsed.query)
@@ -386,6 +396,27 @@ class Handler(BaseHTTPRequestHandler):
                     status_filter=str(filter_payload.get("status") or query.get("filter_status", ["active"])[0]),
                     limit=_query_int(query, "limit", _body_int(body, "limit", 100)),
                     note=str(body.get("note") or query.get("note", [""])[0]),
+                    actor="dashboard",
+                    confirmed=_truthy(body.get("confirm", query.get("confirm", ["0"])[0])),
+                    confirmation_id=str(body.get("confirmation_id") or query.get("confirmation_id", [""])[0]),
+                )
+                self.send_json(result.__dict__)
+            except ValueError as error:
+                self.send_json({"error": str(error)}, status=400)
+            except Exception as error:
+                self.send_json({"error": str(error)}, status=500)
+            return
+        if parsed.path == "/api/tasks/review/undo":
+            query = parse_qs(parsed.query)
+            body = self.read_json_body()
+            audit_id_raw = body.get("audit_id") or query.get("audit_id", [""])[0]
+            if not audit_id_raw:
+                self.send_json({"error": "audit_id field required"}, status=400)
+                return
+            try:
+                result = undo_task_review(
+                    self.paths,
+                    audit_id=int(audit_id_raw),
                     actor="dashboard",
                     confirmed=_truthy(body.get("confirm", query.get("confirm", ["0"])[0])),
                     confirmation_id=str(body.get("confirmation_id") or query.get("confirmation_id", [""])[0]),

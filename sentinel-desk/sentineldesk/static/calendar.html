@@ -304,6 +304,7 @@
     daily: null,         // local daily landing summary
     queue: [],           // pending suggestion queue for the assistant panel
     taskQueue: [],       // non-calendar email tasks exposed as review cards
+    reviewHistory: [],   // recent local task review audit rows
     taskFilterKind: 'all',
     taskFilterStatus: 'active',
     taskCursor: 0,
@@ -671,7 +672,8 @@
       '<button class="dD-cbtn sec" data-act="task-bulk-ignored"' + bulkDisabled + '>批量忽略</button>' +
       '<button class="dD-cbtn warn" data-act="task-bulk-needs-verification"' + bulkDisabled + '>批量核对</button></div>' +
       '<div class="dD-btns"><button class="dD-cbtn sec" data-act="daily-run">刷新今日检查</button>' +
-      '<button class="dD-cbtn sec" data-act="show-task">打开当前任务</button></div></div>';
+      '<button class="dD-cbtn sec" data-act="show-task">打开当前任务</button>' +
+      '<button class="dD-cbtn sec" data-act="task-history">查看历史</button></div></div>';
   }
 
   function suggestionCard(item) {
@@ -736,6 +738,31 @@
         (factHtml ? '<div class="dD-facts">' + factHtml + '</div>' : '') +
         (source.body_preview ? '<div class="body-preview">' + escapeHtml(source.body_preview) + '</div>' : '') +
         '</div>';
+    });
+    return html;
+  }
+
+  function taskHistoryEmbed(payload) {
+    var history = (payload && payload.history) || [];
+    state.reviewHistory = history;
+    var html = '<div class="dD-body">最近任务操作历史如下。撤销只恢复本地 review 状态，并会写入一条新的本地 audit。</div>';
+    if (!history.length) {
+      return html + '<div class="dD-embed evidence"><div class="enote">还没有可显示的任务 review 历史。</div></div>';
+    }
+    history.slice(0, 8).forEach(function (item) {
+      var label = REVIEW_STATUS_LABEL[item.status] || item.status || 'unknown';
+      var previous = REVIEW_STATUS_LABEL[item.previous_status] || item.previous_status || '无';
+      var count = item.reviewed_count || (item.task_ids || []).length || 0;
+      html += '<div class="dD-embed evidence" data-audit-id="' + escapeHtml(item.audit_id) + '">' +
+        '<div class="dD-task-kind">' + escapeHtml(item.action || 'task.review') +
+        ' · ' + escapeHtml(item.created_at || '') + '</div>' +
+        '<div class="src-title">' + escapeHtml(item.summary || ('标记为 ' + label)) + '</div>' +
+        '<div class="src-meta">数量 ' + escapeHtml(count) + ' · 之前 ' + escapeHtml(previous) +
+        ' · 当前 ' + escapeHtml(label) + '</div>' +
+        (item.confirmation_id ? '<div class="src-meta">确认 ID · ' + escapeHtml(item.confirmation_id) + '</div>' : '') +
+        '<div class="dD-btns">' +
+        '<button class="dD-cbtn warn" data-act="task-undo" data-audit-id="' + escapeHtml(item.audit_id) + '"' +
+        (item.undoable ? '' : ' disabled') + '>' + (item.undoable ? '撤销' : '已不可撤销') + '</button></div></div>';
     });
     return html;
   }
@@ -942,6 +969,63 @@
       });
   }
 
+  function handleTaskHistory(button) {
+    if (state.busy) return;
+    state.busy = true;
+    button.disabled = true;
+    fetch('/api/tasks/review/history?limit=8')
+      .then(function (r) { return r.json(); })
+      .then(function (payload) {
+        if (payload.error) throw new Error(payload.error);
+        botMessage(taskHistoryEmbed(payload), { ghost: true });
+      })
+      .catch(function (err) { botMessage('<div class="dD-body uncertain">历史读取失败：' + escapeHtml(err) + '</div>'); })
+      .finally(function () {
+        state.busy = false;
+        button.disabled = false;
+      });
+  }
+
+  function handleTaskUndo(auditId, button) {
+    if (state.busy) return;
+    var ok = window.confirm('撤销这条本地任务 review 操作？\n这只恢复本地 review 状态并写入新的 audit，不会发送邮件或写外部日历。');
+    if (!ok) return;
+    state.busy = true;
+    button.disabled = true;
+    var confirmationId = 'ui-task-undo-' + auditId + '-' + Date.now();
+    fetch('/api/tasks/review/undo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ audit_id: Number(auditId), confirm: true, confirmation_id: confirmationId })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (result) {
+        if (result.error) throw new Error(result.error);
+        if (!result.allowed) {
+          botMessage('<div class="dD-body uncertain">撤销被确认门拦下了：' +
+            escapeHtml(result.reason || '未知原因') + '</div>');
+          return null;
+        }
+        botMessage('<div class="dD-body">已恢复 <b>' + escapeHtml(result.restored_count || 0) +
+          '</b> 条任务的本地 review 状态。确认 ID <code>' + escapeHtml(confirmationId) +
+          '</code> 已记录；没有外部副作用。</div>');
+        state.taskCursor = 0;
+        return refresh();
+      })
+      .then(function () {
+        return fetch('/api/tasks/review/history?limit=8');
+      })
+      .then(function (r) { return r ? r.json() : null; })
+      .then(function (payload) {
+        if (payload) botMessage(taskHistoryEmbed(payload), { ghost: true });
+      })
+      .catch(function (err) { botMessage('<div class="dD-body uncertain">撤销失败：' + escapeHtml(err) + '</div>'); })
+      .finally(function () {
+        state.busy = false;
+        button.disabled = false;
+      });
+  }
+
   function askAssistant(question) {
     userMessage(question);
     fetch('/api/ask', {
@@ -1008,6 +1092,14 @@
     }
     if (btn.dataset.act === 'show-task') {
       offerNextTaskSuggestion();
+      return;
+    }
+    if (btn.dataset.act === 'task-history') {
+      handleTaskHistory(btn);
+      return;
+    }
+    if (btn.dataset.act === 'task-undo') {
+      handleTaskUndo(btn.dataset.auditId || '', btn);
       return;
     }
     var bulkStatus = TASK_BULK_ACTION_STATUS[btn.dataset.act];

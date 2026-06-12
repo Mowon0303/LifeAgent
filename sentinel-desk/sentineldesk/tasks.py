@@ -41,6 +41,20 @@ class TaskBulkReviewResult:
     external_writes_performed: bool = False
 
 
+@dataclass(frozen=True)
+class TaskReviewUndoResult:
+    allowed: bool
+    reason: str
+    audit_id: int
+    actor: str
+    updated_at: str
+    confirmation_id: str
+    restored_count: int
+    task_ids: tuple[str, ...]
+    tasks: tuple[dict[str, Any], ...]
+    external_writes_performed: bool = False
+
+
 def task_evidence(paths: Paths, *, task_id: str) -> dict[str, Any]:
     """Return local source evidence for a task without external reads."""
     db.init_db(paths)
@@ -85,6 +99,217 @@ def list_tasks(
     return tasks[:limit]
 
 
+def list_review_history(paths: Paths, *, limit: int = 20) -> list[dict[str, Any]]:
+    db.init_db(paths)
+    limit = max(0, int(limit))
+    if limit == 0:
+        return []
+    history_limit = max(limit * 10, 100)
+    events = db.list_audit_events(paths, limit=history_limit)
+    undone_ids = _undone_source_audit_ids(events)
+    history: list[dict[str, Any]] = []
+    for event in events:
+        if str(event.get("action") or "") not in {"task.review", "task.review.bulk"}:
+            continue
+        history.append(_review_history_item(event, undone_ids=undone_ids))
+        if len(history) >= limit:
+            break
+    return history
+
+
+def undo_task_review(
+    paths: Paths,
+    *,
+    audit_id: int,
+    actor: str = "user",
+    confirmed: bool = False,
+    confirmation_id: str = "",
+    updated_at: str | None = None,
+) -> TaskReviewUndoResult:
+    db.init_db(paths)
+    timestamp = updated_at or utc_now()
+    event = db.get_audit_event(paths, audit_id=int(audit_id))
+    if not event:
+        raise ValueError(f"Audit event not found: {audit_id}")
+    action = str(event.get("action") or "")
+    if action not in {"task.review", "task.review.bulk"}:
+        raise ValueError(f"Audit event is not a task review event: {audit_id}")
+
+    undo_items = tuple(_undo_items_from_event(event))
+    task_ids = tuple(str(item.get("task_id") or "") for item in undo_items if item.get("task_id"))
+    subject = f"audit:{int(audit_id)}"
+    if not undo_items:
+        reason = "not_undoable"
+        _audit_review_undo(
+            paths,
+            action="task.review.undo.blocked",
+            actor=actor,
+            audit_id=int(audit_id),
+            allowed=False,
+            confirmation_id=confirmation_id,
+            timestamp=timestamp,
+            metadata={"reason": reason, "source_action": action, "external_write": False},
+        )
+        return TaskReviewUndoResult(
+            allowed=False,
+            reason=reason,
+            audit_id=int(audit_id),
+            actor=actor,
+            updated_at=timestamp,
+            confirmation_id=confirmation_id,
+            restored_count=0,
+            task_ids=task_ids,
+            tasks=(),
+        )
+
+    if not confirmed:
+        reason = "confirmation_required"
+        _audit_review_undo(
+            paths,
+            action="task.review.undo.blocked",
+            actor=actor,
+            audit_id=int(audit_id),
+            allowed=False,
+            confirmation_id=confirmation_id,
+            timestamp=timestamp,
+            metadata={
+                "reason": reason,
+                "source_action": action,
+                "task_ids": list(task_ids),
+                "external_write": False,
+            },
+        )
+        return TaskReviewUndoResult(
+            allowed=False,
+            reason=reason,
+            audit_id=int(audit_id),
+            actor=actor,
+            updated_at=timestamp,
+            confirmation_id=confirmation_id,
+            restored_count=0,
+            task_ids=task_ids,
+            tasks=(),
+        )
+
+    if not confirmation_id:
+        raise ValueError("confirmation_id required for task review undo")
+    if db.approval_record_exists(
+        paths,
+        confirmation_id=confirmation_id,
+        action="task.review.undo",
+        subject=subject,
+    ):
+        reason = "confirmation_id_already_consumed"
+        _audit_review_undo(
+            paths,
+            action="task.review.undo.blocked",
+            actor=actor,
+            audit_id=int(audit_id),
+            allowed=False,
+            confirmation_id=confirmation_id,
+            timestamp=timestamp,
+            metadata={
+                "reason": reason,
+                "source_action": action,
+                "task_ids": list(task_ids),
+                "external_write": False,
+            },
+        )
+        return TaskReviewUndoResult(
+            allowed=False,
+            reason=reason,
+            audit_id=int(audit_id),
+            actor=actor,
+            updated_at=timestamp,
+            confirmation_id=confirmation_id,
+            restored_count=0,
+            task_ids=task_ids,
+            tasks=(),
+        )
+    if _source_audit_already_undone(paths, audit_id=int(audit_id)):
+        reason = "source_audit_already_undone"
+        _audit_review_undo(
+            paths,
+            action="task.review.undo.blocked",
+            actor=actor,
+            audit_id=int(audit_id),
+            allowed=False,
+            confirmation_id=confirmation_id,
+            timestamp=timestamp,
+            metadata={
+                "reason": reason,
+                "source_action": action,
+                "task_ids": list(task_ids),
+                "external_write": False,
+            },
+        )
+        return TaskReviewUndoResult(
+            allowed=False,
+            reason=reason,
+            audit_id=int(audit_id),
+            actor=actor,
+            updated_at=timestamp,
+            confirmation_id=confirmation_id,
+            restored_count=0,
+            task_ids=task_ids,
+            tasks=(),
+        )
+
+    restored: list[dict[str, Any]] = []
+    for item in undo_items:
+        task = _restore_review_state(paths, item, actor=actor, timestamp=timestamp)
+        if task:
+            restored.append(task)
+
+    db.insert_approval_record(
+        paths,
+        confirmation_id=confirmation_id,
+        actor=actor,
+        action="task.review.undo",
+        subject=subject,
+        capability="task_review_undo",
+        side_effect="local_db_write",
+        status="confirmed",
+        evidence_refs=list(task_ids),
+        metadata={
+            "source_audit_id": int(audit_id),
+            "source_action": action,
+            "restored_count": len(restored),
+            "task_ids": list(task_ids),
+            "external_write": False,
+        },
+        created_at=timestamp,
+        consumed_at=timestamp,
+    )
+    _audit_review_undo(
+        paths,
+        action="task.review.undo",
+        actor=actor,
+        audit_id=int(audit_id),
+        allowed=True,
+        confirmation_id=confirmation_id,
+        timestamp=timestamp,
+        metadata={
+            "reason": "confirmed",
+            "source_action": action,
+            "restored_count": len(restored),
+            "task_ids": list(task_ids),
+            "external_write": False,
+        },
+    )
+    return TaskReviewUndoResult(
+        allowed=True,
+        reason="confirmed",
+        audit_id=int(audit_id),
+        actor=actor,
+        updated_at=timestamp,
+        confirmation_id=confirmation_id,
+        restored_count=len(restored),
+        task_ids=task_ids,
+        tasks=tuple(restored),
+    )
+
+
 def review_task(
     paths: Paths,
     *,
@@ -97,6 +322,8 @@ def review_task(
     db.init_db(paths)
     _validate_status(status)
     timestamp = updated_at or utc_now()
+    task_before = get_task(paths, task_id)
+    undo_state = _review_undo_state(paths, task_id=task_id, task=task_before)
     db.upsert_task_review(
         paths,
         task_id=task_id,
@@ -119,6 +346,13 @@ def review_task(
             "status": status,
             "note_present": bool(note),
             "task_found": task is not None,
+            "undoable": task_before is not None,
+            "previous_status": undo_state["previous_status"],
+            "previous_note": undo_state["previous_note"],
+            "previous_actor": undo_state["previous_actor"],
+            "previous_updated_at": undo_state["previous_updated_at"],
+            "had_previous_review": undo_state["had_previous_review"],
+            "external_write": False,
         },
         created_at=timestamp,
     )
@@ -149,6 +383,11 @@ def bulk_review_tasks(
     matched_set = set(matched_ids)
     missing_ids = tuple(task_id for task_id in requested_ids if task_id not in matched_set)
     requested_count = len(requested_ids) if requested_ids else len(selected)
+    undo_items = tuple(
+        _review_undo_state(paths, task_id=str(task.get("task_id") or ""), task=task)
+        for task in selected
+        if task.get("task_id")
+    )
 
     if not confirmed:
         reason = "confirmation_required"
@@ -260,6 +499,8 @@ def bulk_review_tasks(
             "matched_count": len(selected),
             "reviewed_count": len(reviewed),
             "missing_task_ids": list(missing_ids),
+            "task_ids": list(matched_ids),
+            "undo_items": list(undo_items),
             "external_write": False,
         },
         created_at=timestamp,
@@ -279,6 +520,8 @@ def bulk_review_tasks(
             "matched_count": len(selected),
             "reviewed_count": len(reviewed),
             "missing_task_ids": list(missing_ids),
+            "task_ids": list(matched_ids),
+            "undo_items": list(undo_items),
             "external_write": False,
         },
     )
@@ -611,6 +854,169 @@ def _bulk_selected_tasks(
 
 def _is_active_status(status: str) -> bool:
     return status in {"new", "needs_verification", "reviewed"}
+
+
+def _review_undo_state(paths: Paths, *, task_id: str, task: dict[str, Any] | None) -> dict[str, Any]:
+    previous = db.get_task_review(paths, task_id=task_id)
+    return {
+        "task_id": task_id,
+        "previous_status": str(previous.get("status") or "new") if previous else "new",
+        "previous_note": str(previous.get("note") or "") if previous else "",
+        "previous_actor": str(previous.get("actor") or "") if previous else "",
+        "previous_updated_at": str(previous.get("updated_at") or "") if previous else "",
+        "had_previous_review": previous is not None,
+        "task_found": task is not None,
+        "current_status": str(task.get("status") or "") if task else "",
+    }
+
+
+def _review_history_item(event: dict[str, Any], *, undone_ids: set[int]) -> dict[str, Any]:
+    metadata = event.get("metadata") if isinstance(event.get("metadata"), dict) else {}
+    action = str(event.get("action") or "")
+    audit_id = int(event.get("id") or 0)
+    if action == "task.review.bulk":
+        undo_items = metadata.get("undo_items") if isinstance(metadata.get("undo_items"), list) else []
+        task_ids = [str(item.get("task_id") or "") for item in undo_items if isinstance(item, dict)]
+        if not task_ids and isinstance(metadata.get("task_ids"), list):
+            task_ids = [str(task_id) for task_id in metadata["task_ids"] if str(task_id)]
+        reviewed_count = int(metadata.get("reviewed_count") or len(task_ids))
+        status = str(metadata.get("target_status") or "")
+        previous_status = "mixed" if len({str(item.get("previous_status") or "") for item in undo_items if isinstance(item, dict)}) > 1 else (
+            str(undo_items[0].get("previous_status") or "") if undo_items and isinstance(undo_items[0], dict) else ""
+        )
+        undoable = bool(undo_items) and audit_id not in undone_ids
+        summary = f"Bulk marked {reviewed_count} task(s) as {status}"
+    else:
+        task_id = str(event.get("subject") or "")
+        task_ids = [task_id] if task_id else []
+        reviewed_count = 1 if task_id else 0
+        status = str(metadata.get("status") or "")
+        previous_status = str(metadata.get("previous_status") or "")
+        undoable = bool(metadata.get("undoable") and previous_status and task_id) and audit_id not in undone_ids
+        summary = f"Marked {task_id} as {status}" if task_id else f"Marked task as {status}"
+    return {
+        "audit_id": audit_id,
+        "action": action,
+        "actor": str(event.get("actor") or ""),
+        "subject": str(event.get("subject") or ""),
+        "created_at": str(event.get("created_at") or ""),
+        "confirmation_id": str(event.get("confirmation_id") or ""),
+        "status": status,
+        "previous_status": previous_status,
+        "reviewed_count": reviewed_count,
+        "task_ids": task_ids,
+        "undoable": undoable,
+        "undo_status": "undone" if audit_id in undone_ids else "available",
+        "summary": summary,
+        "external_writes_performed": False,
+    }
+
+
+def _undo_items_from_event(event: dict[str, Any]) -> list[dict[str, Any]]:
+    metadata = event.get("metadata") if isinstance(event.get("metadata"), dict) else {}
+    action = str(event.get("action") or "")
+    if action == "task.review.bulk":
+        raw_items = metadata.get("undo_items")
+        if not isinstance(raw_items, list):
+            return []
+        return [_normalize_undo_item(item) for item in raw_items if isinstance(item, dict) and item.get("task_id")]
+    if action != "task.review" or not metadata.get("undoable"):
+        return []
+    task_id = str(event.get("subject") or "")
+    if not task_id or "previous_status" not in metadata:
+        return []
+    return [
+        _normalize_undo_item(
+            {
+                "task_id": task_id,
+                "previous_status": metadata.get("previous_status"),
+                "previous_note": metadata.get("previous_note"),
+                "previous_actor": metadata.get("previous_actor"),
+                "previous_updated_at": metadata.get("previous_updated_at"),
+                "had_previous_review": metadata.get("had_previous_review"),
+                "task_found": metadata.get("task_found"),
+            }
+        )
+    ]
+
+
+def _normalize_undo_item(item: dict[str, Any]) -> dict[str, Any]:
+    status = str(item.get("previous_status") or "new")
+    _validate_status(status)
+    return {
+        "task_id": str(item.get("task_id") or ""),
+        "previous_status": status,
+        "previous_note": str(item.get("previous_note") or ""),
+        "previous_actor": str(item.get("previous_actor") or ""),
+        "previous_updated_at": str(item.get("previous_updated_at") or ""),
+        "had_previous_review": bool(item.get("had_previous_review")),
+        "task_found": bool(item.get("task_found", True)),
+    }
+
+
+def _restore_review_state(paths: Paths, item: dict[str, Any], *, actor: str, timestamp: str) -> dict[str, Any] | None:
+    task_id = str(item.get("task_id") or "")
+    if not task_id:
+        return None
+    if item.get("had_previous_review"):
+        db.upsert_task_review(
+            paths,
+            task_id=task_id,
+            status=str(item.get("previous_status") or "new"),
+            note=str(item.get("previous_note") or ""),
+            actor=actor,
+            updated_at=timestamp,
+        )
+    else:
+        db.delete_task_review(paths, task_id=task_id)
+    return get_task(paths, task_id)
+
+
+def _undone_source_audit_ids(events: list[dict[str, Any]]) -> set[int]:
+    undone: set[int] = set()
+    for event in events:
+        if str(event.get("action") or "") != "task.review.undo" or not event.get("allowed"):
+            continue
+        metadata = event.get("metadata") if isinstance(event.get("metadata"), dict) else {}
+        try:
+            undone.add(int(metadata.get("source_audit_id") or 0))
+        except (TypeError, ValueError):
+            continue
+    undone.discard(0)
+    return undone
+
+
+def _source_audit_already_undone(paths: Paths, *, audit_id: int) -> bool:
+    return audit_id in _undone_source_audit_ids(db.list_audit_events(paths, limit=1000))
+
+
+def _audit_review_undo(
+    paths: Paths,
+    *,
+    action: str,
+    actor: str,
+    audit_id: int,
+    allowed: bool,
+    confirmation_id: str,
+    timestamp: str,
+    metadata: dict[str, Any],
+) -> None:
+    merged = {
+        "source_audit_id": audit_id,
+        **metadata,
+    }
+    db.insert_audit_event(
+        paths,
+        action=action,
+        actor=actor,
+        subject=f"audit:{audit_id}",
+        capability="task_review_undo",
+        side_effect="local_db_write",
+        allowed=allowed,
+        confirmation_id=confirmation_id,
+        metadata=merged,
+        created_at=timestamp,
+    )
 
 
 def _audit_bulk_review(

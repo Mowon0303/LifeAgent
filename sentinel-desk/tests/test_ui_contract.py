@@ -100,6 +100,34 @@ TASK_EVIDENCE_SOURCE_FIELDS = {
     "matched_facts",
     "fact_count",
 }
+TASK_REVIEW_HISTORY_FIELDS = {
+    "audit_id",
+    "action",
+    "actor",
+    "subject",
+    "created_at",
+    "confirmation_id",
+    "status",
+    "previous_status",
+    "reviewed_count",
+    "task_ids",
+    "undoable",
+    "undo_status",
+    "summary",
+    "external_writes_performed",
+}
+TASK_REVIEW_UNDO_FIELDS = {
+    "allowed",
+    "reason",
+    "audit_id",
+    "actor",
+    "updated_at",
+    "confirmation_id",
+    "restored_count",
+    "task_ids",
+    "tasks",
+    "external_writes_performed",
+}
 CITATION_FIELDS = {"source_id", "source_type", "evidence", "captured_at"}
 SOURCE_TRUST_VALUES = {"email_evidence", "portal_verified", "trusted_doc_context", "local_evidence"}
 APPROVAL_STATES = {"draft", "approved"}
@@ -305,6 +333,57 @@ class TaskContractTests(UiContractBase):
         self.assertFalse(replay["allowed"])
         self.assertEqual(replay["reason"], "confirmation_id_already_consumed")
 
+    def test_task_review_history_is_local_readonly(self) -> None:
+        _, tasks = self.json_request("GET", "/api/tasks")
+        email_task = next(task for task in tasks if str(task["task_id"]).startswith("email:"))
+        status, receipt = self.json_request(
+            "POST", f"/api/tasks/review?task_id={email_task['task_id']}&status=done&note=history"
+        )
+        self.assertEqual(status, 200)
+        before = db.list_audit_events(self.paths, limit=20)
+        status, payload = self.json_request("GET", "/api/tasks/review/history?limit=5")
+        after = db.list_audit_events(self.paths, limit=20)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(set(payload), {"history", "external_network", "external_writes_performed"})
+        self.assertFalse(payload["external_network"])
+        self.assertFalse(payload["external_writes_performed"])
+        self.assertEqual(before, after)
+        self.assertGreaterEqual(len(payload["history"]), 1)
+        item = payload["history"][0]
+        self.assertEqual(set(item), TASK_REVIEW_HISTORY_FIELDS)
+        self.assertEqual(item["action"], "task.review")
+        self.assertEqual(item["task_ids"], [receipt["task_id"]])
+        self.assertTrue(item["undoable"])
+
+    def test_task_review_undo_requires_confirmation_and_restores_locally(self) -> None:
+        _, tasks = self.json_request("GET", "/api/tasks")
+        email_task = next(task for task in tasks if str(task["task_id"]).startswith("email:"))
+        task_id = email_task["task_id"]
+        status, _ = self.json_request("POST", f"/api/tasks/review?task_id={task_id}&status=done")
+        self.assertEqual(status, 200)
+        audit_id = next(event["id"] for event in db.list_audit_events(self.paths, limit=20) if event["action"] == "task.review")
+
+        status, blocked = self.json_request("POST", "/api/tasks/review/undo", json.dumps({"audit_id": audit_id}))
+        self.assertEqual(status, 200)
+        self.assertEqual(set(blocked), TASK_REVIEW_UNDO_FIELDS)
+        self.assertFalse(blocked["allowed"])
+        self.assertEqual(blocked["reason"], "confirmation_required")
+        _, done = self.json_request("GET", "/api/tasks?status=done")
+        self.assertIn(task_id, {task["task_id"] for task in done})
+
+        body = json.dumps({"audit_id": audit_id, "confirm": True, "confirmation_id": "ui-undo-contract-1"})
+        status, restored = self.json_request("POST", "/api/tasks/review/undo", body)
+        self.assertEqual(status, 200)
+        self.assertTrue(restored["allowed"])
+        self.assertEqual(restored["restored_count"], 1)
+        self.assertFalse(restored["external_writes_performed"])
+        _, new_tasks = self.json_request("GET", "/api/tasks?status=new")
+        self.assertIn(task_id, {task["task_id"] for task in new_tasks})
+        approvals = db.list_approval_records(self.paths, limit=5)
+        self.assertEqual(approvals[0]["action"], "task.review.undo")
+        self.assertEqual(approvals[0]["confirmation_id"], "ui-undo-contract-1")
+
     def test_task_evidence_drilldown_is_local_readonly(self) -> None:
         _, tasks = self.json_request("GET", "/api/tasks")
         email_task = next(task for task in tasks if str(task["task_id"]).startswith("email:"))
@@ -508,6 +587,8 @@ class CalendarPageTests(UiContractBase):
             "/api/tasks/evidence?task_id=",
             "/api/tasks/review?task_id=",
             "/api/tasks/review/bulk",
+            "/api/tasks/review/history",
+            "/api/tasks/review/undo",
             "/api/calendar/sync?destination=ics&confirm=1",
             "/api/ask",
             'id="dailySummary"',
@@ -515,6 +596,8 @@ class CalendarPageTests(UiContractBase):
             'id="taskQueueFilters"',
             'id="taskNavState"',
             'id="taskBulkActions"',
+            'data-act="task-history"',
+            'data-act="task-undo"',
             'data-act="daily-run"',
             'data-act="show-task"',
             'data-act="task-filter-kind"',
@@ -550,6 +633,9 @@ class CalendarPageTests(UiContractBase):
         self.assertIn("function moveTaskCursor", html)
         self.assertIn("function handleTaskBulkReview", html)
         self.assertIn("function taskEvidenceEmbed", html)
+        self.assertIn("function taskHistoryEmbed", html)
+        self.assertIn("function handleTaskHistory", html)
+        self.assertIn("function handleTaskUndo", html)
         self.assertIn("function offerNextTaskSuggestion", html)
         self.assertIn("function handleTaskReview", html)
         self.assertIn("function handleTaskEvidence", html)

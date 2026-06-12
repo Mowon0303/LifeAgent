@@ -11,7 +11,7 @@ from sentineldesk.cli import main
 from sentineldesk.config import get_paths
 from sentineldesk.email.ingest import ingest_messages
 from sentineldesk.email.models import EmailMessage
-from sentineldesk.tasks import bulk_review_tasks, list_tasks, review_task
+from sentineldesk.tasks import bulk_review_tasks, list_review_history, list_tasks, review_task, undo_task_review
 
 
 def task_message() -> EmailMessage:
@@ -88,6 +88,68 @@ class TaskReviewTests(unittest.TestCase):
             self.assertEqual(audit["actor"], "tester")
             self.assertEqual(audit["subject"], task_id)
             self.assertEqual(audit["side_effect"], "local_db_write")
+            self.assertEqual(audit["metadata"]["previous_status"], "new")
+            self.assertTrue(audit["metadata"]["undoable"])
+
+    def test_review_history_and_undo_restore_unreviewed_task(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+            task_id = list_tasks(paths, kind="amount")[0]["task_id"]
+            review_task(
+                paths,
+                task_id=task_id,
+                status="done",
+                note="Handled.",
+                actor="tester",
+                updated_at="2026-06-10T12:05:00Z",
+            )
+            audit_id = db.list_audit_events(paths)[0]["id"]
+
+            history = list_review_history(paths, limit=5)
+            self.assertEqual(history[0]["audit_id"], audit_id)
+            self.assertTrue(history[0]["undoable"])
+            self.assertEqual(history[0]["previous_status"], "new")
+
+            blocked = undo_task_review(
+                paths,
+                audit_id=audit_id,
+                actor="tester",
+                confirmed=False,
+                updated_at="2026-06-10T12:06:00Z",
+            )
+            self.assertFalse(blocked.allowed)
+            self.assertEqual(blocked.reason, "confirmation_required")
+            self.assertEqual(list_tasks(paths, kind="amount", status="done")[0]["task_id"], task_id)
+
+            restored = undo_task_review(
+                paths,
+                audit_id=audit_id,
+                actor="tester",
+                confirmed=True,
+                confirmation_id="undo-single-1",
+                updated_at="2026-06-10T12:07:00Z",
+            )
+            self.assertTrue(restored.allowed)
+            self.assertEqual(restored.restored_count, 1)
+            task = next(task for task in list_tasks(paths, kind="amount") if task["task_id"] == task_id)
+            self.assertEqual(task["status"], "new")
+            self.assertEqual(task["review_note"], "")
+            self.assertEqual(task["review_actor"], "")
+            history = [item for item in list_review_history(paths, limit=5) if item["audit_id"] == audit_id]
+            self.assertEqual(history[0]["undo_status"], "undone")
+            self.assertFalse(history[0]["undoable"])
+
+            replay = undo_task_review(
+                paths,
+                audit_id=audit_id,
+                actor="tester",
+                confirmed=True,
+                confirmation_id="undo-single-2",
+                updated_at="2026-06-10T12:08:00Z",
+            )
+            self.assertFalse(replay.allowed)
+            self.assertEqual(replay.reason, "source_audit_already_undone")
 
     def test_cli_tasks_list_and_review(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -177,6 +239,54 @@ class TaskReviewTests(unittest.TestCase):
             self.assertIn("task.review.bulk", audit_actions)
             self.assertIn("task.review.bulk.blocked", audit_actions)
 
+    def test_bulk_review_history_and_undo_restore_mixed_previous_states(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+            task_ids = [task["task_id"] for task in list_tasks(paths) if task["kind"] in {"amount", "action"}]
+            self.assertGreaterEqual(len(task_ids), 2)
+            review_task(
+                paths,
+                task_id=task_ids[0],
+                status="needs_verification",
+                note="Check first.",
+                actor="tester",
+                updated_at="2026-06-10T12:09:00Z",
+            )
+
+            confirmed = bulk_review_tasks(
+                paths,
+                task_ids=task_ids[:2],
+                status="done",
+                actor="tester",
+                confirmed=True,
+                confirmation_id="bulk-undo-1",
+                updated_at="2026-06-10T12:10:00Z",
+            )
+            self.assertTrue(confirmed.allowed)
+            self.assertEqual(confirmed.reviewed_count, 2)
+            bulk_event = next(event for event in db.list_audit_events(paths, limit=10) if event["action"] == "task.review.bulk")
+            self.assertEqual(len(bulk_event["metadata"]["undo_items"]), 2)
+
+            restored = undo_task_review(
+                paths,
+                audit_id=bulk_event["id"],
+                actor="tester",
+                confirmed=True,
+                confirmation_id="bulk-undo-restore-1",
+                updated_at="2026-06-10T12:11:00Z",
+            )
+
+            self.assertTrue(restored.allowed)
+            self.assertEqual(restored.restored_count, 2)
+            tasks = {task["task_id"]: task for task in list_tasks(paths)}
+            self.assertEqual(tasks[task_ids[0]]["status"], "needs_verification")
+            self.assertEqual(tasks[task_ids[0]]["review_note"], "Check first.")
+            self.assertEqual(tasks[task_ids[1]]["status"], "new")
+            undo_audit = db.list_audit_events(paths, limit=5)[0]
+            self.assertEqual(undo_audit["action"], "task.review.undo")
+            self.assertEqual(undo_audit["metadata"]["source_audit_id"], bulk_event["id"])
+
     def test_cli_tasks_bulk_review(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             paths = get_paths(tmp)
@@ -207,6 +317,42 @@ class TaskReviewTests(unittest.TestCase):
             self.assertTrue(payload["allowed"])
             self.assertEqual(payload["reviewed_count"], 1)
             self.assertEqual(list_tasks(paths, kind="action", status="reviewed")[0]["status"], "reviewed")
+
+    def test_cli_tasks_history_and_undo(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+            task_id = list_tasks(paths, kind="action")[0]["task_id"]
+            review_task(paths, task_id=task_id, status="done", actor="tester")
+            audit_id = db.list_audit_events(paths)[0]["id"]
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = main(["--home", tmp, "tasks", "history", "--limit", "3"])
+            self.assertEqual(code, 0)
+            history = json.loads(output.getvalue())
+            self.assertEqual(history[0]["audit_id"], audit_id)
+            self.assertTrue(history[0]["undoable"])
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = main(
+                    [
+                        "--home",
+                        tmp,
+                        "tasks",
+                        "undo",
+                        "--audit-id",
+                        str(audit_id),
+                        "--confirm",
+                        "--confirmation-id",
+                        "cli-undo-1",
+                    ]
+                )
+            self.assertEqual(code, 0)
+            payload = json.loads(output.getvalue())
+            self.assertTrue(payload["allowed"])
+            self.assertEqual(list_tasks(paths, kind="action", status="new")[0]["task_id"], task_id)
 
 
 if __name__ == "__main__":

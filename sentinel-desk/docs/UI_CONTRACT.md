@@ -93,6 +93,47 @@ Without `confirm: true`, the response is blocked with `allowed: false`, `reason:
 
 The CLI mirrors this with `sentineldesk tasks bulk-review --kind ... --filter-status ... --status ... --confirm --confirmation-id ...`.
 
+### GET `/api/tasks/review/history?limit=` → review history receipt
+
+Read-only local task review history. Returns `{history, external_network: false, external_writes_performed: false}`. This endpoint does not write an audit event and never refreshes Gmail or writes an external system.
+
+Each `history[]` item contains:
+
+| Field | Type | Notes |
+| --- | --- | --- |
+| `audit_id` | number | source audit event id used for undo |
+| `action` | string | `task.review` or `task.review.bulk` |
+| `actor` / `subject` / `created_at` | string | audit metadata |
+| `confirmation_id` | string | present for bulk review actions |
+| `status` | string | target review status |
+| `previous_status` | string | previous state, or `mixed` for bulk |
+| `reviewed_count` | number | number of affected tasks |
+| `task_ids` | string[] | affected task IDs |
+| `undoable` | boolean | true when the source audit has enough previous-state metadata and has not already been undone |
+| `undo_status` | string | `available` or `undone` |
+| `summary` | string | compact display text |
+| `external_writes_performed` | boolean | always false |
+
+The CLI mirrors this with `sentineldesk tasks history --limit ...`.
+
+### POST `/api/tasks/review/undo` → undo receipt
+
+Confirmation-gated local undo for a previous `task.review` or `task.review.bulk` audit event. Preferred UI request body:
+
+```json
+{
+  "audit_id": 42,
+  "confirm": true,
+  "confirmation_id": "ui-task-undo-42-<epoch>"
+}
+```
+
+Without `confirm: true`, the response is blocked with `allowed: false`, `reason: "confirmation_required"`, and no task status changes. Confirmed requests require a single-use `confirmation_id`; replay returns `allowed: false`, `reason: "confirmation_id_already_consumed"`. A source audit that has already been undone returns `allowed: false`, `reason: "source_audit_already_undone"`.
+
+Successful responses include `allowed`, `reason`, `audit_id`, `actor`, `updated_at`, `confirmation_id`, `restored_count`, `task_ids`, `tasks`, and `external_writes_performed: false`. The operation writes one local approval record and one `task.review.undo` audit event. It restores the previous local review state or deletes the review row when the task had never been reviewed before; it never sends email, refreshes Gmail, submits a portal form, or writes an external calendar.
+
+The CLI mirrors this with `sentineldesk tasks undo --audit-id ... --confirm --confirmation-id ...`.
+
 ### GET `/api/tasks/evidence?task_id=` → task evidence drill-down
 
 Read-only source drill-down for a review task. Returns `{task_id, task, sources, source_count, external_network, external_writes_performed}`. Each source includes local email metadata (`message_id`, `thread_id`, `sender`, `subject`, `received_at`), `body_preview`, attachment counts/names, and `matched_facts` with `kind`, `value`, `confidence`, and evidence snippets. This endpoint does not write an audit event, refresh Gmail, or call any external system.
@@ -160,6 +201,7 @@ How backend fields drive the B′ visual spec:
 | Assistant task review card | computed from `/api/tasks`: non-calendar amount/action tasks render with value chips, evidence snippet, confidence, a local-only `查看证据` drill-down from `/api/tasks/evidence`, and local-only `done`, `needs_verification`, `reviewed`, `ignored` controls |
 | Assistant task queue controls | client-side filters over the loaded `/api/tasks` rows: kind (`all/deadline/amount/action`), status (`active/new/needs_verification/reviewed/done/ignored/all`), plus cursor navigation (`task-prev`, `task-next`, `show-task`) so large queues can be reviewed without cycling one unfiltered card at a time |
 | Assistant bulk task controls | `task-bulk-done`, `task-bulk-reviewed`, `task-bulk-ignored`, and `task-bulk-needs-verification` use `window.confirm`, send the currently filtered `task_ids` to `/api/tasks/review/bulk`, and re-fetch local state after `allowed: true` |
+| Assistant review history/undo | `task-history` reads `/api/tasks/review/history`; each undoable row renders `task-undo`, which uses `window.confirm`, sends `{audit_id, confirm: true, confirmation_id}` to `/api/tasks/review/undo`, and re-fetches local state after `allowed: true` |
 | Assistant calendar embed | computed client-side from `/api/calendar/events` + `/api/tasks`: counts of pending/confirmed/uncertain in the visible range |
 | Composer | sends to `/api/ask`; render `citations` as evidence chips and `uncertain` answers with the uncertainty style |
 | Now line | client clock; render only in today's column within 07:00–21:00 |

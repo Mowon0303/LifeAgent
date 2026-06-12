@@ -697,6 +697,12 @@ def list_audit_events(paths: Paths, *, limit: int = 100) -> list[dict[str, Any]]
     return decode_rows(rows)
 
 
+def get_audit_event(paths: Paths, *, audit_id: int) -> dict[str, Any] | None:
+    with open_db(paths) as conn:
+        row = conn.execute("SELECT * FROM audit_events WHERE id = ?", (audit_id,)).fetchone()
+    return decode_row(row)
+
+
 def insert_approval_record(
     paths: Paths,
     *,
@@ -818,6 +824,12 @@ def get_task_review(paths: Paths, *, task_id: str) -> dict[str, Any] | None:
     with open_db(paths) as conn:
         row = conn.execute("SELECT * FROM task_reviews WHERE task_id = ?", (task_id,)).fetchone()
     return decode_row(row)
+
+
+def delete_task_review(paths: Paths, *, task_id: str) -> int:
+    with open_db(paths) as conn:
+        cursor = conn.execute("DELETE FROM task_reviews WHERE task_id = ?", (task_id,))
+        return int(cursor.rowcount)
 
 
 def list_task_reviews(paths: Paths, *, limit: int = 500) -> list[dict[str, Any]]:

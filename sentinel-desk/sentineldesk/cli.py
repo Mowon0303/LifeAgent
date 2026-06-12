@@ -46,7 +46,7 @@ from .reports import (
 from .scenarios import apply_scenario, list_scenarios
 from .server import serve
 from .secrets import env_secret
-from .tasks import bulk_review_tasks, list_tasks, review_task
+from .tasks import bulk_review_tasks, list_review_history, list_tasks, review_task, undo_task_review
 
 
 def print_json(value: object) -> None:
@@ -564,6 +564,12 @@ def cmd_tasks_review(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_tasks_history(args: argparse.Namespace) -> int:
+    paths = paths_from_args(args)
+    print_json(list_review_history(paths, limit=args.limit))
+    return 0
+
+
 def cmd_tasks_bulk_review(args: argparse.Namespace) -> int:
     paths = paths_from_args(args)
     try:
@@ -574,6 +580,23 @@ def cmd_tasks_bulk_review(args: argparse.Namespace) -> int:
             status_filter=args.filter_status,
             limit=args.limit,
             note=args.note or "",
+            actor=args.actor,
+            confirmed=args.confirm,
+            confirmation_id=args.confirmation_id,
+        )
+    except ValueError as error:
+        print_json({"error": str(error)})
+        return 1
+    print_json(result.__dict__)
+    return 0 if result.allowed or not args.confirm else 1
+
+
+def cmd_tasks_undo(args: argparse.Namespace) -> int:
+    paths = paths_from_args(args)
+    try:
+        result = undo_task_review(
+            paths,
+            audit_id=args.audit_id,
             actor=args.actor,
             confirmed=args.confirm,
             confirmation_id=args.confirmation_id,
@@ -1064,6 +1087,9 @@ def build_parser() -> argparse.ArgumentParser:
     tasks_review.add_argument("--note", default="")
     tasks_review.add_argument("--actor", default="user")
     tasks_review.set_defaults(func=cmd_tasks_review)
+    tasks_history = tasks_sub.add_parser("history", help="List recent local task review actions and undo availability")
+    tasks_history.add_argument("--limit", type=int, default=20)
+    tasks_history.set_defaults(func=cmd_tasks_history)
     tasks_bulk = tasks_sub.add_parser("bulk-review", help="Set review status for a filtered task queue after confirmation")
     tasks_bulk.add_argument("--status", required=True, choices=["new", "reviewed", "ignored", "needs_verification", "done"])
     tasks_bulk.add_argument("--kind", default="all", choices=["all", "deadline", "amount", "action"])
@@ -1078,6 +1104,12 @@ def build_parser() -> argparse.ArgumentParser:
     tasks_bulk.add_argument("--confirm", action="store_true", help="Allow the local bulk review write")
     tasks_bulk.add_argument("--confirmation-id", default="", help="Required when --confirm is used")
     tasks_bulk.set_defaults(func=cmd_tasks_bulk_review)
+    tasks_undo = tasks_sub.add_parser("undo", help="Undo a recent local task review audit event after confirmation")
+    tasks_undo.add_argument("--audit-id", required=True, type=int)
+    tasks_undo.add_argument("--actor", default="user")
+    tasks_undo.add_argument("--confirm", action="store_true", help="Allow the local undo write")
+    tasks_undo.add_argument("--confirmation-id", default="", help="Required when --confirm is used")
+    tasks_undo.set_defaults(func=cmd_tasks_undo)
 
     calendar = sub.add_parser("calendar", help="Preview or sync drafted calendar deadline events")
     calendar_sub = calendar.add_subparsers(dest="calendar_command", required=True)
