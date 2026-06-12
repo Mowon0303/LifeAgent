@@ -23,7 +23,7 @@ from .monitor import run_all
 from .reports import package_path_for, redact_data, write_evidence_package
 from .retention import plan_purge, purge, result_to_dict
 from .scenarios import apply_scenario, list_scenarios
-from .tasks import list_tasks, review_task, task_evidence
+from .tasks import bulk_review_tasks, list_tasks, review_task, task_evidence
 
 
 def json_bytes(value: object) -> bytes:
@@ -367,6 +367,35 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as error:
                 self.send_json({"error": str(error)}, status=500)
             return
+        if parsed.path == "/api/tasks/review/bulk":
+            query = parse_qs(parsed.query)
+            body = self.read_json_body()
+            task_ids = body.get("task_ids") if isinstance(body.get("task_ids"), list) else query.get("task_id", [])
+            task_ids = [str(task_id) for task_id in task_ids if str(task_id)]
+            filter_payload = body.get("filter") if isinstance(body.get("filter"), dict) else {}
+            status = str(body.get("status") or query.get("status", [""])[0])
+            if not status:
+                self.send_json({"error": "status field required"}, status=400)
+                return
+            try:
+                result = bulk_review_tasks(
+                    self.paths,
+                    task_ids=task_ids,
+                    status=status,
+                    kind=str(filter_payload.get("kind") or query.get("kind", ["all"])[0]),
+                    status_filter=str(filter_payload.get("status") or query.get("filter_status", ["active"])[0]),
+                    limit=_query_int(query, "limit", _body_int(body, "limit", 100)),
+                    note=str(body.get("note") or query.get("note", [""])[0]),
+                    actor="dashboard",
+                    confirmed=_truthy(body.get("confirm", query.get("confirm", ["0"])[0])),
+                    confirmation_id=str(body.get("confirmation_id") or query.get("confirmation_id", [""])[0]),
+                )
+                self.send_json(result.__dict__)
+            except ValueError as error:
+                self.send_json({"error": str(error)}, status=400)
+            except Exception as error:
+                self.send_json({"error": str(error)}, status=500)
+            return
         if parsed.path == "/api/tasks/review":
             query = parse_qs(parsed.query)
             task_id = query.get("task_id", [""])[0]
@@ -447,3 +476,16 @@ def _query_int(query: dict[str, list[str]], name: str, default: int) -> int:
         return max(0, int(query.get(name, [str(default)])[0]))
     except (TypeError, ValueError):
         return default
+
+
+def _body_int(body: dict[str, object], name: str, default: int) -> int:
+    try:
+        return max(0, int(body.get(name, default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _truthy(value: object) -> bool:
+    if isinstance(value, bool):
+        return value
+    return str(value).lower() in {"1", "true", "yes", "y", "on"}

@@ -49,7 +49,7 @@ python3 -B -m sentineldesk --home .demo daily run --email-json fixtures/ui/sampl
 
 Expected result: JSON with `mode: "daily_landing"`, a task review queue, local calendar drafts, safe next actions, and `external_writes_performed: false`.
 
-The calendar assistant uses the same local queue: it reads `/api/tasks`, shows filtered amount/action/deadline review cards, expands local source evidence through `/api/tasks/evidence`, and writes only local `task.review` audit records for `done`, `needs_verification`, `reviewed`, and `ignored`.
+The calendar assistant uses the same local queue: it reads `/api/tasks`, shows filtered amount/action/deadline review cards, expands local source evidence through `/api/tasks/evidence`, writes local `task.review` audit records for `done`, `needs_verification`, `reviewed`, and `ignored`, and can bulk-mark the current filtered queue through a confirmation-gated local review API.
 
 For a real inbox, first configure Google OAuth token env vars, then explicitly opt into readonly Gmail refresh:
 

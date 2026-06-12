@@ -46,7 +46,7 @@ from .reports import (
 from .scenarios import apply_scenario, list_scenarios
 from .server import serve
 from .secrets import env_secret
-from .tasks import list_tasks, review_task
+from .tasks import bulk_review_tasks, list_tasks, review_task
 
 
 def print_json(value: object) -> None:
@@ -564,6 +564,27 @@ def cmd_tasks_review(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_tasks_bulk_review(args: argparse.Namespace) -> int:
+    paths = paths_from_args(args)
+    try:
+        result = bulk_review_tasks(
+            paths,
+            status=args.status,
+            kind=args.kind,
+            status_filter=args.filter_status,
+            limit=args.limit,
+            note=args.note or "",
+            actor=args.actor,
+            confirmed=args.confirm,
+            confirmation_id=args.confirmation_id,
+        )
+    except ValueError as error:
+        print_json({"error": str(error)})
+        return 1
+    print_json(result.__dict__)
+    return 0 if result.allowed or not args.confirm else 1
+
+
 def cmd_calendar_sync(args: argparse.Namespace) -> int:
     paths = paths_from_args(args)
     ensure_dirs(paths)
@@ -1043,6 +1064,20 @@ def build_parser() -> argparse.ArgumentParser:
     tasks_review.add_argument("--note", default="")
     tasks_review.add_argument("--actor", default="user")
     tasks_review.set_defaults(func=cmd_tasks_review)
+    tasks_bulk = tasks_sub.add_parser("bulk-review", help="Set review status for a filtered task queue after confirmation")
+    tasks_bulk.add_argument("--status", required=True, choices=["new", "reviewed", "ignored", "needs_verification", "done"])
+    tasks_bulk.add_argument("--kind", default="all", choices=["all", "deadline", "amount", "action"])
+    tasks_bulk.add_argument(
+        "--filter-status",
+        default="active",
+        choices=["active", "new", "reviewed", "ignored", "needs_verification", "done", "all"],
+    )
+    tasks_bulk.add_argument("--limit", type=int, default=100)
+    tasks_bulk.add_argument("--note", default="")
+    tasks_bulk.add_argument("--actor", default="user")
+    tasks_bulk.add_argument("--confirm", action="store_true", help="Allow the local bulk review write")
+    tasks_bulk.add_argument("--confirmation-id", default="", help="Required when --confirm is used")
+    tasks_bulk.set_defaults(func=cmd_tasks_bulk_review)
 
     calendar = sub.add_parser("calendar", help="Preview or sync drafted calendar deadline events")
     calendar_sub = calendar.add_subparsers(dest="calendar_command", required=True)

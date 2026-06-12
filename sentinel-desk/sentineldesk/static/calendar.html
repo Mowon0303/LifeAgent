@@ -158,6 +158,7 @@
   .dD-tasknav { display:flex; align-items:center; gap:7px; max-width:340px; margin-top:8px; }
   .dD-tasknav .meta { flex:1; font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:#9A8E7B; white-space:nowrap;
     overflow:hidden; text-overflow:ellipsis; }
+  .dD-bulkbar { display:flex; flex-wrap:wrap; gap:6px; max-width:340px; margin-top:8px; }
   .dD-mini { width:32px; height:28px; border-radius:7px; border:0; background:#E6DECD; color:#5C5446;
     font-size:15px; font-weight:700; cursor:pointer; font-family:inherit; }
   .dD-mini:disabled { opacity:.45; cursor:default; }
@@ -282,6 +283,12 @@
     'task-ignored': 'ignored',
     'task-reviewed': 'reviewed',
     'task-needs-verification': 'needs_verification'
+  };
+  var TASK_BULK_ACTION_STATUS = {
+    'task-bulk-done': 'done',
+    'task-bulk-reviewed': 'reviewed',
+    'task-bulk-ignored': 'ignored',
+    'task-bulk-needs-verification': 'needs_verification'
   };
   var WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']; // Mon-first
   var MONTH_CN = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
@@ -644,6 +651,8 @@
     var safety = d.safety || {};
     var facts = email.fact_counts || {};
     var connectors = d.connectors || [];
+    var filteredTasks = filteredTaskQueue();
+    var bulkDisabled = filteredTasks.length ? '' : ' disabled';
     var connector = connectors.length ? connectors[0] : {};
     var connectorText = connector.connector
       ? (connector.connector + (connector.has_cursor ? ' · 已保存游标' : ' · 无游标'))
@@ -656,6 +665,11 @@
       '<div class="dD-sumrow"><div class="n">' + (safety.external_writes_performed ? '!' : '0') + '</div><div><div class="lab">外部写入</div><div class="sub">' + escapeHtml(connectorText) + ' · Gmail 只读</div></div></div>' +
       '<div class="dD-taskline" id="taskReviewQueue">任务操作只写本地 review 状态和 audit，不会发送邮件或写外部日历。</div>' +
       taskFilterControls() +
+      '<div class="dD-bulkbar" id="taskBulkActions">' +
+      '<button class="dD-cbtn prim" data-act="task-bulk-done"' + bulkDisabled + '>批量完成</button>' +
+      '<button class="dD-cbtn sec" data-act="task-bulk-reviewed"' + bulkDisabled + '>批量已阅</button>' +
+      '<button class="dD-cbtn sec" data-act="task-bulk-ignored"' + bulkDisabled + '>批量忽略</button>' +
+      '<button class="dD-cbtn warn" data-act="task-bulk-needs-verification"' + bulkDisabled + '>批量核对</button></div>' +
       '<div class="dD-btns"><button class="dD-cbtn sec" data-act="daily-run">刷新今日检查</button>' +
       '<button class="dD-cbtn sec" data-act="show-task">打开当前任务</button></div></div>';
   }
@@ -862,6 +876,55 @@
       .finally(function () { state.busy = false; });
   }
 
+  function handleTaskBulkReview(status, button) {
+    if (state.busy) return;
+    var queue = filteredTaskQueue();
+    if (!queue.length) {
+      botMessage('<div class="dD-body">当前筛选下没有可批量处理的任务。</div>', { ghost: true });
+      return;
+    }
+    var label = REVIEW_STATUS_LABEL[status] || status;
+    var scope = (TASK_KIND_FILTER_LABEL[state.taskFilterKind] || state.taskFilterKind) + ' / ' +
+      (TASK_STATUS_FILTER_LABEL[state.taskFilterStatus] || state.taskFilterStatus);
+    var ok = window.confirm('将当前筛选下 ' + queue.length + ' 条任务批量标记为“' + label + '”？\n筛选：' + scope + '\n这个操作只写本地 review 状态和 audit。');
+    if (!ok) return;
+    state.busy = true;
+    var wrap = button.closest('#taskBulkActions');
+    if (wrap) wrap.querySelectorAll('button').forEach(function (btn) { btn.disabled = true; });
+    var confirmationId = 'ui-task-bulk-' + Date.now();
+    fetch('/api/tasks/review/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        task_ids: queue.map(function (task) { return task.task_id; }),
+        status: status,
+        note: 'bulk reviewed from calendar assistant: ' + status,
+        confirm: true,
+        confirmation_id: confirmationId,
+        filter: { kind: state.taskFilterKind, status: state.taskFilterStatus }
+      })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (result) {
+        if (result.error) throw new Error(result.error);
+        if (!result.allowed) {
+          botMessage('<div class="dD-body uncertain">批量操作被确认门拦下了：' +
+            escapeHtml(result.reason || '未知原因') + '</div>');
+          return null;
+        }
+        botMessage('<div class="dD-body">已把 <b>' + escapeHtml(result.reviewed_count || 0) +
+          '</b> 条任务批量标记为 <b>' + escapeHtml(label) + '</b>。确认 ID <code>' +
+          escapeHtml(confirmationId) + '</code> 已记录；没有外部副作用。</div>');
+        state.taskCursor = 0;
+        return refresh();
+      })
+      .catch(function (err) { botMessage('<div class="dD-body uncertain">批量任务状态更新失败：' + escapeHtml(err) + '</div>'); })
+      .finally(function () {
+        state.busy = false;
+        if (wrap) wrap.querySelectorAll('button').forEach(function (btn) { btn.disabled = false; });
+      });
+  }
+
   function handleTaskEvidence(taskId, button) {
     if (state.busy) return;
     state.busy = true;
@@ -945,6 +1008,11 @@
     }
     if (btn.dataset.act === 'show-task') {
       offerNextTaskSuggestion();
+      return;
+    }
+    var bulkStatus = TASK_BULK_ACTION_STATUS[btn.dataset.act];
+    if (bulkStatus) {
+      handleTaskBulkReview(bulkStatus, btn);
       return;
     }
     var reviewStatus = TASK_ACTION_STATUS[btn.dataset.act];

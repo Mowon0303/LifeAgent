@@ -38,7 +38,7 @@ Agent layer:
 
 ## Current Evidence
 
-- `280` unittest cases pass.
+- `283` unittest cases pass.
 - Golden extraction eval: raw deadline, amount, and action are all `P=1.000 / R=1.000 / F1=1.000` on the current synthetic set.
 - Redacted Gmail-first readiness package shape is regression-tested.
 - Daily landing workflow creates 4 synthetic messages, 8 extracted facts, 3 local calendar drafts, 7 grouped reviewable tasks, and a local audit record without external writes.
@@ -48,6 +48,7 @@ Agent layer:
 - Calendar assistant exposes amount/action task review cards with local-only `done`, `needs_verification`, `reviewed`, and `ignored` actions.
 - Task cards can expand local source evidence from SQLite before review, including matched facts and a bounded email body preview, without refreshing Gmail or writing audit events.
 - Task queues can be filtered by kind/status and navigated with previous/current/next controls, backed by `/api/tasks?kind=&status=&limit=`.
+- Filtered task queues can be bulk-marked through a confirmation-gated local review API with single-use confirmation IDs and replay protection.
 - Source release packaging and release audit pass with runtime artifacts excluded.
 
 ## Portfolio Snapshot

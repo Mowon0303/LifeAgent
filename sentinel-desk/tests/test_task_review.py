@@ -11,7 +11,7 @@ from sentineldesk.cli import main
 from sentineldesk.config import get_paths
 from sentineldesk.email.ingest import ingest_messages
 from sentineldesk.email.models import EmailMessage
-from sentineldesk.tasks import list_tasks, review_task
+from sentineldesk.tasks import bulk_review_tasks, list_tasks, review_task
 
 
 def task_message() -> EmailMessage:
@@ -122,6 +122,91 @@ class TaskReviewTests(unittest.TestCase):
             reviewed = json.loads(output.getvalue())
             self.assertEqual(reviewed["status"], "done")
             self.assertEqual(reviewed["task"]["status"], "done")
+
+    def test_bulk_review_requires_confirmation_and_blocks_replay(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+
+            blocked = bulk_review_tasks(
+                paths,
+                kind="amount",
+                status_filter="active",
+                status="done",
+                actor="tester",
+                confirmed=False,
+                updated_at="2026-06-10T12:10:00Z",
+            )
+
+            self.assertFalse(blocked.allowed)
+            self.assertEqual(blocked.reason, "confirmation_required")
+            self.assertEqual(blocked.reviewed_count, 0)
+            self.assertTrue([task for task in list_tasks(paths, kind="amount") if task["status"] == "new"])
+
+            confirmed = bulk_review_tasks(
+                paths,
+                kind="amount",
+                status_filter="active",
+                status="done",
+                actor="tester",
+                confirmed=True,
+                confirmation_id="bulk-test-1",
+                updated_at="2026-06-10T12:15:00Z",
+            )
+
+            self.assertTrue(confirmed.allowed)
+            self.assertEqual(confirmed.reason, "confirmed")
+            self.assertEqual(confirmed.reviewed_count, 1)
+            self.assertEqual(list_tasks(paths, kind="amount", status="done")[0]["status"], "done")
+
+            replay = bulk_review_tasks(
+                paths,
+                kind="amount",
+                status_filter="all",
+                status="ignored",
+                actor="tester",
+                confirmed=True,
+                confirmation_id="bulk-test-1",
+                updated_at="2026-06-10T12:20:00Z",
+            )
+
+            self.assertFalse(replay.allowed)
+            self.assertEqual(replay.reason, "confirmation_id_already_consumed")
+            self.assertEqual(list_tasks(paths, kind="amount", status="done")[0]["status"], "done")
+            audit_actions = [event["action"] for event in db.list_audit_events(paths, limit=10)]
+            self.assertIn("task.review.bulk", audit_actions)
+            self.assertIn("task.review.bulk.blocked", audit_actions)
+
+    def test_cli_tasks_bulk_review(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = main(
+                    [
+                        "--home",
+                        tmp,
+                        "tasks",
+                        "bulk-review",
+                        "--kind",
+                        "action",
+                        "--filter-status",
+                        "active",
+                        "--status",
+                        "reviewed",
+                        "--confirm",
+                        "--confirmation-id",
+                        "cli-bulk-1",
+                    ]
+                )
+
+            self.assertEqual(code, 0)
+            payload = json.loads(output.getvalue())
+            self.assertTrue(payload["allowed"])
+            self.assertEqual(payload["reviewed_count"], 1)
+            self.assertEqual(list_tasks(paths, kind="action", status="reviewed")[0]["status"], "reviewed")
 
 
 if __name__ == "__main__":

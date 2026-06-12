@@ -257,6 +257,54 @@ class TaskContractTests(UiContractBase):
         self.assertGreater(len(review_events), len([event for event in before if event["action"] == "task.review"]))
         self.assertEqual(review_events[0]["subject"], task_id)
 
+    def test_bulk_review_flow_requires_confirmation_and_records_local_audit(self) -> None:
+        _, amount_tasks = self.json_request("GET", "/api/tasks?kind=amount&status=new")
+        task_ids = [task["task_id"] for task in amount_tasks]
+        self.assertGreaterEqual(len(task_ids), 1)
+
+        blocked_body = json.dumps(
+            {
+                "task_ids": task_ids,
+                "status": "done",
+                "note": "ui bulk blocked",
+                "filter": {"kind": "amount", "status": "new"},
+            }
+        )
+        status, blocked = self.json_request("POST", "/api/tasks/review/bulk", blocked_body)
+        self.assertEqual(status, 200)
+        self.assertFalse(blocked["allowed"])
+        self.assertEqual(blocked["reason"], "confirmation_required")
+        _, still_new = self.json_request("GET", "/api/tasks?kind=amount&status=new")
+        self.assertEqual({task["task_id"] for task in still_new}, set(task_ids))
+
+        confirmed_body = json.dumps(
+            {
+                "task_ids": task_ids,
+                "status": "done",
+                "note": "ui bulk done",
+                "confirm": True,
+                "confirmation_id": "ui-bulk-contract-1",
+                "filter": {"kind": "amount", "status": "new"},
+            }
+        )
+        status, confirmed = self.json_request("POST", "/api/tasks/review/bulk", confirmed_body)
+        self.assertEqual(status, 200)
+        self.assertTrue(confirmed["allowed"])
+        self.assertEqual(confirmed["reviewed_count"], len(task_ids))
+        _, done = self.json_request("GET", "/api/tasks?kind=amount&status=done")
+        self.assertLessEqual(set(task_ids), {task["task_id"] for task in done})
+        audit_actions = [event["action"] for event in db.list_audit_events(self.paths, limit=20)]
+        self.assertIn("task.review.bulk", audit_actions)
+        self.assertIn("task.review", audit_actions)
+        approvals = db.list_approval_records(self.paths, limit=10)
+        self.assertEqual(approvals[0]["confirmation_id"], "ui-bulk-contract-1")
+        self.assertEqual(approvals[0]["action"], "task.review.bulk")
+
+        status, replay = self.json_request("POST", "/api/tasks/review/bulk", confirmed_body)
+        self.assertEqual(status, 200)
+        self.assertFalse(replay["allowed"])
+        self.assertEqual(replay["reason"], "confirmation_id_already_consumed")
+
     def test_task_evidence_drilldown_is_local_readonly(self) -> None:
         _, tasks = self.json_request("GET", "/api/tasks")
         email_task = next(task for task in tasks if str(task["task_id"]).startswith("email:"))
@@ -459,18 +507,24 @@ class CalendarPageTests(UiContractBase):
             "/api/daily/run",
             "/api/tasks/evidence?task_id=",
             "/api/tasks/review?task_id=",
+            "/api/tasks/review/bulk",
             "/api/calendar/sync?destination=ics&confirm=1",
             "/api/ask",
             'id="dailySummary"',
             'id="taskReviewQueue"',
             'id="taskQueueFilters"',
             'id="taskNavState"',
+            'id="taskBulkActions"',
             'data-act="daily-run"',
             'data-act="show-task"',
             'data-act="task-filter-kind"',
             'data-act="task-filter-status"',
             'data-act="task-prev"',
             'data-act="task-next"',
+            'data-act="task-bulk-done"',
+            'data-act="task-bulk-reviewed"',
+            'data-act="task-bulk-ignored"',
+            'data-act="task-bulk-needs-verification"',
             'data-act="task-evidence"',
             'data-act="task-done"',
             'data-act="task-needs-verification"',
@@ -494,6 +548,7 @@ class CalendarPageTests(UiContractBase):
         self.assertIn("function taskFilterControls", html)
         self.assertIn("function handleTaskFilter", html)
         self.assertIn("function moveTaskCursor", html)
+        self.assertIn("function handleTaskBulkReview", html)
         self.assertIn("function taskEvidenceEmbed", html)
         self.assertIn("function offerNextTaskSuggestion", html)
         self.assertIn("function handleTaskReview", html)

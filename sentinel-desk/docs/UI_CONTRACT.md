@@ -74,6 +74,25 @@ Sets the review state (audited, local-only). Response: `{task_id, status, note, 
 
 The calendar assistant reads the full `/api/tasks` queue. Calendar-derived tasks drive pending calendar suggestion visibility; non-calendar email tasks (`amount` and `action`, plus any future email-only deadline tasks) render as review cards. Buttons map to `status=done`, `status=needs_verification`, `status=reviewed`, and `status=ignored`. These calls write only local `task.review` audit events and must not trigger email sends, portal writes, or external calendar writes.
 
+### POST `/api/tasks/review/bulk` → bulk review receipt
+
+Confirmation-gated local bulk review for the current filtered task queue. Preferred UI request body:
+
+```json
+{
+  "task_ids": ["email:..."],
+  "status": "done",
+  "note": "bulk reviewed from calendar assistant: done",
+  "confirm": true,
+  "confirmation_id": "ui-task-bulk-<epoch>",
+  "filter": {"kind": "amount", "status": "active"}
+}
+```
+
+Without `confirm: true`, the response is blocked with `allowed: false`, `reason: "confirmation_required"`, and no task status changes. Confirmed requests require a single-use `confirmation_id`; replay returns `allowed: false`, `reason: "confirmation_id_already_consumed"`. Successful responses include `allowed`, `reason`, `status`, `confirmation_id`, `filters`, `requested_count`, `matched_count`, `reviewed_count`, `missing_task_ids`, `task_ids`, `tasks`, and `external_writes_performed: false`. The operation writes a local approval record, a `task.review.bulk` audit event, and one existing `task.review` audit event per changed task. It never sends email, refreshes Gmail, submits a portal form, or writes an external calendar.
+
+The CLI mirrors this with `sentineldesk tasks bulk-review --kind ... --filter-status ... --status ... --confirm --confirmation-id ...`.
+
 ### GET `/api/tasks/evidence?task_id=` → task evidence drill-down
 
 Read-only source drill-down for a review task. Returns `{task_id, task, sources, source_count, external_network, external_writes_performed}`. Each source includes local email metadata (`message_id`, `thread_id`, `sender`, `subject`, `received_at`), `body_preview`, attachment counts/names, and `matched_facts` with `kind`, `value`, `confidence`, and evidence snippets. This endpoint does not write an audit event, refresh Gmail, or call any external system.
@@ -140,6 +159,7 @@ How backend fields drive the B′ visual spec:
 | Assistant daily embed | computed from `/api/daily/summary`: stored mail, grouped review queue, local calendar drafts, connector readiness, and external-write boundary |
 | Assistant task review card | computed from `/api/tasks`: non-calendar amount/action tasks render with value chips, evidence snippet, confidence, a local-only `查看证据` drill-down from `/api/tasks/evidence`, and local-only `done`, `needs_verification`, `reviewed`, `ignored` controls |
 | Assistant task queue controls | client-side filters over the loaded `/api/tasks` rows: kind (`all/deadline/amount/action`), status (`active/new/needs_verification/reviewed/done/ignored/all`), plus cursor navigation (`task-prev`, `task-next`, `show-task`) so large queues can be reviewed without cycling one unfiltered card at a time |
+| Assistant bulk task controls | `task-bulk-done`, `task-bulk-reviewed`, `task-bulk-ignored`, and `task-bulk-needs-verification` use `window.confirm`, send the currently filtered `task_ids` to `/api/tasks/review/bulk`, and re-fetch local state after `allowed: true` |
 | Assistant calendar embed | computed client-side from `/api/calendar/events` + `/api/tasks`: counts of pending/confirmed/uncertain in the visible range |
 | Composer | sends to `/api/ask`; render `citations` as evidence chips and `uncertain` answers with the uncertainty style |
 | Now line | client clock; render only in today's column within 07:00–21:00 |
