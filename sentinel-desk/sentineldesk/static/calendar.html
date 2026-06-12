@@ -156,6 +156,14 @@
   .dD-task-values span { font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:#5C5446; background:#F1EADB;
     border-radius:5px; padding:3px 7px; max-width:154px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .dD-task-actions { flex-wrap:wrap; }
+  .dD-evidence { border-left-color:#4F7A4A; }
+  .dD-evidence .src-title { font-size:13.5px; font-weight:700; color:#2B2622; line-height:1.35; }
+  .dD-evidence .src-meta { font-size:11.5px; color:#9A8E7B; margin-top:3px; overflow-wrap:break-word; }
+  .dD-evidence .body-preview { font-size:12.5px; color:#514A3F; line-height:1.45; background:#F5EFE3;
+    border-radius:6px; padding:9px 10px; margin-top:9px; max-height:138px; overflow:auto; }
+  .dD-facts { display:flex; flex-direction:column; gap:5px; margin-top:9px; }
+  .dD-fact { border-top:1px solid #F1EADB; padding-top:6px; font-size:12px; color:#5C5446; }
+  .dD-fact b { color:#B14228; font-family:'IBM Plex Mono',monospace; font-size:10.5px; text-transform:uppercase; }
   .dD-cites { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
   .dD-cite { font-family:'IBM Plex Mono',monospace; font-size:10px; color:#6A5BD0; background:#EAE6FA;
     border-radius:5px; padding:2px 7px; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -595,10 +603,38 @@
       (task.evidence ? '<div class="enote">' + escapeHtml(clip(task.evidence, 160)) + '</div>' : '') +
       '</div>' +
       '<div class="dD-btns dD-task-actions" data-task-id="' + escapeHtml(task.task_id) + '">' +
+      '<button class="dD-cbtn sec" data-act="task-evidence">查看证据</button>' +
       '<button class="dD-cbtn prim" data-act="task-done">完成</button>' +
       '<button class="dD-cbtn warn" data-act="task-needs-verification">需核对</button>' +
       '<button class="dD-cbtn sec" data-act="task-reviewed">已审阅</button>' +
       '<button class="dD-cbtn sec" data-act="task-ignored">忽略</button></div>';
+  }
+
+  function taskEvidenceEmbed(payload) {
+    var task = payload.task || {};
+    var sources = payload.sources || [];
+    var html = '<div class="dD-body">这是该任务的本地证据。这个展开动作只读 SQLite，不刷新 Gmail，也不写外部系统。</div>';
+    if (!sources.length) {
+      return html + '<div class="dD-embed evidence dD-evidence"><div class="enote">没有找到可展开的本地来源，建议标记为需核对。</div></div>';
+    }
+    sources.slice(0, 2).forEach(function (source) {
+      var facts = source.matched_facts || [];
+      var factHtml = facts.slice(0, 4).map(function (fact) {
+        return '<div class="dD-fact"><b>' + escapeHtml(TASK_KIND_LABEL[fact.kind] || fact.kind || 'fact') +
+          '</b> ' + escapeHtml(fact.value || '') +
+          '<div class="src-meta">置信 ' + Number(fact.confidence || 0).toFixed(2) +
+          (fact.evidence ? ' · ' + escapeHtml(clip(fact.evidence, 120)) : '') + '</div></div>';
+      }).join('');
+      html += '<div class="dD-embed evidence dD-evidence">' +
+        '<div class="dD-task-kind">本地邮件证据 · ' + escapeHtml(task.task_id || '') + '</div>' +
+        '<div class="src-title">' + escapeHtml(source.subject || '(no subject)') + '</div>' +
+        '<div class="src-meta">' + escapeHtml(source.sender || '') + ' · ' + escapeHtml(source.received_at || '') +
+        ' · ' + escapeHtml(source.message_id || '') + '</div>' +
+        (factHtml ? '<div class="dD-facts">' + factHtml + '</div>' : '') +
+        (source.body_preview ? '<div class="body-preview">' + escapeHtml(source.body_preview) + '</div>' : '') +
+        '</div>';
+    });
+    return html;
   }
 
   function offerNextSuggestion() {
@@ -716,6 +752,23 @@
       .finally(function () { state.busy = false; });
   }
 
+  function handleTaskEvidence(taskId, button) {
+    if (state.busy) return;
+    state.busy = true;
+    button.disabled = true;
+    fetch('/api/tasks/evidence?task_id=' + encodeURIComponent(taskId))
+      .then(function (r) { return r.json(); })
+      .then(function (payload) {
+        if (payload.error) throw new Error(payload.error);
+        botMessage(taskEvidenceEmbed(payload), { ghost: true });
+      })
+      .catch(function (err) { botMessage('<div class="dD-body uncertain">证据展开失败：' + escapeHtml(err) + '</div>'); })
+      .finally(function () {
+        state.busy = false;
+        button.disabled = false;
+      });
+  }
+
   function askAssistant(question) {
     userMessage(question);
     fetch('/api/ask', {
@@ -772,6 +825,11 @@
     if (reviewStatus) {
       var taskWrap = btn.closest('.dD-btns');
       if (taskWrap && taskWrap.dataset.taskId) handleTaskReview(taskWrap.dataset.taskId, reviewStatus, taskWrap);
+      return;
+    }
+    if (btn.dataset.act === 'task-evidence') {
+      var evidenceWrap = btn.closest('.dD-btns');
+      if (evidenceWrap && evidenceWrap.dataset.taskId) handleTaskEvidence(evidenceWrap.dataset.taskId, btn);
       return;
     }
     var wrap = btn.closest('.dD-btns');

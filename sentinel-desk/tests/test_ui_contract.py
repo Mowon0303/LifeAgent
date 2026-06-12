@@ -79,6 +79,27 @@ DAILY_SUMMARY_FIELDS = {
     "safety",
     "next_actions",
 }
+TASK_EVIDENCE_FIELDS = {
+    "task_id",
+    "task",
+    "sources",
+    "source_count",
+    "external_network",
+    "external_writes_performed",
+}
+TASK_EVIDENCE_SOURCE_FIELDS = {
+    "source_id",
+    "message_id",
+    "thread_id",
+    "sender",
+    "subject",
+    "received_at",
+    "body_preview",
+    "attachment_names",
+    "attachment_count",
+    "matched_facts",
+    "fact_count",
+}
 CITATION_FIELDS = {"source_id", "source_type", "evidence", "captured_at"}
 SOURCE_TRUST_VALUES = {"email_evidence", "portal_verified", "trusted_doc_context", "local_evidence"}
 APPROVAL_STATES = {"draft", "approved"}
@@ -224,9 +245,36 @@ class TaskContractTests(UiContractBase):
         self.assertGreater(len(review_events), len([event for event in before if event["action"] == "task.review"]))
         self.assertEqual(review_events[0]["subject"], task_id)
 
+    def test_task_evidence_drilldown_is_local_readonly(self) -> None:
+        _, tasks = self.json_request("GET", "/api/tasks")
+        email_task = next(task for task in tasks if str(task["task_id"]).startswith("email:"))
+        before = db.list_audit_events(self.paths, limit=20)
+        status, payload = self.json_request("GET", f"/api/tasks/evidence?task_id={email_task['task_id']}")
+        after = db.list_audit_events(self.paths, limit=20)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(set(payload), TASK_EVIDENCE_FIELDS)
+        self.assertEqual(payload["task_id"], email_task["task_id"])
+        self.assertFalse(payload["external_network"])
+        self.assertFalse(payload["external_writes_performed"])
+        self.assertEqual(before, after)
+        self.assertGreaterEqual(payload["source_count"], 1)
+        source = payload["sources"][0]
+        self.assertEqual(set(source), TASK_EVIDENCE_SOURCE_FIELDS)
+        self.assertTrue(source["message_id"])
+        self.assertTrue(source["subject"])
+        self.assertTrue(source["body_preview"])
+        self.assertGreaterEqual(source["fact_count"], 1)
+        self.assertTrue(any(fact["kind"] == email_task["kind"] for fact in source["matched_facts"]))
+
     def test_invalid_review_status_is_rejected(self) -> None:
         status, payload = self.json_request("POST", "/api/tasks/review?task_id=calendar:x&status=bogus")
         self.assertEqual(status, 400)
+        self.assertIn("error", payload)
+
+    def test_missing_task_evidence_is_rejected(self) -> None:
+        status, payload = self.json_request("GET", "/api/tasks/evidence?task_id=email:missing")
+        self.assertEqual(status, 404)
         self.assertIn("error", payload)
 
 
@@ -397,6 +445,7 @@ class CalendarPageTests(UiContractBase):
             "/api/tasks",
             "/api/daily/summary",
             "/api/daily/run",
+            "/api/tasks/evidence?task_id=",
             "/api/tasks/review?task_id=",
             "/api/calendar/sync?destination=ics&confirm=1",
             "/api/ask",
@@ -404,6 +453,7 @@ class CalendarPageTests(UiContractBase):
             'id="taskReviewQueue"',
             'data-act="daily-run"',
             'data-act="show-task"',
+            'data-act="task-evidence"',
             'data-act="task-done"',
             'data-act="task-needs-verification"',
             'data-act="task-reviewed"',
@@ -422,8 +472,10 @@ class CalendarPageTests(UiContractBase):
         self.assertIn("function dailyEmbed()", html)
         self.assertIn("function handleDailyRun", html)
         self.assertIn("function taskReviewCard", html)
+        self.assertIn("function taskEvidenceEmbed", html)
         self.assertIn("function offerNextTaskSuggestion", html)
         self.assertIn("function handleTaskReview", html)
+        self.assertIn("function handleTaskEvidence", html)
         refresh_body = html.split("function refresh()", 1)[1].split("// ---------- boot ----------", 1)[0]
         self.assertIn("updateSummary()", refresh_body, "refresh() must recompute the assistant summary and topic")
 

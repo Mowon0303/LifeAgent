@@ -90,7 +90,7 @@ The latest dry-run used a temporary home outside the repo and verified:
 - 4 sample email messages
 - 8 extracted email facts
 - 3 local calendar drafts
-- 8 reviewable tasks
+- 7 grouped reviewable tasks
 - baseline, `critical`, and `uncertain` states
 - calendar assistant and ops dashboard load at `127.0.0.1:8798`
 - `/api/calendar/events` returns 3 email-derived drafts

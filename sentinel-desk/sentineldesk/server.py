@@ -23,7 +23,7 @@ from .monitor import run_all
 from .reports import package_path_for, redact_data, write_evidence_package
 from .retention import plan_purge, purge, result_to_dict
 from .scenarios import apply_scenario, list_scenarios
-from .tasks import list_tasks, review_task
+from .tasks import list_tasks, review_task, task_evidence
 
 
 def json_bytes(value: object) -> bytes:
@@ -84,6 +84,17 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(list_tasks(self.paths, status=query.get("status", [None])[0], limit=100))
             except ValueError as error:
                 self.send_json({"error": str(error)}, status=400)
+            return
+        if path == "/api/tasks/evidence":
+            query = parse_qs(parsed.query)
+            task_id = query.get("task_id", [""])[0]
+            if not task_id:
+                self.send_json({"error": "task_id query parameter required"}, status=400)
+                return
+            try:
+                self.send_json(task_evidence(self.paths, task_id=task_id))
+            except ValueError as error:
+                self.send_json({"error": str(error)}, status=404)
             return
         if path == "/api/daily/summary":
             query = parse_qs(parsed.query)

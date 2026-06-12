@@ -22,6 +22,23 @@ class TaskReviewResult:
     task: dict[str, Any] | None
 
 
+def task_evidence(paths: Paths, *, task_id: str) -> dict[str, Any]:
+    """Return local source evidence for a task without external reads."""
+    db.init_db(paths)
+    task = get_task(paths, task_id)
+    if not task:
+        raise ValueError(f"Task not found: {task_id}")
+    sources = [_task_source_detail(task, message) for message in _source_messages(paths, task)]
+    return {
+        "task_id": task_id,
+        "task": task,
+        "sources": sources,
+        "source_count": len(sources),
+        "external_network": False,
+        "external_writes_performed": False,
+    }
+
+
 def list_tasks(paths: Paths, *, status: str | None = None, limit: int = 100) -> list[dict[str, Any]]:
     db.init_db(paths)
     reviews = {item["task_id"]: item for item in db.list_task_reviews(paths, limit=1000)}
@@ -261,6 +278,82 @@ def _task_sort_key(task: dict[str, Any]) -> tuple[str, str, str]:
     due_date = str(task.get("due_date") or "9999-99-99")
     updated_at = str(task.get("updated_at") or task.get("received_at") or "")
     return (due_date, str(task.get("status") or ""), updated_at)
+
+
+def _source_messages(paths: Paths, task: dict[str, Any]) -> list[dict[str, Any]]:
+    source_refs = {str(item) for item in task.get("source_refs", []) if item}
+    message_ids = {_message_id_from_source_ref(source_ref) for source_ref in source_refs}
+    message_ids.discard("")
+    matched: list[dict[str, Any]] = []
+    for message in db.list_email_messages(paths, limit=1000):
+        facts = [fact for fact in message.get("facts", []) if isinstance(fact, dict)]
+        if str(message.get("message_id") or "") in message_ids:
+            matched.append(message)
+            continue
+        if any(str(fact.get("source_id") or "") in source_refs for fact in facts):
+            matched.append(message)
+    return matched
+
+
+def _task_source_detail(task: dict[str, Any], message: dict[str, Any]) -> dict[str, Any]:
+    kind = str(task.get("kind") or "")
+    source_refs_list = [str(item) for item in task.get("source_refs", []) if item]
+    source_refs = set(source_refs_list)
+    message_id = str(message.get("message_id") or "")
+    attachment_names = [str(item) for item in message.get("attachment_names", [])]
+    attachment_texts = list(message.get("attachment_texts", []) or [])
+    facts = [
+        _evidence_fact(fact)
+        for fact in message.get("facts", [])
+        if isinstance(fact, dict) and _fact_matches_task(fact, kind=kind, source_refs=source_refs, message_id=message_id)
+    ]
+    return {
+        "source_id": str(task.get("primary_source") or (source_refs_list[0] if source_refs_list else "")),
+        "message_id": message_id,
+        "thread_id": str(message.get("thread_id") or ""),
+        "sender": str(message.get("sender") or ""),
+        "subject": str(message.get("subject") or ""),
+        "received_at": str(message.get("received_at") or ""),
+        "body_preview": _clip(str(message.get("body_text") or ""), 1200),
+        "attachment_names": attachment_names,
+        "attachment_count": max(len(attachment_names), len(attachment_texts)),
+        "matched_facts": facts,
+        "fact_count": len(facts),
+    }
+
+
+def _fact_matches_task(fact: dict[str, Any], *, kind: str, source_refs: set[str], message_id: str) -> bool:
+    if kind and str(fact.get("kind") or "") != kind:
+        return False
+    fact_source = str(fact.get("source_id") or "")
+    if fact_source in source_refs:
+        return True
+    return bool(message_id and any(_message_id_from_source_ref(source_ref) == message_id for source_ref in source_refs))
+
+
+def _evidence_fact(fact: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "kind": str(fact.get("kind") or ""),
+        "value": str(fact.get("value") or ""),
+        "confidence": float(fact.get("confidence") or 0.0),
+        "evidence": _clip(str(fact.get("evidence") or ""), 500),
+        "source_id": str(fact.get("source_id") or ""),
+        "source_type": str(fact.get("source_type") or ""),
+        "received_at": str(fact.get("received_at") or ""),
+    }
+
+
+def _message_id_from_source_ref(source_ref: str) -> str:
+    if ":" not in source_ref:
+        return source_ref
+    return source_ref.split(":", 1)[1]
+
+
+def _clip(text: str, limit: int) -> str:
+    compact = " ".join(text.split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 1] + "..."
 
 
 def _validate_status(status: str) -> None:
