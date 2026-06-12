@@ -67,6 +67,18 @@ ASK_FIELDS = {
     "citations",
     "metadata",
 }
+DAILY_SUMMARY_FIELDS = {
+    "status",
+    "generated_at",
+    "mode",
+    "sync",
+    "email",
+    "tasks",
+    "calendar",
+    "connectors",
+    "safety",
+    "next_actions",
+}
 CITATION_FIELDS = {"source_id", "source_type", "evidence", "captured_at"}
 SOURCE_TRUST_VALUES = {"email_evidence", "portal_verified", "trusted_doc_context", "local_evidence"}
 APPROVAL_STATES = {"draft", "approved"}
@@ -198,6 +210,36 @@ class TaskContractTests(UiContractBase):
         status, payload = self.json_request("POST", "/api/tasks/review?task_id=calendar:x&status=bogus")
         self.assertEqual(status, 400)
         self.assertIn("error", payload)
+
+
+class DailyContractTests(UiContractBase):
+    def test_daily_summary_is_readonly_snapshot(self) -> None:
+        before = [event for event in db.list_audit_events(self.paths, limit=20) if event["action"] == "daily.run"]
+        status, summary = self.json_request("GET", "/api/daily/summary")
+        after = [event for event in db.list_audit_events(self.paths, limit=20) if event["action"] == "daily.run"]
+
+        self.assertEqual(status, 200)
+        self.assertEqual(set(summary), DAILY_SUMMARY_FIELDS)
+        self.assertEqual(summary["mode"], "daily_landing")
+        self.assertEqual(summary["sync"]["mode"], "stored_only")
+        self.assertFalse(summary["sync"]["external_network"])
+        self.assertFalse(summary["safety"]["external_writes_performed"])
+        self.assertFalse(summary["safety"]["local_audit_written"])
+        self.assertEqual(before, after)
+
+    def test_daily_run_api_records_local_audit(self) -> None:
+        status, summary = self.json_request("POST", "/api/daily/run")
+
+        self.assertEqual(status, 200)
+        self.assertEqual(set(summary), DAILY_SUMMARY_FIELDS)
+        self.assertGreaterEqual(summary["tasks"]["queue_count"], 1)
+        self.assertGreaterEqual(summary["calendar"]["pending_count"], 1)
+        self.assertFalse(summary["safety"]["external_writes_performed"])
+        self.assertTrue(summary["safety"]["local_audit_written"])
+        audit = next(event for event in db.list_audit_events(self.paths, limit=10) if event["action"] == "daily.run")
+        self.assertEqual(audit["action"], "daily.run")
+        self.assertEqual(audit["actor"], "dashboard")
+        self.assertEqual(audit["metadata"]["sync_mode"], "stored_only")
 
 
 class ConfirmFlowContractTests(UiContractBase):
@@ -335,9 +377,13 @@ class CalendarPageTests(UiContractBase):
             'data-view="agenda"',
             "/api/calendar/events",
             "/api/tasks?status=ignored",
+            "/api/daily/summary",
+            "/api/daily/run",
             "/api/tasks/review?task_id=",
             "/api/calendar/sync?destination=ics&confirm=1",
             "/api/ask",
+            'id="dailySummary"',
+            'data-act="daily-run"',
             "approval_state",
             "confirmation_id",
         ):
@@ -347,7 +393,10 @@ class CalendarPageTests(UiContractBase):
         _, _, body = self.request("GET", "/")
         html = body.decode("utf-8")
         self.assertIn('id="aiSummary"', html)
+        self.assertIn('id="dailySummary"', html)
         self.assertIn("function updateSummary()", html)
+        self.assertIn("function dailyEmbed()", html)
+        self.assertIn("function handleDailyRun", html)
         refresh_body = html.split("function refresh()", 1)[1].split("// ---------- boot ----------", 1)[0]
         self.assertIn("updateSummary()", refresh_body, "refresh() must recompute the assistant summary and topic")
 
@@ -382,8 +431,16 @@ class UiFixtureSampleTests(UiContractBase):
         self.assertEqual(status, 200)
         self.assertEqual(set(sample), set(live))
 
+    def test_committed_daily_sample_matches_live_shape(self) -> None:
+        sample = json.loads((FIXTURES_UI / "daily_summary.sample.json").read_text(encoding="utf-8"))
+        status, live = self.json_request("GET", "/api/daily/summary?task_limit=0&calendar_limit=0")
+        self.assertEqual(status, 200)
+        self.assertEqual(set(sample), set(live))
+        for key in ("sync", "email", "tasks", "calendar", "safety"):
+            self.assertEqual(set(sample[key]), set(live[key]))
+
     def test_samples_stay_synthetic(self) -> None:
-        for name in ("sample_emails.json", "calendar_events.sample.json", "tasks.sample.json"):
+        for name in ("sample_emails.json", "calendar_events.sample.json", "tasks.sample.json", "daily_summary.sample.json"):
             text = (FIXTURES_UI / name).read_text(encoding="utf-8")
             for marker in ("@gmail.", "@outlook.", "@qq.", "@163."):
                 self.assertNotIn(marker, text, f"{name} must stay synthetic")

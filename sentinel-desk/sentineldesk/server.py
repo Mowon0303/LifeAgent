@@ -16,6 +16,7 @@ from .calendar.models import CalendarDraft
 from .calendar.source import events_from_calendar_rows
 from .calendar.view import build_calendar_items
 from .config import Paths, project_root
+from .daily import build_daily_landing_summary
 from .email.ingest import stored_email_messages
 from .extract import utc_now
 from .monitor import run_all
@@ -83,6 +84,18 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_json(list_tasks(self.paths, status=query.get("status", [None])[0], limit=100))
             except ValueError as error:
                 self.send_json({"error": str(error)}, status=400)
+            return
+        if path == "/api/daily/summary":
+            query = parse_qs(parsed.query)
+            self.send_json(
+                build_daily_landing_summary(
+                    self.paths,
+                    task_limit=_query_int(query, "task_limit", 12),
+                    calendar_limit=_query_int(query, "calendar_limit", 20),
+                    actor="dashboard",
+                    record_audit=False,
+                )
+            )
             return
         if path == "/api/calendar/drafts":
             self.send_json(db.list_calendar_drafts(self.paths, limit=100))
@@ -369,6 +382,18 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as error:
                 self.send_json({"error": str(error)}, status=500)
             return
+        if parsed.path == "/api/daily/run":
+            query = parse_qs(parsed.query)
+            self.send_json(
+                build_daily_landing_summary(
+                    self.paths,
+                    task_limit=_query_int(query, "task_limit", 12),
+                    calendar_limit=_query_int(query, "calendar_limit", 20),
+                    actor="dashboard",
+                    record_audit=True,
+                )
+            )
+            return
         if parsed.path == "/api/retention/purge":
             query = parse_qs(parsed.query)
             before = query.get("before", [""])[0]
@@ -397,3 +422,10 @@ def serve(paths: Paths, *, host: str = "127.0.0.1", port: int = 8787) -> None:
     server = ThreadingHTTPServer((host, port), Handler)
     print(f"SentinelDesk dashboard: http://{host}:{port}")
     server.serve_forever()
+
+
+def _query_int(query: dict[str, list[str]], name: str, default: int) -> int:
+    try:
+        return max(0, int(query.get(name, [str(default)])[0]))
+    except (TypeError, ValueError):
+        return default

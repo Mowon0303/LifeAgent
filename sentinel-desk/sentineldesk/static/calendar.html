@@ -142,6 +142,7 @@
   .dD-sumrow .lab { font-size:13.5px; font-weight:600; color:#2B2622; }
   .dD-sumrow .sub { font-size:12px; color:#9A8E7B; margin-top:1px; }
   .dD-embed.ev { border-left-color:#6A5BD0; }
+  .dD-embed.daily { border-left-color:#4F7A4A; }
   .dD-embed .etitle { font-size:15px; font-weight:700; color:#2B2622; display:flex; align-items:center; gap:8px; }
   .dD-embed .etitle .pin { width:8px; height:8px; border-radius:50%; background:#6A5BD0; flex:none; }
   .dD-embed .ewhen { font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6A5BD0; margin:7px 0 1px; }
@@ -240,6 +241,7 @@
     events: [],          // mapped calendar items
     undated: [],         // items with no parseable date_key
     ignored: {},         // task_id -> true (calendar:<event_id> ignored via review)
+    daily: null,         // local daily landing summary
     queue: [],           // pending suggestion queue for the assistant panel
     busy: false
   };
@@ -285,9 +287,11 @@
   function loadData() {
     return Promise.all([
       fetch('/api/calendar/events').then(function (r) { return r.json(); }),
-      fetch('/api/tasks?status=ignored').then(function (r) { return r.json(); })
+      fetch('/api/tasks?status=ignored').then(function (r) { return r.json(); }),
+      fetch('/api/daily/summary').then(function (r) { return r.json(); })
     ]).then(function (results) {
       var events = results[0], ignoredTasks = results[1];
+      state.daily = results[2];
       state.ignored = {};
       (ignoredTasks || []).forEach(function (t) { state.ignored[t.task_id] = true; });
       var mapped = (events || []).map(mapItem).filter(function (item) {
@@ -497,6 +501,27 @@
       '<div class="dD-sumrow"><div class="n' + (uncertain ? ' u' : '') + '">' + uncertain + '</div><div><div class="lab">低置信抽取</div><div class="sub">标 ? 的事项建议核对原始邮件</div></div></div></div>';
   }
 
+  function dailyEmbed() {
+    var d = state.daily || {};
+    var email = d.email || {};
+    var tasks = d.tasks || {};
+    var calendar = d.calendar || {};
+    var safety = d.safety || {};
+    var facts = email.fact_counts || {};
+    var connectors = d.connectors || [];
+    var connector = connectors.length ? connectors[0] : {};
+    var connectorText = connector.connector
+      ? (connector.connector + (connector.has_cursor ? ' · 已保存游标' : ' · 无游标'))
+      : '仅本地';
+    var factText = '截止 ' + (facts.deadline || 0) + ' · 金额 ' + (facts.amount || 0) + ' · 动作 ' + (facts.action || 0);
+    return '<div class="dD-embed daily" id="dailySummary"><h4>今日检查 · 本地状态</h4>' +
+      '<div class="dD-sumrow"><div class="n">' + (email.stored_message_count || 0) + '</div><div><div class="lab">邮件证据</div><div class="sub">' + escapeHtml(factText) + '</div></div></div>' +
+      '<div class="dD-sumrow"><div class="n' + ((tasks.queue_count || 0) ? ' u' : '') + '">' + (tasks.queue_count || 0) + '</div><div><div class="lab">待处理任务</div><div class="sub">总计 ' + (tasks.total || 0) + ' · 按邮件聚合</div></div></div>' +
+      '<div class="dD-sumrow"><div class="n' + ((calendar.pending_count || 0) ? ' u' : '') + '">' + (calendar.pending_count || 0) + '</div><div><div class="lab">本地日历草稿</div><div class="sub">总计 ' + (calendar.total_drafts || 0) + ' · 待核对 ' + (calendar.uncertain_count || 0) + '</div></div></div>' +
+      '<div class="dD-sumrow"><div class="n">' + (safety.external_writes_performed ? '!' : '0') + '</div><div><div class="lab">外部写入</div><div class="sub">' + escapeHtml(connectorText) + ' · Gmail 只读</div></div></div>' +
+      '<div class="dD-btns"><button class="dD-cbtn sec" data-act="daily-run">刷新今日检查</button></div></div>';
+  }
+
   function suggestionCard(item) {
     return '<div class="dD-body">我在本地证据里发现这条日程，要加入日历吗？</div>' +
       '<div class="dD-embed ev">' +
@@ -517,8 +542,11 @@
   function updateSummary() {
     var embed = document.getElementById('aiSummary');
     if (embed) embed.outerHTML = summaryEmbed();
+    var daily = document.getElementById('dailySummary');
+    if (daily) daily.outerHTML = dailyEmbed();
+    var dailyTasks = state.daily && state.daily.tasks ? state.daily.tasks.queue_count : state.queue.length;
     document.getElementById('aiTopic').textContent =
-      '本地证据 · ' + (state.events.length + state.undated.length) + ' 条事项 · ' + state.queue.length + ' 条待确认';
+      '本地证据 · ' + (state.events.length + state.undated.length) + ' 条事项 · ' + dailyTasks + ' 条待处理';
   }
 
   function welcome() {
@@ -528,8 +556,28 @@
     var pending = state.queue.length;
     botMessage(
       '<div class="dD-body">早上好。本地证据中目前有 <b>' + total + '</b> 条带日期的事项，其中 <b>' + pending +
-      '</b> 条等你确认——日历里虚线显示的就是。外部写入永远先问你。</div>' + summaryEmbed());
+      '</b> 条等你确认——日历里虚线显示的就是。外部写入永远先问你。</div>' + dailyEmbed() + summaryEmbed());
     offerNextSuggestion();
+  }
+
+  function handleDailyRun(button) {
+    if (state.busy) return;
+    state.busy = true;
+    button.disabled = true;
+    fetch('/api/daily/run', { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (summary) {
+        state.daily = summary;
+        updateSummary();
+        botMessage('<div class="dD-body">今日检查完成：<b>' +
+          escapeHtml((summary.tasks || {}).queue_count || 0) + '</b> 条待处理，<b>' +
+          escapeHtml((summary.calendar || {}).pending_count || 0) + '</b> 条本地日历草稿等待确认。</div>');
+      })
+      .catch(function (err) { botMessage('<div class="dD-body uncertain">今日检查失败：' + escapeHtml(err) + '</div>'); })
+      .finally(function () {
+        state.busy = false;
+        button.disabled = false;
+      });
   }
 
   function handleConfirm(eventId, buttons) {
@@ -614,6 +662,10 @@
   feed.addEventListener('click', function (e) {
     var btn = e.target.closest('button[data-act]');
     if (!btn) return;
+    if (btn.dataset.act === 'daily-run') {
+      handleDailyRun(btn);
+      return;
+    }
     var wrap = btn.closest('.dD-btns');
     var eventId = wrap.dataset.eventId;
     state.queue = state.queue.filter(function (item) { return item.eventId !== eventId; });

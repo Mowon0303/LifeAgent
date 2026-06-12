@@ -1,0 +1,69 @@
+{
+  "status": "ready",
+  "generated_at": "2026-06-25T10:00:00+00:00",
+  "mode": "daily_landing",
+  "sync": {
+    "mode": "stored_only",
+    "external_network": false,
+    "messages_persisted": 0,
+    "facts_extracted": 0,
+    "deadline_events_drafted": 0
+  },
+  "email": {
+    "stored_message_count": 4,
+    "latest_received_at": "2026-06-25T09:00:00+00:00",
+    "fact_counts": {
+      "action": 2,
+      "amount": 3,
+      "deadline": 3
+    }
+  },
+  "tasks": {
+    "total": 7,
+    "counts_by_status": {
+      "new": 7
+    },
+    "queue_count": 7,
+    "queue": []
+  },
+  "calendar": {
+    "total_drafts": 3,
+    "pending_count": 3,
+    "uncertain_count": 0,
+    "items": []
+  },
+  "connectors": [],
+  "safety": {
+    "external_writes_performed": false,
+    "calendar_writes_require_confirmation": true,
+    "gmail_scope": "readonly",
+    "raw_secret_values_included": false,
+    "local_audit_written": false
+  },
+  "next_actions": [
+    {
+      "kind": "refresh",
+      "label": "Refresh inbox evidence",
+      "command": "sentineldesk daily run --sync-gmail --account <account>",
+      "side_effect": "gmail_readonly_plus_local_db_write"
+    },
+    {
+      "kind": "review_tasks",
+      "label": "Review extracted tasks",
+      "command": "sentineldesk tasks list --status new",
+      "side_effect": "local_read"
+    },
+    {
+      "kind": "review_calendar",
+      "label": "Review local calendar drafts before any sync",
+      "command": "sentineldesk calendar sync --destination ics",
+      "side_effect": "preview_only_without_confirm"
+    },
+    {
+      "kind": "ask",
+      "label": "Ask a tool-verified follow-up question",
+      "command": "sentineldesk ask \"what should I do next?\"",
+      "side_effect": "local_read"
+    }
+  ]
+}

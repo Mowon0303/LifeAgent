@@ -8,6 +8,7 @@ Regression tests for every shape below live in `tests/test_ui_contract.py`. Samp
 
 - `fixtures/ui/calendar_events.sample.json`
 - `fixtures/ui/tasks.sample.json`
+- `fixtures/ui/daily_summary.sample.json`
 - `fixtures/ui/ask_answer.sample.json`
 
 Regenerate samples by re-running the ingest + endpoint functions over `sample_emails.json` (see `tests/test_ui_contract.py::UiFixtureSampleTests` which verifies the committed samples still match the live shapes).
@@ -69,6 +70,16 @@ Common fields present on every task (calendar-derived tasks additionally carry `
 
 Sets the review state (audited, local-only). Response: `{task_id, status, note, actor, updated_at, task}` where `task` is the refreshed Task or `null`. Invalid status → HTTP 400 `{error}`.
 
+### GET `/api/daily/summary?task_limit=&calendar_limit=` → daily landing snapshot
+
+Read-only daily landing summary for the assistant panel. It returns stored email counts, fact counts, grouped task queue counts and optional queue rows, local calendar draft counts and optional calendar items, redacted connector readiness, safety flags, and safe next actions. This endpoint does **not** write a `daily.run` audit event; it is safe for page load and refresh polling.
+
+Top-level fields: `status`, `generated_at`, `mode`, `sync`, `email`, `tasks`, `calendar`, `connectors`, `safety`, `next_actions`.
+
+### POST `/api/daily/run?task_limit=&calendar_limit=` → daily landing run
+
+Runs the same stored-evidence daily summary from the dashboard and writes a local `daily.run` audit event. This dashboard route does not refresh Gmail or perform external calendar writes; external reads still happen through the CLI `daily run --sync-gmail` path, and external calendar writes remain behind `/api/calendar/sync?confirm=1`.
+
 ### POST `/api/calendar/sync?confirm=1&confirmation_id=&event_id=&destination=ics` → sync receipt
 
 Confirmation-gated local ICS export. Without `confirm=1` the call is blocked and audited (`allowed: false`). Confirmation IDs are single-use; reuse is rejected. Response fields the UI relies on: `allowed` (boolean), `event_ids` (string[]), `reason`. On success the affected drafts move to `sync_state: "ics_exported"`, `status: "synced"`, and `/api/calendar/events` reports `approval_state: "approved"`.
@@ -118,7 +129,8 @@ How backend fields drive the B′ visual spec:
 | All-day vs timed | current extraction has no time-of-day → all events render as all-day chips; the week/day time grid renders the layout (hours, gridlines, now line) with all-day strip populated |
 | **确认加入日历** button | `POST /api/calendar/sync?confirm=1&confirmation_id=ui-<event_id>-<epoch>&event_id=<event_id>&destination=ics`; on `allowed: true` re-fetch events (chip turns solid) |
 | **忽略** button | `POST /api/tasks/review?task_id=calendar:<event_id>&status=ignored`; UI hides the pending suggestion; the draft itself stays in local storage (retention controls own deletion) |
-| Assistant summary embed | computed client-side from `/api/calendar/events` + `/api/tasks`: counts of pending/confirmed/uncertain in the visible range |
+| Assistant daily embed | computed from `/api/daily/summary`: stored mail, grouped review queue, local calendar drafts, connector readiness, and external-write boundary |
+| Assistant calendar embed | computed client-side from `/api/calendar/events` + `/api/tasks`: counts of pending/confirmed/uncertain in the visible range |
 | Composer | sends to `/api/ask`; render `citations` as evidence chips and `uncertain` answers with the uncertainty style |
 | Now line | client clock; render only in today's column within 07:00–21:00 |
 

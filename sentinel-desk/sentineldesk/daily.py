@@ -21,6 +21,7 @@ def build_daily_landing_summary(
     calendar_limit: int = 20,
     actor: str = "system",
     now: str | None = None,
+    record_audit: bool = True,
 ) -> dict[str, Any]:
     """Build the repeatable local daily workflow summary.
 
@@ -80,28 +81,29 @@ def build_daily_landing_summary(
             "calendar_writes_require_confirmation": True,
             "gmail_scope": "readonly",
             "raw_secret_values_included": False,
-            "local_audit_written": True,
+            "local_audit_written": record_audit,
         },
         "next_actions": _next_actions(task_queue=task_queue, pending_calendar=pending_calendar, sync_summary=sync_summary),
     }
-    db.insert_audit_event(
-        paths,
-        action="daily.run",
-        actor=actor,
-        subject="daily_landing",
-        capability="daily_workflow",
-        side_effect="local_db_write",
-        allowed=True,
-        confirmation_id="",
-        metadata={
-            "stored_message_count": summary["email"]["stored_message_count"],
-            "task_queue_count": summary["tasks"]["queue_count"],
-            "calendar_pending_count": summary["calendar"]["pending_count"],
-            "sync_mode": summary["sync"].get("mode", ""),
-            "external_writes_performed": False,
-        },
-        created_at=timestamp,
-    )
+    if record_audit:
+        db.insert_audit_event(
+            paths,
+            action="daily.run",
+            actor=actor,
+            subject="daily_landing",
+            capability="daily_workflow",
+            side_effect="local_db_write",
+            allowed=True,
+            confirmation_id="",
+            metadata={
+                "stored_message_count": summary["email"]["stored_message_count"],
+                "task_queue_count": summary["tasks"]["queue_count"],
+                "calendar_pending_count": summary["calendar"]["pending_count"],
+                "sync_mode": summary["sync"].get("mode", ""),
+                "external_writes_performed": False,
+            },
+            created_at=timestamp,
+        )
     return summary
 
 

@@ -59,10 +59,10 @@
     "task_id": "email:02a3d0e5955acb41",
     "kind": "amount",
     "title": "Review 2 amount facts: Your June statement is ready",
-    "value": "$35.00",
+    "value": "$1,243.87",
     "values": [
-      "$35.00",
-      "$1,243.87"
+      "$1,243.87",
+      "$35.00"
     ],
     "fact_count": 2,
     "due_date": "",
@@ -73,7 +73,7 @@
       "email:ui-sample-card-001"
     ],
     "primary_source": "email:ui-sample-card-001",
-    "evidence": "is ready Your June statement is ready. Statement balance: $1,243.87. Minimum payment due: $35.00. Payment due date: 07/02/2026.",
+    "evidence": "ard.example Your June statement is ready Your June statement is ready. Statement balance: $1,243.87. Minimum payment due: $35.00. Payment due date: 07/02/2026.",
     "calendar_event_id": "",
     "sync_state": "",
     "subject": "Your June statement is ready",
