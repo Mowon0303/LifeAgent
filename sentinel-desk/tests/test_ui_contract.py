@@ -627,6 +627,7 @@ class CalendarPageTests(UiContractBase):
             "/api/tasks",
             "/api/tasks?view=",
             "&sort=",
+            "/api/tasks?view=all&sort=priority&limit=1000",
             "/api/daily/summary",
             "/api/daily/run",
             "/api/tasks/evidence?task_id=",
@@ -640,10 +641,11 @@ class CalendarPageTests(UiContractBase):
             'id="taskReviewQueue"',
             'id="taskQueueFilters"',
             'id="taskNavState"',
+            'id="taskSessionSummary"',
             'id="taskBulkActions"',
             'data-act="task-view"',
             'data-act="task-sort"',
-            "var views = ['all', 'needs_verification', 'payments', 'deadlines_soon', 'recently_changed'];",
+            "var TASK_VIEWS = ['all', 'needs_verification', 'payments', 'deadlines_soon', 'recently_changed'];",
             "var sorts = ['priority', 'due_date', 'recent'];",
             'data-act="task-history"',
             'data-act="task-undo"',
@@ -678,6 +680,13 @@ class CalendarPageTests(UiContractBase):
         self.assertIn("function taskReviewCard", html)
         self.assertIn("function filteredTaskQueue", html)
         self.assertIn("function taskFilterControls", html)
+        self.assertIn("function taskSessionPanel", html)
+        self.assertIn("function taskSessionStats", html)
+        self.assertIn("function taskViewStats", html)
+        self.assertIn("function taskMatchesSavedView", html)
+        self.assertIn("function taskSessionEmptyCopy", html)
+        self.assertIn("function taskEmptyStateMessage", html)
+        self.assertIn("function advancePastTask", html)
         self.assertIn("function handleTaskFilter", html)
         self.assertIn("function handleTaskView", html)
         self.assertIn("function handleTaskSort", html)

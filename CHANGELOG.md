@@ -23,6 +23,7 @@ All notable project updates for LifeAgent are tracked here.
 - Added local task review history and confirmation-gated undo: `/api/tasks/review/history`, `/api/tasks/review/undo`, `sentineldesk tasks history`, and `sentineldesk tasks undo` recover recent single/bulk review mistakes through local review/audit/approval records only, with no Gmail refresh or external calendar write.
 - Added deterministic task priority ranking and sort controls: `/api/tasks` and `sentineldesk tasks list` support `sort=priority|due_date|recent`, each task includes `priority_score`, `priority_band`, and `priority_reasons`, and the calendar assistant exposes sort chips so high-risk review work surfaces first by default.
 - Added saved task views and quick-review presets: `/api/tasks` and `sentineldesk tasks list` support `view=all|needs_verification|payments|deadlines_soon|recently_changed`, and the calendar assistant exposes preset chips that reset view/kind/status/sort for repeat daily review slices.
+- Added review-session progress and empty-state summaries in the calendar assistant, including per-view queue/classified counts, empty-view explanations, non-empty view suggestions, and auto-advance after single/bulk local review actions.
 
 ### Added
 

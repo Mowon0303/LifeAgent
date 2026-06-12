@@ -50,6 +50,7 @@ Agent layer:
 - Task queues can be filtered by saved view/kind/status, sorted by priority/due date/recent activity, and navigated with previous/current/next controls, backed by `/api/tasks?view=&sort=&kind=&status=&limit=`.
 - Task priority scores surface high-risk deadlines, low-confidence items, explicit `needs_verification` work, and payment/action context before low-risk review noise.
 - Saved task views expose repeat review slices for `needs_verification`, `payments`, `deadlines_soon`, and `recently_changed`.
+- Review-session summaries show current view progress, explain empty saved views, and offer the next non-empty review slice.
 - Filtered task queues can be bulk-marked through a confirmation-gated local review API with single-use confirmation IDs and replay protection.
 - Recent single/bulk task review actions have local history and confirmation-gated undo controls, so review mistakes can be recovered without external writes.
 - Source release packaging and release audit pass with runtime artifacts excluded.

@@ -144,12 +144,18 @@
   .dD-embed.ev { border-left-color:#6A5BD0; }
   .dD-embed.daily { border-left-color:#4F7A4A; }
   .dD-embed.task { border-left-color:#B14228; }
+  .dD-embed.session { border-left-color:#6A5BD0; }
   .dD-embed .etitle { font-size:15px; font-weight:700; color:#2B2622; display:flex; align-items:center; gap:8px; }
   .dD-embed .etitle .pin { width:8px; height:8px; border-radius:50%; background:#6A5BD0; flex:none; }
   .dD-embed .ewhen { font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6A5BD0; margin:7px 0 1px; }
   .dD-embed .esrc { font-size:11.5px; color:#A89A86; }
   .dD-embed .enote { font-size:13.5px; color:#5A5247; line-height:1.5; margin-top:9px; }
   .dD-taskline { font-size:11.5px; color:#9A8E7B; line-height:1.35; border-top:1px solid #F1EADB; padding-top:9px; margin-top:3px; }
+  .dD-session-note { font-size:12px; color:#7A705F; line-height:1.45; border-top:1px solid #F1EADB; margin-top:7px; padding-top:8px; }
+  .dD-session-next { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+  .dD-session-next button { border:1px solid transparent; background:#EAE6FA; color:#5C4DB8; border-radius:7px;
+    height:27px; padding:0 9px; font-size:11.5px; font-weight:700; cursor:pointer; font-family:inherit; }
+  .dD-empty.compact { padding:8px 0 0; line-height:1.45; }
   .dD-filterbar { display:flex; flex-wrap:wrap; gap:5px; max-width:340px; margin-top:8px; }
   .dD-filterbar button { border:1px solid transparent; background:#EFE7D8; color:#6B6253; border-radius:7px;
     height:27px; padding:0 9px; font-size:11.5px; font-weight:700; cursor:pointer; font-family:inherit; }
@@ -290,6 +296,14 @@
     deadlines_soon: '临近截止',
     recently_changed: '最近变化'
   };
+  var TASK_VIEWS = ['all', 'needs_verification', 'payments', 'deadlines_soon', 'recently_changed'];
+  var TASK_VIEW_EMPTY_COPY = {
+    all: '当前没有需要处理的任务。可以刷新今日检查，或先同步新的邮件证据。',
+    needs_verification: '没有低置信或需核对事项。当前证据没有被标记为需要人工复核。',
+    payments: '没有付款相关事项。租金、账单、invoice、balance due 等证据会进入这里。',
+    deadlines_soon: '没有可解析日期的截止事项。缺日期或相对日期的内容会留在普通任务里等待核对。',
+    recently_changed: '没有最近变化的活跃任务。已完成或已忽略的历史项不会占用这个视图。'
+  };
   var TASK_VIEW_CONFIG = {
     all: { kind: 'all', status: 'active', sort: 'priority' },
     needs_verification: { kind: 'all', status: 'active', sort: 'priority' },
@@ -320,6 +334,7 @@
     undated: [],         // items with no parseable date_key
     ignored: {},         // task_id -> true (calendar:<event_id> ignored via review)
     tasks: [],           // raw task review rows from /api/tasks
+    allTasks: [],        // unfiltered local tasks used for saved-view session summaries
     daily: null,         // local daily landing summary
     queue: [],           // pending suggestion queue for the assistant panel
     taskQueue: [],       // non-calendar email tasks exposed as review cards
@@ -383,13 +398,15 @@
     return Promise.all([
       fetch('/api/calendar/events').then(function (r) { return r.json(); }),
       fetch(taskApiUrl()).then(function (r) { return r.json(); }),
-      fetch('/api/daily/summary').then(function (r) { return r.json(); })
+      fetch('/api/daily/summary').then(function (r) { return r.json(); }),
+      fetch('/api/tasks?view=all&sort=priority&limit=1000').then(function (r) { return r.json(); })
     ]).then(function (results) {
-      var events = results[0], tasks = results[1] || [];
+      var events = results[0], tasks = results[1] || [], allTasks = results[3] || tasks;
       state.daily = results[2];
       state.tasks = tasks;
+      state.allTasks = allTasks;
       state.ignored = {};
-      tasks.forEach(function (t) {
+      allTasks.forEach(function (t) {
         if (t.status === 'ignored') state.ignored[t.task_id] = true;
       });
       var mapped = (events || []).map(mapItem).filter(function (item) {
@@ -412,9 +429,83 @@
     return ['new', 'needs_verification', 'reviewed'].indexOf(String(status || 'new')) >= 0;
   }
 
+  function confidenceValue(task) {
+    var value = Number(task && task.confidence);
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  function taskHasReason(task, reason) {
+    return Array.isArray(task.priority_reasons) && task.priority_reasons.indexOf(reason) >= 0;
+  }
+
+  function taskHasPaymentContext(task) {
+    var parts = [task.title, task.value, task.evidence, task.subject].concat(task.values || []);
+    return /(rent|payment|pay |pay$|balance|invoice|bill|tuition|fee|premium|amount due|\$)/i.test(parts.join(' '));
+  }
+
+  function taskHasTimestamp(task) {
+    return !!(task.updated_at || task.received_at || task.reviewed_at || task.created_at);
+  }
+
+  function taskMatchesSavedView(task, view) {
+    var status = String(task.status || 'new');
+    if (view === 'all') return true;
+    if (view === 'needs_verification') {
+      return status === 'needs_verification' || !!task.needs_verification ||
+        confidenceValue(task) < 0.7 || taskHasReason(task, 'low_trust_or_missing_source');
+    }
+    if (view === 'payments') {
+      return task.kind === 'amount' || taskHasReason(task, 'payment_context') || taskHasPaymentContext(task);
+    }
+    if (view === 'deadlines_soon') return task.kind === 'deadline' && !!(task.due_date || task.value);
+    if (view === 'recently_changed') return taskHasTimestamp(task) && isActiveTaskStatus(status);
+    return false;
+  }
+
   function shouldShowTaskInReview(task) {
     if (state.taskView === 'deadlines_soon') return String(task.kind || '') === 'deadline';
     return isReviewTask(task);
+  }
+
+  function shouldShowTaskInViewReview(task, view) {
+    if (view === 'deadlines_soon') return String(task.kind || '') === 'deadline';
+    return isReviewTask(task);
+  }
+
+  function viewTasks(view) {
+    return (state.allTasks || []).filter(function (task) {
+      return taskMatchesSavedView(task, view) && shouldShowTaskInViewReview(task, view);
+    });
+  }
+
+  function taskViewStats(view) {
+    var tasks = viewTasks(view);
+    var counts = { total: tasks.length, active: 0, new: 0, needs_verification: 0, reviewed: 0, done: 0, ignored: 0 };
+    tasks.forEach(function (task) {
+      var status = String(task.status || 'new');
+      if (counts[status] == null) counts[status] = 0;
+      counts[status] += 1;
+      if (isActiveTaskStatus(status)) counts.active += 1;
+    });
+    counts.classified = Math.max(0, counts.total - counts.new);
+    return counts;
+  }
+
+  function taskSessionStats() {
+    var scope = state.taskQueue.filter(function (task) {
+      var reviewOk = shouldShowTaskInReview(task);
+      var kindOk = state.taskFilterKind === 'all' || task.kind === state.taskFilterKind;
+      return reviewOk && kindOk;
+    });
+    var queue = filteredTaskQueue();
+    var counts = { total: scope.length, queue: queue.length, new: 0, needs_verification: 0, reviewed: 0, done: 0, ignored: 0 };
+    scope.forEach(function (task) {
+      var status = String(task.status || 'new');
+      if (counts[status] == null) counts[status] = 0;
+      counts[status] += 1;
+    });
+    counts.classified = Math.max(0, counts.total - counts.new);
+    return counts;
   }
 
   function filteredTaskQueue() {
@@ -450,7 +541,6 @@
   }
 
   function taskFilterControls() {
-    var views = ['all', 'needs_verification', 'payments', 'deadlines_soon', 'recently_changed'];
     var kinds = ['all', 'amount', 'action', 'deadline'];
     var statuses = ['active', 'new', 'needs_verification', 'reviewed', 'done', 'ignored', 'all'];
     var sorts = ['priority', 'due_date', 'recent'];
@@ -474,7 +564,7 @@
       return '<button class="' + selected.trim() + '" data-act="task-sort" data-sort="' +
         escapeHtml(sort) + '">' + escapeHtml(TASK_SORT_LABEL[sort]) + '</button>';
     }).join('');
-    var viewButtons = views.map(function (view) {
+    var viewButtons = TASK_VIEWS.map(function (view) {
       var selected = state.taskView === view ? ' on' : '';
       return '<button class="' + selected.trim() + '" data-act="task-view" data-view="' +
         escapeHtml(view) + '">' + escapeHtml(TASK_VIEW_LABEL[view]) + '</button>';
@@ -493,6 +583,72 @@
         escapeHtml(TASK_SORT_LABEL[state.taskSort] || state.taskSort) + '</div>' +
       '<button class="dD-mini" data-act="task-next"' + (queue.length ? '' : ' disabled') + '>›</button>' +
       '</div></div>';
+  }
+
+  function taskNextViewButtons() {
+    return TASK_VIEWS.filter(function (view) {
+      return view !== state.taskView && taskViewStats(view).active > 0;
+    }).slice(0, 3).map(function (view) {
+      var stats = taskViewStats(view);
+      return '<button data-act="task-view" data-view="' + escapeHtml(view) + '">' +
+        escapeHtml(TASK_VIEW_LABEL[view]) + ' ' + stats.active + '</button>';
+    }).join('');
+  }
+
+  function taskSessionEmptyCopy(stats, viewStats) {
+    if (viewStats.total && stats.total && !stats.queue) {
+      return '当前状态筛选下没有任务。切回“活跃”或“全部”可以查看这个视图里的其他本地任务。';
+    }
+    if (viewStats.total && !stats.total) {
+      return '当前类型筛选下没有任务。切回“全部”类型可以查看这个视图里的其他本地任务。';
+    }
+    return TASK_VIEW_EMPTY_COPY[state.taskView] || '当前视图没有任务。';
+  }
+
+  function taskSessionPanel() {
+    var stats = taskSessionStats();
+    var viewStats = taskViewStats(state.taskView);
+    var label = TASK_VIEW_LABEL[state.taskView] || state.taskView;
+    var statusLabel = TASK_STATUS_FILTER_LABEL[state.taskFilterStatus] || state.taskFilterStatus;
+    var nextViews = taskNextViewButtons();
+    var emptyNote = !stats.queue
+      ? '<div class="dD-empty compact">' + escapeHtml(taskSessionEmptyCopy(stats, viewStats)) + '</div>'
+      : '';
+    var nextHtml = !stats.queue && nextViews
+      ? '<div class="dD-session-next">' + nextViews + '</div>'
+      : '';
+    return '<div class="dD-embed session" id="taskSessionSummary"><h4>' + escapeHtml(label) + '审查 · 进度</h4>' +
+      '<div class="dD-sumrow"><div class="n">' + viewStats.total + '</div><div><div class="lab">本视图任务</div><div class="sub">活跃 ' +
+        viewStats.active + ' · 完成 ' + viewStats.done + ' · 忽略 ' + viewStats.ignored + '</div></div></div>' +
+      '<div class="dD-sumrow"><div class="n' + (stats.queue ? ' u' : '') + '">' + stats.queue + '</div><div><div class="lab">当前队列</div><div class="sub">' +
+        escapeHtml(statusLabel) + ' · 新 ' + stats.new + ' · 核对 ' + stats.needs_verification + ' · 已阅 ' + stats.reviewed + '</div></div></div>' +
+      '<div class="dD-sumrow"><div class="n">' + stats.classified + '</div><div><div class="lab">本轮已归类</div><div class="sub">完成 ' +
+        stats.done + ' · 忽略 ' + stats.ignored + ' · 需核对 ' + stats.needs_verification + '</div></div></div>' +
+      '<div class="dD-session-note">当前统计来自本地 SQLite 任务和 review audit，不会刷新 Gmail、发送邮件或写外部日历。</div>' +
+      emptyNote + nextHtml + '</div>';
+  }
+
+  function taskCardMeta(queue) {
+    var stats = taskSessionStats();
+    return (state.taskCursor + 1) + '/' + queue.length + ' · 已归类 ' + stats.classified + '/' + stats.total;
+  }
+
+  function taskEmptyStateMessage() {
+    return '<div class="dD-body">当前筛选下没有任务卡。</div>' + taskSessionPanel();
+  }
+
+  function advancePastTask(taskId) {
+    var queue = filteredTaskQueue();
+    if (!queue.length) {
+      state.taskCursor = 0;
+      return;
+    }
+    var index = queue.findIndex(function (task) { return task.task_id === taskId; });
+    if (index >= 0 && queue.length > 1) {
+      state.taskCursor = (index + 1) % queue.length;
+      return;
+    }
+    clampTaskCursor(queue);
   }
 
   function byDate() {
@@ -715,6 +871,7 @@
       '<div class="dD-sumrow"><div class="n">' + (safety.external_writes_performed ? '!' : '0') + '</div><div><div class="lab">外部写入</div><div class="sub">' + escapeHtml(connectorText) + ' · Gmail 只读</div></div></div>' +
       '<div class="dD-taskline" id="taskReviewQueue">任务操作只写本地 review 状态和 audit，不会发送邮件或写外部日历。</div>' +
       taskFilterControls() +
+      taskSessionPanel() +
       '<div class="dD-bulkbar" id="taskBulkActions">' +
       '<button class="dD-cbtn prim" data-act="task-bulk-done"' + bulkDisabled + '>批量完成</button>' +
       '<button class="dD-cbtn sec" data-act="task-bulk-reviewed"' + bulkDisabled + '>批量已阅</button>' +
@@ -829,11 +986,11 @@
     var queue = filteredTaskQueue();
     clampTaskCursor(queue);
     if (!queue.length) {
-      botMessage('<div class="dD-body">当前筛选下没有任务卡。</div>', { ghost: true });
+      botMessage(taskEmptyStateMessage(), { ghost: true });
       return;
     }
     var task = queue[state.taskCursor];
-    botMessage(taskReviewCard(task, (state.taskCursor + 1) + '/' + queue.length), { ghost: true });
+    botMessage(taskReviewCard(task, taskCardMeta(queue)), { ghost: true });
   }
 
   function moveTaskCursor(offset) {
@@ -841,7 +998,7 @@
     if (!queue.length) {
       state.taskCursor = 0;
       updateSummary();
-      botMessage('<div class="dD-body">当前筛选下没有任务卡。</div>', { ghost: true });
+      botMessage(taskEmptyStateMessage(), { ghost: true });
       return;
     }
     state.taskCursor = (state.taskCursor + offset + queue.length) % queue.length;
@@ -978,6 +1135,10 @@
         buttons.remove();
         return refresh();
       })
+      .then(function () {
+        advancePastTask(taskId);
+        offerNextTaskSuggestion();
+      })
       .catch(function (err) { botMessage('<div class="dD-body uncertain">任务状态更新失败：' + escapeHtml(err) + '</div>'); })
       .finally(function () { state.busy = false; });
   }
@@ -1023,7 +1184,7 @@
           '</b> 条任务批量标记为 <b>' + escapeHtml(label) + '</b>。确认 ID <code>' +
           escapeHtml(confirmationId) + '</code> 已记录；没有外部副作用。</div>');
         state.taskCursor = 0;
-        return refresh();
+        return refresh().then(offerNextTaskSuggestion);
       })
       .catch(function (err) { botMessage('<div class="dD-body uncertain">批量任务状态更新失败：' + escapeHtml(err) + '</div>'); })
       .finally(function () {
