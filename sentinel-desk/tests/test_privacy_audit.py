@@ -50,7 +50,7 @@ class PrivacyAuditTests(unittest.TestCase):
                     json.dumps(
                         {
                             "email": "student@example.edu",
-                            "path": "/Users/zuge/private/report.pdf",
+                            "path": "/Users/alexdoe/private/report.pdf",
                             "access_token": "raw-secret-token",
                         }
                     ),
@@ -63,7 +63,7 @@ class PrivacyAuditTests(unittest.TestCase):
             raw = output.getvalue()
             self.assertEqual(code, 1)
             self.assertNotIn("student@example.edu", raw)
-            self.assertNotIn("/Users/zuge/private/report.pdf", raw)
+            self.assertNotIn("/Users/alexdoe/private/report.pdf", raw)
             self.assertNotIn("raw-secret-token", raw)
             payload = json.loads(raw)
             self.assertEqual(payload["status"], "leaks_found")

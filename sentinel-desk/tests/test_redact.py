@@ -33,13 +33,13 @@ class RedactTests(unittest.TestCase):
                     "to": "office@school.edu",
                     "authorization": "Bearer ya29.hidden-token",
                 },
-                "attachment_names": ["Zuge_Li_I765_A123456789.pdf", "lease-ledger.pdf"],
+                "attachment_names": ["Alex_Doe_I765_A000000000.pdf", "lease-ledger.pdf"],
                 "calendar_event": {
                     "invitees": [{"email": "landlord@example.com", "display_name": "Private Landlord"}],
-                    "organizer": "Zuge Li <zugeli@example.com>",
+                    "organizer": "Alex Doe <alexdoe@example.com>",
                 },
                 "connector_metadata": {
-                    "account_id": "zugeli@gmail.com",
+                    "account_id": "alexdoe@example.com",
                     "cursor": "history-987654321",
                     "sync_token": "sync-token-private",
                     "access_token": "ya29.private",
@@ -56,13 +56,13 @@ class RedactTests(unittest.TestCase):
             "student@example.com",
             "office@school.edu",
             "ya29",
-            "Zuge_Li_I765",
+            "Alex_Doe_I765",
             "lease-ledger.pdf",
             "Private Landlord",
             "landlord@example.com",
             "history-987654321",
             "sync-token-private",
-            "zugeli@gmail.com",
+            "alexdoe@example.com",
         ]:
             self.assertNotIn(raw_value, payload)
 
