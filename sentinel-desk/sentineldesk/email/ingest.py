@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -85,23 +86,97 @@ def stored_email_messages(paths: Paths, *, limit: int = 200) -> list[EmailMessag
     fresh export file; trust labels stay at the stored-evidence level.
     """
     db.init_db(paths)
-    messages: list[EmailMessage] = []
-    for row in db.list_email_messages(paths, limit=limit):
-        messages.append(
-            EmailMessage(
-                message_id=str(row.get("message_id") or ""),
-                thread_id=str(row.get("thread_id") or "default"),
-                sender=str(row.get("sender") or ""),
-                subject=str(row.get("subject") or ""),
-                received_at=str(row.get("received_at") or ""),
-                body_text=str(row.get("body_text") or ""),
-                attachment_texts=tuple(str(item) for item in row.get("attachment_texts") or ()),
-                attachment_names=tuple(str(item) for item in row.get("attachment_names") or ()),
-                source_type="stored_email",
-                trust_label="email_evidence",
-            )
-        )
-    return messages
+    return [
+        _message_from_stored_row(row, preserve_source_labels=False)
+        for row in db.list_email_messages(paths, limit=limit)
+    ]
+
+
+def reprocess_stored_messages(
+    paths: Paths,
+    *,
+    limit: int = 500,
+    rebuild_calendar_drafts: bool = True,
+    ingested_at: str | None = None,
+) -> dict[str, Any]:
+    """Re-run the current extractor over already persisted local email evidence.
+
+    This lets extractor fixes take effect without another Gmail call. It only
+    rewrites local facts and local draft rows; external calendar writes remain
+    outside this path.
+    """
+    db.init_db(paths)
+    timestamp = ingested_at or utc_now()
+    rows = db.list_email_messages(paths, limit=limit)
+    message_row_ids: list[int] = []
+    calendar_row_ids: list[int] = []
+    old_fact_count = 0
+    new_fact_count = 0
+    old_fact_counts: Counter[str] = Counter()
+    new_fact_counts: Counter[str] = Counter()
+
+    for row in rows:
+        old_facts = row.get("facts") or []
+        old_fact_count += len(old_facts)
+        for fact in old_facts:
+            if isinstance(fact, dict):
+                old_fact_counts[str(fact.get("kind") or "unknown")] += 1
+
+        message = _message_from_stored_row(row, preserve_source_labels=True)
+        facts = extract_email_facts(message)
+        new_fact_count += len(facts)
+        new_fact_counts.update(fact.kind for fact in facts)
+        message_row_ids.append(db.upsert_email_message(paths, message=message, facts=facts, ingested_at=timestamp))
+
+        if rebuild_calendar_drafts:
+            draft = draft_events_from_facts(facts, evidence_uri=message.source_id)
+            for event in draft.events:
+                calendar_row_ids.append(
+                    db.upsert_calendar_draft(
+                        paths,
+                        event=event,
+                        created_at=timestamp,
+                        updated_at=timestamp,
+                        sync_state="local_draft",
+                    )
+                )
+
+    db.insert_audit_event(
+        paths,
+        action="email.reprocess",
+        actor="system",
+        subject="stored_email_messages",
+        capability="email_read",
+        side_effect="local_db_write",
+        allowed=True,
+        confirmation_id="",
+        metadata={
+            "messages_seen": len(rows),
+            "messages_reprocessed": len(message_row_ids),
+            "old_facts": old_fact_count,
+            "facts_extracted": new_fact_count,
+            "deadline_events_drafted": len(calendar_row_ids),
+            "rebuild_calendar_drafts": rebuild_calendar_drafts,
+            "external_writes_performed": False,
+        },
+        created_at=timestamp,
+    )
+    return {
+        "mode": "stored_reprocess",
+        "external_network": False,
+        "messages_seen": len(rows),
+        "messages_reprocessed": len(message_row_ids),
+        "old_facts": old_fact_count,
+        "facts_extracted": new_fact_count,
+        "old_fact_counts": dict(sorted(old_fact_counts.items())),
+        "fact_counts": dict(sorted(new_fact_counts.items())),
+        "deadline_events_drafted": len(calendar_row_ids),
+        "message_row_ids": message_row_ids,
+        "calendar_draft_row_ids": calendar_row_ids,
+        "rebuild_calendar_drafts": rebuild_calendar_drafts,
+        "confirmation_required": bool(calendar_row_ids),
+        "external_writes_performed": False,
+    }
 
 
 def sync_connector(
@@ -159,6 +234,36 @@ def sync_connector(
         "cursor": result.cursor,
         "scopes": list(result.scopes),
     }
+
+
+def _message_from_stored_row(row: dict[str, Any], *, preserve_source_labels: bool) -> EmailMessage:
+    source_type, trust_label = (
+        _stored_source_labels(row) if preserve_source_labels else ("stored_email", "email_evidence")
+    )
+    return EmailMessage(
+        message_id=str(row.get("message_id") or ""),
+        thread_id=str(row.get("thread_id") or "default"),
+        sender=str(row.get("sender") or ""),
+        subject=str(row.get("subject") or ""),
+        received_at=str(row.get("received_at") or ""),
+        body_text=str(row.get("body_text") or ""),
+        attachment_texts=tuple(str(item) for item in row.get("attachment_texts") or ()),
+        attachment_names=tuple(str(item) for item in row.get("attachment_names") or ()),
+        source_type=source_type,
+        trust_label=trust_label,
+    )
+
+
+def _stored_source_labels(row: dict[str, Any]) -> tuple[str, str]:
+    for fact in row.get("facts") or []:
+        if not isinstance(fact, dict):
+            continue
+        metadata = fact.get("metadata") if isinstance(fact.get("metadata"), dict) else {}
+        source_type = str(fact.get("source_type") or metadata.get("source_type") or "")
+        trust_label = str(fact.get("trust_label") or metadata.get("trust_label") or "")
+        if source_type or trust_label:
+            return source_type or "stored_email", trust_label or "email_evidence"
+    return "stored_email", "email_evidence"
 
 
 def _message_from_dict(item: dict[str, Any], index: int, *, base_dir: Path) -> EmailMessage:

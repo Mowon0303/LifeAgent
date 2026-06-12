@@ -38,10 +38,11 @@ Agent layer:
 
 ## Current Evidence
 
-- `270` unittest cases pass.
+- `271` unittest cases pass.
 - Golden extraction eval: raw deadline, amount, and action are all `P=1.000 / R=1.000 / F1=1.000` on the current synthetic set.
 - Redacted Gmail-first readiness package shape is regression-tested.
 - Daily landing workflow creates 4 synthetic messages, 8 extracted facts, 3 local calendar drafts, 8 reviewable tasks, and a local audit record without external writes.
+- Stored evidence reprocessing applies extractor fixes to already-synced mail without another Gmail call or external calendar writes.
 - Source release packaging and release audit pass with runtime artifacts excluded.
 
 ## Portfolio Snapshot
@@ -84,6 +85,13 @@ python3 -B -m sentineldesk --home .demo daily run --sync-gmail --account user@ex
 ```
 
 `daily run` summarizes stored mail, extracted task queue, local calendar drafts, connector readiness, and next safe actions. It never performs external calendar writes.
+
+Apply extractor fixes to already stored local evidence without another inbox refresh:
+
+```bash
+python3 -B -m sentineldesk --home .demo email reprocess --no-calendar-drafts
+python3 -B -m sentineldesk --home .demo daily run --reprocess-stored --no-calendar-drafts
+```
 
 Run the extraction eval:
 

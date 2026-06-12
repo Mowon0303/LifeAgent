@@ -16,7 +16,13 @@ from .calendar.models import CalendarDraft, DeadlineEvent
 from .calendar.source import events_from_calendar_rows
 from .email.models import EmailMessage
 from .email.connectors import EmailSyncRequest, GmailApiEmailConnector, LocalJsonEmailConnector
-from .email.ingest import ingest_messages, load_email_json, stored_email_messages, sync_connector
+from .email.ingest import (
+    ingest_messages,
+    load_email_json,
+    reprocess_stored_messages,
+    stored_email_messages,
+    sync_connector,
+)
 from .evals.email_extract import evaluate_golden_path, render_markdown_report, render_text_summary
 from .integrations.apple_calendar import AppleCalendarClientFactory, AppleCalendarConfig
 from .integrations.google_oauth import normalize_google_scopes, write_google_oauth_token
@@ -309,6 +315,19 @@ def cmd_email_sync_gmail(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_email_reprocess(args: argparse.Namespace) -> int:
+    paths = paths_from_args(args)
+    ensure_dirs(paths)
+    print_json(
+        reprocess_stored_messages(
+            paths,
+            limit=args.limit,
+            rebuild_calendar_drafts=not args.no_calendar_drafts,
+        )
+    )
+    return 0
+
+
 def cmd_daily_run(args: argparse.Namespace) -> int:
     paths = paths_from_args(args)
     ensure_dirs(paths)
@@ -354,6 +373,16 @@ def cmd_daily_run(args: argparse.Namespace) -> int:
             "oauth": _redacted_daily_oauth_summary(config.safe_summary()),
             **summary,
         }
+    if args.reprocess_stored:
+        reprocess_summary = reprocess_stored_messages(
+            paths,
+            limit=args.reprocess_limit,
+            rebuild_calendar_drafts=not args.no_calendar_drafts,
+        )
+        if sync_summary:
+            sync_summary = {**sync_summary, "reprocess": reprocess_summary}
+        else:
+            sync_summary = reprocess_summary
     print_json(
         build_daily_landing_summary(
             paths,
@@ -930,6 +959,17 @@ def build_parser() -> argparse.ArgumentParser:
     daily_run.add_argument("--limit", type=int, default=50)
     daily_run.add_argument("--task-limit", type=int, default=12)
     daily_run.add_argument("--calendar-limit", type=int, default=20)
+    daily_run.add_argument(
+        "--reprocess-stored",
+        action="store_true",
+        help="Re-run current extractors over already stored local email before summarizing",
+    )
+    daily_run.add_argument("--reprocess-limit", type=int, default=500)
+    daily_run.add_argument(
+        "--no-calendar-drafts",
+        action="store_true",
+        help="When reprocessing, update email facts without upserting local calendar drafts",
+    )
     daily_run.add_argument("--account", default="default")
     daily_run.add_argument("--actor", default="user")
     daily_run.add_argument("--credentials-env", default="SENTINEL_GOOGLE_CREDENTIALS_JSON")
@@ -985,6 +1025,10 @@ def build_parser() -> argparse.ArgumentParser:
     email_sync_gmail.add_argument("--credentials-env", default="SENTINEL_GOOGLE_CREDENTIALS_JSON")
     email_sync_gmail.add_argument("--token-env", default="SENTINEL_GOOGLE_TOKEN_JSON")
     email_sync_gmail.set_defaults(func=cmd_email_sync_gmail)
+    email_reprocess = email_sub.add_parser("reprocess", help="Re-run current extractors over stored local email evidence")
+    email_reprocess.add_argument("--limit", type=int, default=500)
+    email_reprocess.add_argument("--no-calendar-drafts", action="store_true", help="Update stored facts without upserting local calendar drafts")
+    email_reprocess.set_defaults(func=cmd_email_reprocess)
 
     tasks = sub.add_parser("tasks", help="Review extracted LifeAgent tasks")
     tasks_sub = tasks.add_subparsers(dest="tasks_command", required=True)

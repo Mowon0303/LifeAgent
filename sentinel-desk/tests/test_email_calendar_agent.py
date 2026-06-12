@@ -21,7 +21,7 @@ from sentineldesk.cli import main
 from sentineldesk.config import get_paths
 from sentineldesk.email.extract import extract_email_facts, find_messages
 from sentineldesk.email.ingest import ingest_messages
-from sentineldesk.email.models import EmailMessage
+from sentineldesk.email.models import EmailFact, EmailMessage
 from sentineldesk.monitor import run_all
 from sentineldesk.scenarios import apply_scenario
 
@@ -931,6 +931,51 @@ class EmailCalendarAgentTests(unittest.TestCase):
             self.assertEqual(drafts[0]["status"], "draft")
             self.assertEqual(drafts[0]["sync_state"], "local_draft")
             self.assertEqual(drafts[0]["source_ids"], ["email:m-scan"])
+
+    def test_cli_email_reprocess_updates_stored_facts_without_external_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            db.init_db(paths)
+            message = EmailMessage(
+                "m-stale-action",
+                "t-stale-action",
+                "digest@example.com",
+                "Neighborhood digest",
+                "2026-06-25",
+                (
+                    'Top posts today: <a href="https://digest.example/email&amp;s=dv2'
+                    '&amp;mar=%recipient.mark_as_read%&amp;ct=abc123">Open story</a>.'
+                ),
+                source_type="email_provider_api",
+                trust_label="email_provider_api",
+            )
+            stale_fact = EmailFact(
+                kind="action",
+                value="email&amp;s=dv2&amp;mar=%recipient.mark_as_read%",
+                source_id="email_provider_api:m-stale-action",
+                source_type="email_provider_api",
+                trust_label="email_provider_api",
+                evidence="old extractor matched a tracking URL",
+                confidence=0.68,
+                received_at="2026-06-25",
+            )
+            db.upsert_email_message(paths, message=message, facts=[stale_fact], ingested_at="2026-06-25T00:00:00Z")
+            self.assertEqual(len(db.list_email_facts(paths, kind="action")), 1)
+
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = main(["--home", tmp, "email", "reprocess", "--limit", "10"])
+
+            self.assertEqual(code, 0)
+            payload = json.loads(output.getvalue())
+            self.assertEqual(payload["mode"], "stored_reprocess")
+            self.assertFalse(payload["external_network"])
+            self.assertFalse(payload["external_writes_performed"])
+            self.assertEqual(payload["messages_reprocessed"], 1)
+            self.assertEqual(payload["old_fact_counts"], {"action": 1})
+            self.assertEqual(payload["fact_counts"], {})
+            self.assertEqual(db.list_email_facts(paths, kind="action"), [])
+            self.assertEqual(db.list_audit_events(paths)[0]["action"], "email.reprocess")
 
 
 if __name__ == "__main__":
