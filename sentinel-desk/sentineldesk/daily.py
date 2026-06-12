@@ -8,6 +8,7 @@ from .calendar.view import build_calendar_items
 from .config import Paths
 from .extract import utc_now
 from .gmail_readiness import build_gmail_readiness
+from .gmail_sync_diagnostics import build_gmail_sync_diagnostics
 from .tasks import build_review_receipt_summary, list_tasks
 
 
@@ -86,6 +87,7 @@ def build_daily_landing_summary(
             credentials_env=google_credentials_env,
             token_env=google_token_env,
         ),
+        "gmail_sync_diagnostics": build_gmail_sync_diagnostics(paths, account_id=account_id),
         "review_receipt": build_review_receipt_summary(paths, limit=50, recent_limit=5),
         "safety": {
             "external_writes_performed": False,

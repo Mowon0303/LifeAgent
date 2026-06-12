@@ -156,6 +156,24 @@
     "external_network": false,
     "external_writes_performed": false
   },
+  "gmail_sync_diagnostics": {
+    "status": "no_attempt",
+    "generated_at": "2026-06-25T10:00:00+00:00",
+    "mode": "gmail_sync_diagnostics",
+    "account_id": "default",
+    "latest_failure": null,
+    "latest_success": null,
+    "recent_failure_count": 0,
+    "recent_success_count": 0,
+    "next_action": {
+      "kind": "run_gmail_sync",
+      "label": "Run the first readonly Gmail sync",
+      "command": "sentineldesk daily run --sync-gmail --account <account>",
+      "side_effect": "gmail_readonly_plus_local_db_write"
+    },
+    "external_network": false,
+    "external_writes_performed": false
+  },
   "review_receipt": {
     "status": "ready",
     "generated_at": "2026-06-25T10:00:00+00:00",

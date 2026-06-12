@@ -20,6 +20,7 @@ from .daily import build_daily_landing_summary
 from .email.ingest import stored_email_messages
 from .extract import utc_now
 from .gmail_readiness import build_gmail_readiness
+from .gmail_sync_diagnostics import build_gmail_sync_diagnostics
 from .monitor import run_all
 from .reports import package_path_for, redact_data, write_evidence_package
 from .retention import plan_purge, purge, result_to_dict
@@ -157,6 +158,16 @@ class Handler(BaseHTTPRequestHandler):
                     account_id=query.get("account", ["default"])[0],
                     credentials_env=query.get("google_credentials_env", ["SENTINEL_GOOGLE_CREDENTIALS_JSON"])[0],
                     token_env=query.get("google_token_env", ["SENTINEL_GOOGLE_TOKEN_JSON"])[0],
+                )
+            )
+            return
+        if path == "/api/gmail/sync-diagnostics":
+            query = parse_qs(parsed.query)
+            self.send_json(
+                build_gmail_sync_diagnostics(
+                    self.paths,
+                    account_id=query.get("account", ["default"])[0],
+                    limit=_query_int(query, "limit", 20),
                 )
             )
             return

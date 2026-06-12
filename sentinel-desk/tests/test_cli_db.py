@@ -16,6 +16,7 @@ from sentineldesk.cli import main
 from sentineldesk.config import get_paths
 from sentineldesk.daily import build_daily_landing_summary
 from sentineldesk.integrations.google_workspace import GMAIL_READONLY_SCOPE
+from sentineldesk.secrets import SecretUnavailable
 
 
 class CliDbTests(unittest.TestCase):
@@ -170,6 +171,72 @@ class CliDbTests(unittest.TestCase):
         self.assertFalse(payload["external_network"])
         self.assertFalse(payload["external_writes_performed"])
         self.assertNotIn("student.private@example.com", raw)
+
+    def test_email_sync_gmail_failure_writes_redacted_diagnostics(self) -> None:
+        class FailingFactory:
+            def __init__(self, config: object) -> None:
+                self.config = config
+
+            def gmail_client(self) -> object:
+                raise SecretUnavailable("Missing required environment secret: SENTINEL_TEST_GOOGLE_TOKEN")
+
+        output = io.StringIO()
+        with mock.patch("sentineldesk.cli.GoogleWorkspaceFactory", FailingFactory), contextlib.redirect_stdout(output):
+            code = main(
+                [
+                    "--home",
+                    self.home,
+                    "email",
+                    "sync-gmail",
+                    "--account",
+                    "student.private@example.com",
+                    "--query",
+                    "deadline",
+                ]
+            )
+        raw = output.getvalue()
+        payload = json.loads(raw)
+        self.assertEqual(code, 1)
+        self.assertEqual(payload["error"], "gmail_sync_failed")
+        self.assertEqual(payload["diagnostics"]["status"], "failed")
+        self.assertEqual(payload["diagnostics"]["latest_failure"]["category"], "missing_secret")
+        self.assertEqual(payload["diagnostics"]["next_action"]["kind"], "check_gmail_readiness")
+        self.assertFalse(payload["diagnostics"]["external_network"])
+        self.assertFalse(payload["diagnostics"]["external_writes_performed"])
+        self.assertNotIn("student.private@example.com", raw)
+        self.assertNotIn("SENTINEL_TEST_GOOGLE_TOKEN", raw)
+        events = db.list_audit_events(get_paths(self.home), limit=5)
+        self.assertEqual(events[0]["action"], "email.connector.sync.failed")
+        self.assertFalse(events[0]["allowed"])
+        self.assertFalse(events[0]["metadata"]["raw_error_included"])
+        diagnostics_output = io.StringIO()
+        with contextlib.redirect_stdout(diagnostics_output):
+            diagnostics_code = main(["--home", self.home, "integrations", "gmail-sync-diagnostics"])
+        self.assertEqual(diagnostics_code, 0)
+        diagnostics = json.loads(diagnostics_output.getvalue())
+        self.assertEqual(diagnostics["status"], "failed")
+        self.assertEqual(diagnostics["latest_failure"]["category"], "missing_secret")
+
+    def test_daily_sync_gmail_failure_returns_summary_and_diagnostics(self) -> None:
+        class FailingFactory:
+            def __init__(self, config: object) -> None:
+                self.config = config
+
+            def gmail_client(self) -> object:
+                raise RuntimeError("403 insufficientPermissions token-secret")
+
+        output = io.StringIO()
+        with mock.patch("sentineldesk.cli.GoogleWorkspaceFactory", FailingFactory), contextlib.redirect_stdout(output):
+            code = main(["--home", self.home, "daily", "run", "--sync-gmail", "--account", "student.private@example.com"])
+        raw = output.getvalue()
+        payload = json.loads(raw)
+        self.assertEqual(code, 1)
+        self.assertEqual(payload["error"], "gmail_sync_failed")
+        self.assertEqual(payload["diagnostics"]["latest_failure"]["category"], "permission_denied")
+        self.assertEqual(payload["daily_summary"]["gmail_sync_diagnostics"]["status"], "failed")
+        self.assertFalse(payload["daily_summary"]["safety"]["local_audit_written"])
+        self.assertNotIn("student.private@example.com", raw)
+        self.assertNotIn("token-secret", raw)
 
     def test_daily_summary_embeds_ready_gmail_readiness_without_secret_values(self) -> None:
         paths = get_paths(self.home)

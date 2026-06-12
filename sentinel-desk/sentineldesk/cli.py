@@ -33,6 +33,7 @@ from .config import ensure_config, ensure_dirs, file_url, get_paths, project_roo
 from .daily import build_daily_landing_summary
 from .extract import utc_now
 from .gmail_readiness import build_gmail_readiness
+from .gmail_sync_diagnostics import build_gmail_sync_diagnostics, record_gmail_sync_failure
 from .monitor import run_all
 from .plantracker import format_plan_summary, summarize_plan
 from .privacy import audit_project_tree, audit_redacted_artifacts, write_release_package
@@ -304,21 +305,38 @@ def cmd_email_sync_gmail(args: argparse.Namespace) -> int:
     db.init_db(paths)
     state = db.get_connector_state(paths, connector="gmail_api", account_id=args.account)
     since = args.since if args.since is not None else str((state or {}).get("cursor") or "")
-    config = GoogleOAuthConfig(
-        credentials_json=env_secret(args.credentials_env),
-        token_json=env_secret(args.token_env),
-        scopes=(GMAIL_READONLY_SCOPE,),
-        account_id=args.account,
-    )
-    client = GoogleWorkspaceFactory(config).gmail_client()
-    setattr(client, "account_id", args.account)
-    setattr(client, "scopes", config.scopes)
-    summary = sync_connector(
-        paths,
-        GmailApiEmailConnector(client),
-        EmailSyncRequest(query=args.query or "", since=since, limit=args.limit),
-        account_id=args.account,
-    )
+    query = args.query or ""
+    try:
+        config = GoogleOAuthConfig(
+            credentials_json=env_secret(args.credentials_env),
+            token_json=env_secret(args.token_env),
+            scopes=(GMAIL_READONLY_SCOPE,),
+            account_id=args.account,
+        )
+        client = GoogleWorkspaceFactory(config).gmail_client()
+        setattr(client, "account_id", args.account)
+        setattr(client, "scopes", config.scopes)
+        summary = sync_connector(
+            paths,
+            GmailApiEmailConnector(client),
+            EmailSyncRequest(query=query, since=since, limit=args.limit),
+            account_id=args.account,
+        )
+    except Exception as error:
+        diagnostics = record_gmail_sync_failure(
+            paths,
+            error=error,
+            account_id=args.account,
+            command="email sync-gmail",
+            query=query,
+            since=since,
+            limit=args.limit,
+            credentials_env=args.credentials_env,
+            token_env=args.token_env,
+            actor="user",
+        )
+        print_json({"error": "gmail_sync_failed", "diagnostics": diagnostics})
+        return 1
     print_json({"oauth": config.safe_summary(), "sync": summary})
     return 0
 
@@ -359,21 +377,52 @@ def cmd_daily_run(args: argparse.Namespace) -> int:
         state = db.get_connector_state(paths, connector="gmail_api", account_id=args.account)
         since = args.since if args.since is not None else str((state or {}).get("cursor") or "")
         query = args.query or "deadline OR due OR payment OR notice OR required OR action"
-        config = GoogleOAuthConfig(
-            credentials_json=env_secret(args.credentials_env),
-            token_json=env_secret(args.token_env),
-            scopes=(GMAIL_READONLY_SCOPE,),
-            account_id=args.account,
-        )
-        client = GoogleWorkspaceFactory(config).gmail_client()
-        setattr(client, "account_id", args.account)
-        setattr(client, "scopes", config.scopes)
-        summary = sync_connector(
-            paths,
-            GmailApiEmailConnector(client),
-            EmailSyncRequest(query=query, since=since, limit=args.limit),
-            account_id=args.account,
-        )
+        try:
+            config = GoogleOAuthConfig(
+                credentials_json=env_secret(args.credentials_env),
+                token_json=env_secret(args.token_env),
+                scopes=(GMAIL_READONLY_SCOPE,),
+                account_id=args.account,
+            )
+            client = GoogleWorkspaceFactory(config).gmail_client()
+            setattr(client, "account_id", args.account)
+            setattr(client, "scopes", config.scopes)
+            summary = sync_connector(
+                paths,
+                GmailApiEmailConnector(client),
+                EmailSyncRequest(query=query, since=since, limit=args.limit),
+                account_id=args.account,
+            )
+        except Exception as error:
+            diagnostics = record_gmail_sync_failure(
+                paths,
+                error=error,
+                account_id=args.account,
+                command="daily run --sync-gmail",
+                query=query,
+                since=since,
+                limit=args.limit,
+                credentials_env=args.credentials_env,
+                token_env=args.token_env,
+                actor=args.actor,
+            )
+            print_json(
+                {
+                    "error": "gmail_sync_failed",
+                    "diagnostics": diagnostics,
+                    "daily_summary": build_daily_landing_summary(
+                        paths,
+                        task_limit=args.task_limit,
+                        calendar_limit=args.calendar_limit,
+                        actor=args.actor,
+                        record_audit=False,
+                        account_id=args.account,
+                        google_credentials_env=args.credentials_env,
+                        google_token_env=args.token_env,
+                    ),
+                }
+            )
+            return 1
         sync_summary = {
             "mode": "gmail_readonly",
             "external_network": True,
@@ -771,6 +820,12 @@ def cmd_integrations_gmail_readiness(args: argparse.Namespace) -> int:
             token_env=args.google_token_env,
         )
     )
+    return 0
+
+
+def cmd_integrations_gmail_sync_diagnostics(args: argparse.Namespace) -> int:
+    paths = paths_from_args(args)
+    print_json(build_gmail_sync_diagnostics(paths, account_id=args.account, limit=args.limit))
     return 0
 
 
@@ -1206,6 +1261,13 @@ def build_parser() -> argparse.ArgumentParser:
     integrations_gmail_readiness.add_argument("--google-credentials-env", default="SENTINEL_GOOGLE_CREDENTIALS_JSON")
     integrations_gmail_readiness.add_argument("--google-token-env", default="SENTINEL_GOOGLE_TOKEN_JSON")
     integrations_gmail_readiness.set_defaults(func=cmd_integrations_gmail_readiness)
+    integrations_gmail_diagnostics = integrations_sub.add_parser(
+        "gmail-sync-diagnostics",
+        help="Show local-only Gmail sync failure diagnostics and recovery guidance",
+    )
+    integrations_gmail_diagnostics.add_argument("--account", default="default")
+    integrations_gmail_diagnostics.add_argument("--limit", type=int, default=20)
+    integrations_gmail_diagnostics.set_defaults(func=cmd_integrations_gmail_sync_diagnostics)
     integrations_audit = integrations_sub.add_parser("completion-audit", help="Audit whether final live verification evidence is complete")
     integrations_audit.add_argument("--account", default="default")
     integrations_audit.add_argument("--google-credentials-env", default="SENTINEL_GOOGLE_CREDENTIALS_JSON")

@@ -294,6 +294,11 @@
     needs_oauth: '待 OAuth',
     needs_dependency: '缺依赖'
   };
+  var GMAIL_SYNC_STATUS_LABEL = {
+    ready: '最近成功',
+    failed: '同步失败',
+    no_attempt: '未同步'
+  };
   var TASK_SORT_LABEL = {
     priority: '优先级',
     due_date: '日期',
@@ -694,6 +699,31 @@
       next + '</div>';
   }
 
+  function gmailSyncDiagnosticsPanel() {
+    var diagnostics = (state.daily && state.daily.gmail_sync_diagnostics) || {};
+    var status = diagnostics.status || 'no_attempt';
+    if (status === 'no_attempt') return '';
+    var label = GMAIL_SYNC_STATUS_LABEL[status] || '未检查';
+    var failure = diagnostics.latest_failure || {};
+    var success = diagnostics.latest_success || {};
+    var action = diagnostics.next_action || {};
+    var headline = status === 'failed'
+      ? (failure.category || 'unknown')
+      : ('消息 ' + (success.message_count || 0) + ' · 游标 ' + (success.cursor_saved ? '已保存' : '未保存'));
+    var detail = status === 'failed'
+      ? (failure.detail || '最近 Gmail 同步失败。')
+      : ('最近成功：' + (success.created_at || '暂无时间'));
+    var next = action.command
+      ? '<div class="dD-command">' + escapeHtml(action.command) + '</div>'
+      : '';
+    return '<div class="dD-embed gmail" id="gmailSyncDiagnostics"><h4>Gmail 同步诊断 · 本地记录</h4>' +
+      '<div class="dD-sumrow"><div class="n' + (status === 'failed' ? ' u' : '') + '">' + escapeHtml(label) + '</div><div><div class="lab">' +
+        escapeHtml(headline) + '</div><div class="sub">失败 ' + (diagnostics.recent_failure_count || 0) + ' · 成功 ' +
+        (diagnostics.recent_success_count || 0) + '</div></div></div>' +
+      '<div class="dD-session-note">' + escapeHtml(detail) + '</div>' +
+      next + '</div>';
+  }
+
   function taskCardMeta(queue) {
     var stats = taskSessionStats();
     return (state.taskCursor + 1) + '/' + queue.length + ' · 已归类 ' + stats.classified + '/' + stats.total;
@@ -937,6 +967,7 @@
       '<div class="dD-sumrow"><div class="n">' + (safety.external_writes_performed ? '!' : '0') + '</div><div><div class="lab">外部写入</div><div class="sub">' + escapeHtml(connectorText) + ' · Gmail 只读</div></div></div>' +
       '<div class="dD-taskline" id="taskReviewQueue">任务操作只写本地 review 状态和 audit，不会发送邮件或写外部日历。</div>' +
       gmailReadinessPanel() +
+      gmailSyncDiagnosticsPanel() +
       taskFilterControls() +
       taskSessionPanel() +
       reviewReceiptPanel() +

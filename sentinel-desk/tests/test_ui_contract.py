@@ -80,6 +80,7 @@ DAILY_SUMMARY_FIELDS = {
     "calendar",
     "connectors",
     "gmail_readiness",
+    "gmail_sync_diagnostics",
     "review_receipt",
     "safety",
     "next_actions",
@@ -103,6 +104,36 @@ GMAIL_READINESS_FIELDS = {
     "external_writes_performed",
 }
 GMAIL_READINESS_CHECK_FIELDS = {"name", "status", "detail", "metadata"}
+GMAIL_SYNC_DIAGNOSTICS_FIELDS = {
+    "status",
+    "generated_at",
+    "mode",
+    "account_id",
+    "latest_failure",
+    "latest_success",
+    "recent_failure_count",
+    "recent_success_count",
+    "next_action",
+    "external_network",
+    "external_writes_performed",
+}
+GMAIL_SYNC_FAILURE_FIELDS = {
+    "audit_id",
+    "created_at",
+    "category",
+    "error_type",
+    "detail",
+    "command",
+    "query_present",
+    "query_length",
+    "since_present",
+    "limit",
+    "credentials_env",
+    "token_env",
+    "external_network_attempted",
+    "external_writes_performed",
+    "raw_error_included",
+}
 TASK_EVIDENCE_FIELDS = {
     "task_id",
     "task",
@@ -538,6 +569,10 @@ class DailyContractTests(UiContractBase):
         self.assertFalse(summary["gmail_readiness"]["external_network"])
         self.assertFalse(summary["gmail_readiness"]["external_writes_performed"])
         self.assertTrue(all(set(check) == GMAIL_READINESS_CHECK_FIELDS for check in summary["gmail_readiness"]["checks"]))
+        self.assertEqual(set(summary["gmail_sync_diagnostics"]), GMAIL_SYNC_DIAGNOSTICS_FIELDS)
+        self.assertEqual(summary["gmail_sync_diagnostics"]["status"], "no_attempt")
+        self.assertFalse(summary["gmail_sync_diagnostics"]["external_network"])
+        self.assertFalse(summary["gmail_sync_diagnostics"]["external_writes_performed"])
         self.assertEqual(summary["review_receipt"]["mode"], "local_review_receipt")
         self.assertFalse(summary["safety"]["external_writes_performed"])
         self.assertFalse(summary["safety"]["local_audit_written"])
@@ -567,6 +602,51 @@ class DailyContractTests(UiContractBase):
         self.assertFalse(payload["external_writes_performed"])
         self.assertNotIn("student.private@example.com", raw)
         self.assertNotIn("history-secret-123", raw)
+        self.assertEqual(before, after)
+
+    def test_gmail_sync_diagnostics_api_is_local_readonly_and_redacted(self) -> None:
+        db.insert_audit_event(
+            self.paths,
+            action="email.connector.sync.failed",
+            actor="test",
+            subject="gmail_api:[REDACTED_CONNECTOR_METADATA]",
+            capability="email_read",
+            side_effect="external_read_failed_local_audit",
+            allowed=False,
+            confirmation_id="",
+            metadata={
+                "connector": "gmail_api",
+                "account_id": "[REDACTED_CONNECTOR_METADATA]",
+                "command": "daily run --sync-gmail",
+                "category": "permission_denied",
+                "error_type": "HttpError",
+                "detail": "Google denied Gmail API access; check the app test user and Gmail readonly scope.",
+                "query_present": True,
+                "query_length": 8,
+                "since_present": True,
+                "limit": 50,
+                "credentials_env": "SENTINEL_GOOGLE_CREDENTIALS_JSON",
+                "token_env": "SENTINEL_GOOGLE_TOKEN_JSON",
+                "external_network_attempted": True,
+                "external_writes_performed": False,
+                "raw_error_included": False,
+            },
+            created_at="2026-06-12T12:00:00+00:00",
+        )
+        before = db.list_audit_events(self.paths, limit=20)
+        status, payload = self.json_request("GET", "/api/gmail/sync-diagnostics?account=student.private@example.com")
+        after = db.list_audit_events(self.paths, limit=20)
+
+        raw = json.dumps(payload)
+        self.assertEqual(status, 200)
+        self.assertEqual(set(payload), GMAIL_SYNC_DIAGNOSTICS_FIELDS)
+        self.assertEqual(payload["status"], "failed")
+        self.assertEqual(set(payload["latest_failure"]), GMAIL_SYNC_FAILURE_FIELDS)
+        self.assertEqual(payload["latest_failure"]["category"], "permission_denied")
+        self.assertEqual(payload["next_action"]["kind"], "refresh_gmail_oauth")
+        self.assertFalse(payload["external_network"])
+        self.assertFalse(payload["external_writes_performed"])
+        self.assertNotIn("student.private@example.com", raw)
         self.assertEqual(before, after)
 
     def test_daily_run_api_records_local_audit(self) -> None:
@@ -739,6 +819,7 @@ class CalendarPageTests(UiContractBase):
             'id="taskSessionSummary"',
             'id="taskReviewReceipt"',
             'id="gmailReadiness"',
+            'id="gmailSyncDiagnostics"',
             'id="taskBulkActions"',
             'data-act="task-view"',
             'data-act="task-sort"',
@@ -766,6 +847,7 @@ class CalendarPageTests(UiContractBase):
             "function reviewReceiptPanel",
             "function receiptStatusText",
             "function gmailReadinessPanel",
+            "function gmailSyncDiagnosticsPanel",
         ):
             self.assertIn(marker, html)
 
@@ -783,6 +865,7 @@ class CalendarPageTests(UiContractBase):
         self.assertIn("function taskSessionPanel", html)
         self.assertIn("function taskSessionStats", html)
         self.assertIn("function gmailReadinessPanel", html)
+        self.assertIn("function gmailSyncDiagnosticsPanel", html)
         self.assertIn("function taskViewStats", html)
         self.assertIn("function taskMatchesSavedView", html)
         self.assertIn("function taskSessionEmptyCopy", html)
@@ -840,7 +923,7 @@ class UiFixtureSampleTests(UiContractBase):
         status, live = self.json_request("GET", "/api/daily/summary?task_limit=0&calendar_limit=0")
         self.assertEqual(status, 200)
         self.assertEqual(set(sample), set(live))
-        for key in ("sync", "email", "tasks", "calendar", "gmail_readiness", "safety"):
+        for key in ("sync", "email", "tasks", "calendar", "gmail_readiness", "gmail_sync_diagnostics", "safety"):
             self.assertEqual(set(sample[key]), set(live[key]))
 
     def test_samples_stay_synthetic(self) -> None:
