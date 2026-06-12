@@ -10,6 +10,7 @@ All notable project updates for LifeAgent are tracked here.
 - Marked the final UI design reference as complete and shifted the active plan away from portfolio recording toward product landing.
 - Cancelled the screen-recording direction after user feedback; generated local recording files and temporary thumbnails were deleted, and `PLAN_TRACKER.md` now points the next practical work to the Gmail-first daily landing loop.
 - Switched CI product-state preparation away from the screen-recording helper script; CI now prepares the synthetic product state directly and runs `sentineldesk daily run`.
+- Recorded the real Gmail readonly daily landing verification checkpoint: `daily run --sync-gmail` persisted 50 messages, extracted 1044 facts, drafted 99 local deadline events, counted 959 reviewable tasks, redacted connector account/cursor state, returned no task/calendar item details with zero limits, and performed no external writes.
 
 ### Added
 
