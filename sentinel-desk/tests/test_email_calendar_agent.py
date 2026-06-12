@@ -478,6 +478,18 @@ class EmailCalendarAgentTests(unittest.TestCase):
                 "2026-06-25",
                 "Reminder: quarterly all-hands is at 10 AM. Submit questions for leadership through the form.",
             ),
+            EmailMessage(
+                "m-action-link-artifact",
+                "t-action-link-artifact",
+                "digest@example.com",
+                "Neighborhood digest",
+                "2026-06-25",
+                (
+                    'Top posts today: <a href="https://digest.example/email&amp;s=dv2&amp;section=post_1'
+                    '&amp;mar=%recipient.mark_as_read%&amp;ct=abc123">Open story</a>. '
+                    "Footer: mailto:tips@digest.example?subject=story"
+                ),
+            ),
         ]
         for message in messages:
             with self.subTest(message=message.message_id):
@@ -502,6 +514,21 @@ class EmailCalendarAgentTests(unittest.TestCase):
         self.assertIn("sign", action_text)
         self.assertIn("schedule", action_text)
         self.assertIn("submit", action_text)
+
+    def test_extract_email_facts_keeps_real_email_action_after_link_filters(self) -> None:
+        message = EmailMessage(
+            "m-action-email-preserve",
+            "t-action-email-preserve",
+            "housing@example.com",
+            "Missing lease document",
+            "2026-06-25",
+            "Please email the housing office by 07/02/2026 with your signed addendum attached.",
+        )
+        action_text = " ".join(
+            fact.value.lower() for fact in extract_email_facts(message) if fact.kind == "action"
+        )
+        self.assertIn("email", action_text)
+        self.assertIn("housing office", action_text)
 
     def test_find_messages_scores_matching_terms(self) -> None:
         messages = [

@@ -139,7 +139,7 @@ ACTION_CUE_WORDS = {
     "will",
     "would",
 }
-CONTEXT_SENSITIVE_ACTION_VERBS = {"check", "report", "update"}
+CONTEXT_SENSITIVE_ACTION_VERBS = {"check", "email", "report", "update"}
 
 
 def find_messages(messages: Iterable[EmailMessage], query: str, *, limit: int = 20) -> list[EmailMessage]:
@@ -396,6 +396,8 @@ def _action_noise_context(text: str, start: int, verb: str, action: str) -> bool
     context = _context(text, start, start + len(action)).lower()
     if ACTION_INJECTION_CONTEXT_RE.search(context):
         return True
+    if _looks_like_link_or_html_artifact(action, context):
+        return True
     if re.search(r"\bsecure link\b", context) and re.search(
         r"\bprocessing fee\b|\bterminated\b", context
     ):
@@ -418,6 +420,19 @@ def _action_noise_context(text: str, start: int, verb: str, action: str) -> bool
     if verb == "review" and re.search(r"\bpull request\b|\bmigration script\b|\bcodeforge\b", context):
         return True
     if verb == "submit" and re.search(r"\b(all-hands|questions for leadership|leadership through the form)\b", context):
+        return True
+    return False
+
+
+def _looks_like_link_or_html_artifact(action: str, context: str) -> bool:
+    if re.search(r"(?:https?://|mailto:|href=|&(?:amp;)?[a-z0-9_]+=|%recipient|utm_|ct=|mar=)", action):
+        return True
+    if re.match(r"^email(?:[\"'>]|&|%|=|/)", action):
+        return True
+    if re.search(r"(?:https?://|mailto:|href=|%recipient|utm_|ct=|mar=)", context) and re.search(
+        r"(?:^|[^a-z])email(?:[\"'>]|&|%|=|/)",
+        action,
+    ):
         return True
     return False
 

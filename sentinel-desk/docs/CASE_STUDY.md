@@ -111,9 +111,9 @@ Current public checkpoint:
 
 | Claim | Evidence |
 | --- | --- |
-| Extraction is regression-tested | 142-case golden email extraction eval |
+| Extraction is regression-tested | 144-case golden email extraction eval |
 | Raw extraction is clean on current synthetic set | deadline, amount, and action are all P=1.000 / R=1.000 / F1=1.000 |
-| Behavior is covered beyond extraction | 269 unittest cases |
+| Behavior is covered beyond extraction | 270 unittest cases |
 | Demo does not need private data | synthetic Gmail-style and portal fixtures |
 | Share output is privacy-checked | redacted-output privacy audit passes |
 | Public release excludes runtime artifacts | source release package + extracted release audit pass |

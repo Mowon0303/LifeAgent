@@ -1,7 +1,7 @@
 # Email Extraction Eval Report
 
-- Generated at: 2026-06-11T18:20:30+00:00
-- Golden set: `evals/golden` (142 cases)
+- Generated at: 2026-06-12T16:00:14+00:00
+- Golden set: `evals/golden` (144 cases)
 - Target under test: `sentineldesk.email.extract.extract_email_facts`
 - High-confidence threshold: 0.75 (same boundary the assistant uses for `high` confidence answers)
 - Labels are semantic ground truth for a life-admin assistant; expanded date forms, relative deadlines, non-dollar currencies, spelled-out dollar amounts, and expanded action verbs stay labeled even when extractor support is partial, so recall reflects true capability.
@@ -17,7 +17,7 @@
 | immigration_school | 16 |
 | insurance_medical | 13 |
 | lease_rent | 16 |
-| negatives | 15 |
+| negatives | 17 |
 | subscription_services | 12 |
 | tax_government | 13 |
 

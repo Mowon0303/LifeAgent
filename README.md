@@ -34,11 +34,11 @@ Agent layer:
 - **Tools:** email search, stored evidence reads, portal capture fallback, local calendar draft/export boundaries.
 - **LangChain/LangGraph:** optional orchestration layer for route/tools/finalize workflow metadata and model-swappable tool routing.
 - **RAG:** local SQLite-backed trusted document search for policy/rule explanation; retrieved prompt-injection text is sanitized.
-- **Eval:** 142-case golden email extraction set plus unit tests for orchestration, privacy, redaction, confirmation gates, and package shapes.
+- **Eval:** 144-case golden email extraction set plus unit tests for orchestration, privacy, redaction, confirmation gates, and package shapes.
 
 ## Current Evidence
 
-- `269` unittest cases pass.
+- `270` unittest cases pass.
 - Golden extraction eval: raw deadline, amount, and action are all `P=1.000 / R=1.000 / F1=1.000` on the current synthetic set.
 - Redacted Gmail-first readiness package shape is regression-tested.
 - Daily landing workflow creates 4 synthetic messages, 8 extracted facts, 3 local calendar drafts, 8 reviewable tasks, and a local audit record without external writes.

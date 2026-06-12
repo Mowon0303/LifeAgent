@@ -1,6 +1,6 @@
 # Email Extraction Golden Set
 
-142 hand-labeled synthetic emails for evaluating `sentineldesk.email.extract.extract_email_facts`. All content is synthetic: senders use `.example` domains, names and account numbers are invented, and no fixture is derived from real mailbox data.
+144 hand-labeled synthetic emails for evaluating `sentineldesk.email.extract.extract_email_facts`. All content is synthetic: senders use `.example` domains, names and account numbers are invented, and no fixture is derived from real mailbox data.
 
 Run the eval:
 
@@ -78,7 +78,7 @@ The assistant is a personal life-admin agent. Work-collaboration requests (code 
 | `insurance_medical.jsonl` | 13 | open enrollment, claims, EOB amount traps, grace periods, FSA deadlines |
 | `tax_government.jsonl` | 13 | estimated tax, DMV, citations, jury duty, property tax, identity verification |
 | `edge_cases.jsonl` | 18 | relative dates, UK/no-year/ISO-datetime formats, non-dollar currencies, spelled-out amounts, >10-date truncation, subject-only and attachment-only facts |
-| `negatives.jsonl` | 15 | newsletters, marketing, receipts, social/work notifications — measures false-positive cost |
+| `negatives.jsonl` | 17 | newsletters, marketing, receipts, social/work notifications, link/HTML action artifacts — measures false-positive cost |
 | `adversarial.jsonl` | 10 | prompt injection (forging, suppression), phishing, zero-width obfuscation, repetition/stuffing attacks |
 
 ## Maintenance Rules
