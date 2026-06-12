@@ -25,7 +25,7 @@ The public demo uses synthetic Gmail-style email fixtures plus synthetic OPT, ap
 
 ```bash
 cd sentinel-desk
-python3 -B -m sentineldesk --home .demo demo record-prep --port 8787
+python3 -B -m sentineldesk --home .demo acceptance first-run --port 8787
 python3 -B -m sentineldesk --home .demo serve --port 8787
 ```
 
@@ -33,12 +33,16 @@ Open `http://127.0.0.1:8787/` for the LifeAgent calendar assistant.
 
 Open `http://127.0.0.1:8787/ops` for the SentinelDesk reliability/evidence dashboard.
 
-`demo record-prep` prepares:
+`acceptance first-run` prepares and verifies:
 
 - synthetic Gmail-style email evidence
 - email-derived local calendar drafts and reviewable tasks
-- baseline, `critical`, and `uncertain` portal reliability runs
-- redacted report/package artifacts for the ops view
+- baseline synthetic portal targets
+- tool-first cited ask behavior over stored evidence
+- Gmail readiness and sync diagnostics surfaces
+- explicit proof that the first-run path does not call external networks or write external calendars
+
+For the older ops-heavy recording state with baseline, `critical`, and `uncertain` portal reliability runs plus redacted report/package artifacts, use `python3 -B -m sentineldesk --home .demo demo record-prep --port 8787`.
 
 ## Run The Daily Workflow
 
@@ -115,6 +119,7 @@ Lease/rent scenarios include `lease_baseline`, `lease_notice_required`, and `lea
 ```bash
 python3 -m sentineldesk init
 python3 -m sentineldesk doctor
+python3 -m sentineldesk acceptance first-run
 python3 -m sentineldesk demo seed
 python3 -m sentineldesk demo record-prep
 python3 -m sentineldesk demo scenarios

@@ -45,6 +45,10 @@ jobs:
         working-directory: sentinel-desk
         run: python -B -m sentineldesk eval email-extract --golden evals/golden --json > /tmp/lifeagent-email-eval.json
 
+      - name: Run first-run acceptance
+        working-directory: sentinel-desk
+        run: python -B -m sentineldesk --home /tmp/lifeagent-ci-first-run acceptance first-run --port 8787 > /tmp/lifeagent-first-run.json
+
       - name: Prepare email-first product state
         working-directory: sentinel-desk
         run: |

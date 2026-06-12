@@ -11,6 +11,7 @@ from .agent.providers import adapter_status_dict
 from .agent.rag_index import index_file, search_index
 from .agent.tools import default_tool_registry
 from .agent.workflow import answer_with_workflow
+from .acceptance import run_first_run_acceptance
 from .calendar.adapters import AppleCalendarAdapter, GoogleCalendarAdapter, IcsFileCalendarAdapter, sync_calendar_draft
 from .calendar.models import CalendarDraft, DeadlineEvent
 from .calendar.source import events_from_calendar_rows
@@ -89,6 +90,16 @@ def cmd_doctor(args: argparse.Namespace) -> int:
     checks.append({"name": "chrome_profile", "ok": str(paths.chrome_profile).startswith(str(paths.home)), "detail": str(paths.chrome_profile)})
     print_json(checks)
     return 0 if all(item["ok"] for item in checks) else 1
+
+
+def cmd_acceptance_first_run(args: argparse.Namespace) -> int:
+    result = run_first_run_acceptance(
+        paths_from_args(args),
+        sample_email_json=args.email_json,
+        port=args.port,
+    )
+    print_json(result)
+    return 0 if result["status"] == "passed" else 1
 
 
 def cmd_demo_seed(args: argparse.Namespace) -> int:
@@ -1003,6 +1014,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     doctor_parser = sub.add_parser("doctor", help="Check local readiness")
     doctor_parser.set_defaults(func=cmd_doctor)
+
+    acceptance = sub.add_parser("acceptance", help="Run product acceptance checks")
+    acceptance_sub = acceptance.add_subparsers(dest="acceptance_command", required=True)
+    acceptance_first = acceptance_sub.add_parser("first-run", help="Prepare and verify the local first-run MVP")
+    acceptance_first.add_argument("--email-json", help="Synthetic email fixture to use. Defaults to fixtures/ui/sample_emails.json")
+    acceptance_first.add_argument("--port", type=int, default=8787, help="Dashboard port to include in the printed serve command")
+    acceptance_first.set_defaults(func=cmd_acceptance_first_run)
 
     demo = sub.add_parser("demo", help="Demo fixture helpers")
     demo_sub = demo.add_subparsers(dest="demo_command", required=True)

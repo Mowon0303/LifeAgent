@@ -68,6 +68,36 @@ class CliDbTests(unittest.TestCase):
         self.assertTrue(Path(summary["packages"]["critical"]).exists())
         self.assertTrue(Path(summary["packages"]["uncertain"]).exists())
 
+    def test_acceptance_first_run_prepares_and_verifies_local_mvp(self) -> None:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = main(["--home", self.home, "acceptance", "first-run", "--port", "8898"])
+        raw = output.getvalue()
+        summary = json.loads(raw)
+        self.assertEqual(code, 0)
+        self.assertEqual(summary["status"], "passed")
+        self.assertEqual(summary["mode"], "first_run_acceptance")
+        self.assertFalse(summary["external_network"])
+        self.assertFalse(summary["external_writes_performed"])
+        self.assertEqual(summary["dashboard"]["calendar_url"], "http://127.0.0.1:8898/")
+        self.assertEqual(summary["summary"]["stored_messages"], 4)
+        self.assertEqual(summary["summary"]["fact_counts"]["deadline"], 3)
+        self.assertEqual(summary["summary"]["task_queue_count"], 7)
+        self.assertEqual(summary["summary"]["calendar_pending_count"], 3)
+        self.assertIn("2026-07-01", summary["summary"]["calendar_dates"])
+        self.assertEqual(summary["summary"]["gmail_readiness_status"], "needs_oauth")
+        self.assertEqual(summary["ask_smoke"]["intent"], "latest_deadline")
+        self.assertIn("search_latest_email", summary["ask_smoke"]["tool_calls"])
+        self.assertGreaterEqual(summary["ask_smoke"]["citation_count"], 1)
+        self.assertTrue(all(check["status"] == "passed" for check in summary["checks"]))
+        self.assertNotIn(self.home, raw)
+
+        second_output = io.StringIO()
+        with contextlib.redirect_stdout(second_output):
+            second_code = main(["--home", self.home, "acceptance", "first-run"])
+        self.assertEqual(second_code, 0)
+        self.assertEqual(json.loads(second_output.getvalue())["status"], "passed")
+
     def test_daily_run_ingests_local_email_and_summarizes_landing_queue(self) -> None:
         output = io.StringIO()
         with contextlib.redirect_stdout(output):

@@ -38,7 +38,7 @@ Agent layer:
 
 ## Current Evidence
 
-- `307` unittest cases pass.
+- `308` unittest cases pass.
 - Golden extraction eval: raw deadline, amount, and action are all `P=1.000 / R=1.000 / F1=1.000` on the current synthetic set.
 - Redacted Gmail-first readiness package shape is regression-tested.
 - The local assistant exposes an explicit Gmail readonly sync/retry control with external-read labeling and redacted failure diagnostics.
@@ -58,6 +58,7 @@ Agent layer:
 - Filtered task queues can be bulk-marked through a confirmation-gated local review API with single-use confirmation IDs and replay protection.
 - Recent single/bulk task review actions have local history and confirmation-gated undo controls, so review mistakes can be recovered without external writes.
 - Source release packaging and release audit pass with runtime artifacts excluded.
+- One-command first-run acceptance prepares the synthetic local MVP and verifies email ingest, task review, calendar draft visibility, tool-first cited ask behavior, Gmail readiness, UI wiring, audit logging, and no external network/write side effects.
 
 ## Portfolio Snapshot
 
@@ -69,15 +70,15 @@ The implementation lives in `sentinel-desk/`.
 
 ```bash
 cd sentinel-desk
+python3 -B -m sentineldesk --home /tmp/lifeagent-first-run acceptance first-run
 python3 -B -m unittest discover -s tests -q
 ```
 
-Run the email-first calendar assistant demo:
+If the acceptance output says `status: "passed"`, open the prepared local assistant:
 
 ```bash
 cd sentinel-desk
-python3 -B -m sentineldesk --home .demo demo record-prep --port 8787
-python3 -B -m sentineldesk --home .demo serve --port 8787
+python3 -B -m sentineldesk --home /tmp/lifeagent-first-run serve --port 8787
 ```
 
 Open:
@@ -121,6 +122,7 @@ GitHub Actions runs:
 - full unittest suite
 - `compileall`
 - golden extraction eval in JSON mode
+- first-run MVP acceptance over synthetic local fixtures
 - email-first demo dry run
 - redacted-output privacy audit on generated demo artifacts
 - source release package generation

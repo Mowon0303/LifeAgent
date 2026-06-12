@@ -43,7 +43,7 @@ python3 -m zipfile -e /tmp/sentineldesk.release.zip "$EXTRACT_DIR"
 python3 -m sentineldesk privacy release-audit --path "$EXTRACT_DIR" --require-clean
 ```
 
-The current implementation was verified by packaging the local tree to `/tmp/sentineldesk.release.zip`, extracting it, and auditing the extracted tree with 124 scanned files and 0 release-artifact issues. The same package/audit boundary is now part of GitHub Actions CI.
+The current implementation was verified by packaging the local tree to `/tmp/sentineldesk.release.zip`, extracting it, and auditing the extracted tree with 125 scanned files and 0 release-artifact issues. The same package/audit boundary is now part of GitHub Actions CI.
 
 The redacted-output privacy audit remains separate:
 
