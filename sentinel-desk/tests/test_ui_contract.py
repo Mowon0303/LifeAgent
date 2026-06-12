@@ -79,10 +79,30 @@ DAILY_SUMMARY_FIELDS = {
     "tasks",
     "calendar",
     "connectors",
+    "gmail_readiness",
     "review_receipt",
     "safety",
     "next_actions",
 }
+GMAIL_READINESS_FIELDS = {
+    "status",
+    "generated_at",
+    "mode",
+    "account_id",
+    "credentials_env",
+    "token_env",
+    "checks",
+    "oauth_ready",
+    "has_local_evidence",
+    "has_cursor",
+    "stored_message_count",
+    "latest_received_at",
+    "connector",
+    "next_action",
+    "external_network",
+    "external_writes_performed",
+}
+GMAIL_READINESS_CHECK_FIELDS = {"name", "status", "detail", "metadata"}
 TASK_EVIDENCE_FIELDS = {
     "task_id",
     "task",
@@ -513,9 +533,40 @@ class DailyContractTests(UiContractBase):
         self.assertEqual(summary["mode"], "daily_landing")
         self.assertEqual(summary["sync"]["mode"], "stored_only")
         self.assertFalse(summary["sync"]["external_network"])
+        self.assertEqual(set(summary["gmail_readiness"]), GMAIL_READINESS_FIELDS)
+        self.assertTrue(summary["gmail_readiness"]["has_local_evidence"])
+        self.assertFalse(summary["gmail_readiness"]["external_network"])
+        self.assertFalse(summary["gmail_readiness"]["external_writes_performed"])
+        self.assertTrue(all(set(check) == GMAIL_READINESS_CHECK_FIELDS for check in summary["gmail_readiness"]["checks"]))
         self.assertEqual(summary["review_receipt"]["mode"], "local_review_receipt")
         self.assertFalse(summary["safety"]["external_writes_performed"])
         self.assertFalse(summary["safety"]["local_audit_written"])
+        self.assertEqual(before, after)
+
+    def test_gmail_readiness_api_is_local_readonly_and_redacted(self) -> None:
+        db.upsert_connector_state(
+            self.paths,
+            connector="gmail_api",
+            account_id="student.private@example.com",
+            cursor="history-secret-123",
+            scopes=["https://www.googleapis.com/auth/gmail.readonly"],
+            metadata={"source_type": "gmail_api", "trust_label": "gmail_readonly"},
+            updated_at="2026-06-12T00:00:00+00:00",
+        )
+        before = db.list_audit_events(self.paths, limit=20)
+        status, payload = self.json_request("GET", "/api/gmail/readiness?account=student.private@example.com")
+        after = db.list_audit_events(self.paths, limit=20)
+
+        raw = json.dumps(payload)
+        self.assertEqual(status, 200)
+        self.assertEqual(set(payload), GMAIL_READINESS_FIELDS)
+        self.assertEqual(payload["mode"], "gmail_first_readiness")
+        self.assertTrue(payload["has_cursor"])
+        self.assertTrue(payload["has_local_evidence"])
+        self.assertFalse(payload["external_network"])
+        self.assertFalse(payload["external_writes_performed"])
+        self.assertNotIn("student.private@example.com", raw)
+        self.assertNotIn("history-secret-123", raw)
         self.assertEqual(before, after)
 
     def test_daily_run_api_records_local_audit(self) -> None:
@@ -687,6 +738,7 @@ class CalendarPageTests(UiContractBase):
             'id="taskNavState"',
             'id="taskSessionSummary"',
             'id="taskReviewReceipt"',
+            'id="gmailReadiness"',
             'id="taskBulkActions"',
             'data-act="task-view"',
             'data-act="task-sort"',
@@ -713,6 +765,7 @@ class CalendarPageTests(UiContractBase):
             "confirmation_id",
             "function reviewReceiptPanel",
             "function receiptStatusText",
+            "function gmailReadinessPanel",
         ):
             self.assertIn(marker, html)
 
@@ -729,6 +782,7 @@ class CalendarPageTests(UiContractBase):
         self.assertIn("function taskFilterControls", html)
         self.assertIn("function taskSessionPanel", html)
         self.assertIn("function taskSessionStats", html)
+        self.assertIn("function gmailReadinessPanel", html)
         self.assertIn("function taskViewStats", html)
         self.assertIn("function taskMatchesSavedView", html)
         self.assertIn("function taskSessionEmptyCopy", html)
@@ -786,7 +840,7 @@ class UiFixtureSampleTests(UiContractBase):
         status, live = self.json_request("GET", "/api/daily/summary?task_limit=0&calendar_limit=0")
         self.assertEqual(status, 200)
         self.assertEqual(set(sample), set(live))
-        for key in ("sync", "email", "tasks", "calendar", "safety"):
+        for key in ("sync", "email", "tasks", "calendar", "gmail_readiness", "safety"):
             self.assertEqual(set(sample[key]), set(live[key]))
 
     def test_samples_stay_synthetic(self) -> None:

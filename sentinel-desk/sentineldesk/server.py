@@ -19,6 +19,7 @@ from .config import Paths, project_root
 from .daily import build_daily_landing_summary
 from .email.ingest import stored_email_messages
 from .extract import utc_now
+from .gmail_readiness import build_gmail_readiness
 from .monitor import run_all
 from .reports import package_path_for, redact_data, write_evidence_package
 from .retention import plan_purge, purge, result_to_dict
@@ -142,6 +143,20 @@ class Handler(BaseHTTPRequestHandler):
                     calendar_limit=_query_int(query, "calendar_limit", 20),
                     actor="dashboard",
                     record_audit=False,
+                    account_id=query.get("account", ["default"])[0],
+                    google_credentials_env=query.get("google_credentials_env", ["SENTINEL_GOOGLE_CREDENTIALS_JSON"])[0],
+                    google_token_env=query.get("google_token_env", ["SENTINEL_GOOGLE_TOKEN_JSON"])[0],
+                )
+            )
+            return
+        if path == "/api/gmail/readiness":
+            query = parse_qs(parsed.query)
+            self.send_json(
+                build_gmail_readiness(
+                    self.paths,
+                    account_id=query.get("account", ["default"])[0],
+                    credentials_env=query.get("google_credentials_env", ["SENTINEL_GOOGLE_CREDENTIALS_JSON"])[0],
+                    token_env=query.get("google_token_env", ["SENTINEL_GOOGLE_TOKEN_JSON"])[0],
                 )
             )
             return
@@ -489,6 +504,9 @@ class Handler(BaseHTTPRequestHandler):
                     calendar_limit=_query_int(query, "calendar_limit", 20),
                     actor="dashboard",
                     record_audit=True,
+                    account_id=query.get("account", ["default"])[0],
+                    google_credentials_env=query.get("google_credentials_env", ["SENTINEL_GOOGLE_CREDENTIALS_JSON"])[0],
+                    google_token_env=query.get("google_token_env", ["SENTINEL_GOOGLE_TOKEN_JSON"])[0],
                 )
             )
             return

@@ -7,6 +7,7 @@ from . import db
 from .calendar.view import build_calendar_items
 from .config import Paths
 from .extract import utc_now
+from .gmail_readiness import build_gmail_readiness
 from .tasks import build_review_receipt_summary, list_tasks
 
 
@@ -22,6 +23,9 @@ def build_daily_landing_summary(
     actor: str = "system",
     now: str | None = None,
     record_audit: bool = True,
+    account_id: str = "default",
+    google_credentials_env: str = "SENTINEL_GOOGLE_CREDENTIALS_JSON",
+    google_token_env: str = "SENTINEL_GOOGLE_TOKEN_JSON",
 ) -> dict[str, Any]:
     """Build the repeatable local daily workflow summary.
 
@@ -76,6 +80,12 @@ def build_daily_landing_summary(
             "items": visible_calendar,
         },
         "connectors": connector_states,
+        "gmail_readiness": build_gmail_readiness(
+            paths,
+            account_id=account_id,
+            credentials_env=google_credentials_env,
+            token_env=google_token_env,
+        ),
         "review_receipt": build_review_receipt_summary(paths, limit=50, recent_limit=5),
         "safety": {
             "external_writes_performed": False,

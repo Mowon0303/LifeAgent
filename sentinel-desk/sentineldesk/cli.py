@@ -32,6 +32,7 @@ from .chrome import launch as launch_chrome
 from .config import ensure_config, ensure_dirs, file_url, get_paths, project_root, seed_demo_fixtures
 from .daily import build_daily_landing_summary
 from .extract import utc_now
+from .gmail_readiness import build_gmail_readiness
 from .monitor import run_all
 from .plantracker import format_plan_summary, summarize_plan
 from .privacy import audit_project_tree, audit_redacted_artifacts, write_release_package
@@ -397,6 +398,9 @@ def cmd_daily_run(args: argparse.Namespace) -> int:
             task_limit=args.task_limit,
             calendar_limit=args.calendar_limit,
             actor=args.actor,
+            account_id=args.account,
+            google_credentials_env=args.credentials_env,
+            google_token_env=args.token_env,
         )
     )
     return 0
@@ -754,6 +758,19 @@ def cmd_integrations_reports(args: argparse.Namespace) -> int:
     paths = paths_from_args(args)
     db.init_db(paths)
     print_json(db.list_integration_verifications(paths, limit=args.limit))
+    return 0
+
+
+def cmd_integrations_gmail_readiness(args: argparse.Namespace) -> int:
+    paths = paths_from_args(args)
+    print_json(
+        build_gmail_readiness(
+            paths,
+            account_id=args.account,
+            credentials_env=args.google_credentials_env,
+            token_env=args.google_token_env,
+        )
+    )
     return 0
 
 
@@ -1181,6 +1198,14 @@ def build_parser() -> argparse.ArgumentParser:
     integrations_reports = integrations_sub.add_parser("reports", help="List stored integration verification reports")
     integrations_reports.add_argument("--limit", type=int, default=20)
     integrations_reports.set_defaults(func=cmd_integrations_reports)
+    integrations_gmail_readiness = integrations_sub.add_parser(
+        "gmail-readiness",
+        help="Show the local-only first-run Gmail readiness checklist",
+    )
+    integrations_gmail_readiness.add_argument("--account", default="default")
+    integrations_gmail_readiness.add_argument("--google-credentials-env", default="SENTINEL_GOOGLE_CREDENTIALS_JSON")
+    integrations_gmail_readiness.add_argument("--google-token-env", default="SENTINEL_GOOGLE_TOKEN_JSON")
+    integrations_gmail_readiness.set_defaults(func=cmd_integrations_gmail_readiness)
     integrations_audit = integrations_sub.add_parser("completion-audit", help="Audit whether final live verification evidence is complete")
     integrations_audit.add_argument("--account", default="default")
     integrations_audit.add_argument("--google-credentials-env", default="SENTINEL_GOOGLE_CREDENTIALS_JSON")

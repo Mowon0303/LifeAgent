@@ -149,9 +149,17 @@ Read-only source drill-down for a review task. Returns `{task_id, task, sources,
 
 ### GET `/api/daily/summary?task_limit=&calendar_limit=` → daily landing snapshot
 
-Read-only daily landing summary for the assistant panel. It returns stored email counts, fact counts, grouped task queue counts and optional queue rows, local calendar draft counts and optional calendar items, redacted connector readiness, a local review receipt, safety flags, and safe next actions. This endpoint does **not** write a `daily.run` audit event; it is safe for page load and refresh polling.
+Read-only daily landing summary for the assistant panel. It returns stored email counts, fact counts, grouped task queue counts and optional queue rows, local calendar draft counts and optional calendar items, redacted connector readiness, a Gmail first-run readiness checklist, a local review receipt, safety flags, and safe next actions. This endpoint does **not** write a `daily.run` audit event; it is safe for page load and refresh polling.
 
-Top-level fields: `status`, `generated_at`, `mode`, `sync`, `email`, `tasks`, `calendar`, `connectors`, `review_receipt`, `safety`, `next_actions`.
+Top-level fields: `status`, `generated_at`, `mode`, `sync`, `email`, `tasks`, `calendar`, `connectors`, `gmail_readiness`, `review_receipt`, `safety`, `next_actions`.
+
+`gmail_readiness` is the same shape as `GET /api/gmail/readiness` and is local-only: it inspects env var presence/JSON shape, optional Gmail dependency availability, stored connector cursor metadata, and stored local email evidence. It must not call Gmail or write audit events.
+
+### GET `/api/gmail/readiness?account=&google_credentials_env=&google_token_env=` → Gmail first-run readiness
+
+Read-only local checklist for first-run Gmail setup. It returns `status` (`needs_oauth`, `needs_dependency`, `needs_sync`, or `ready`), redacted `account_id`, env var names, bounded `checks`, `oauth_ready`, `has_local_evidence`, `has_cursor`, stored message counts, latest local mail timestamp, redacted connector metadata, a safe `next_action`, `external_network: false`, and `external_writes_performed: false`.
+
+The endpoint never returns raw OAuth client JSON, tokens, refresh tokens, connector cursors, real account IDs, or local filesystem paths. It does not refresh Gmail; the first external read remains the explicit CLI path `sentineldesk daily run --sync-gmail --account <account>`.
 
 ### POST `/api/daily/run?task_limit=&calendar_limit=` → daily landing run
 
@@ -206,7 +214,8 @@ How backend fields drive the B′ visual spec:
 | All-day vs timed | current extraction has no time-of-day → all events render as all-day chips; the week/day time grid renders the layout (hours, gridlines, now line) with all-day strip populated |
 | **确认加入日历** button | `POST /api/calendar/sync?confirm=1&confirmation_id=ui-<event_id>-<epoch>&event_id=<event_id>&destination=ics`; on `allowed: true` re-fetch events (chip turns solid) |
 | **忽略** button | `POST /api/tasks/review?task_id=calendar:<event_id>&status=ignored`; UI hides the pending suggestion; the draft itself stays in local storage (retention controls own deletion) |
-| Assistant daily embed | computed from `/api/daily/summary`: stored mail, grouped review queue, local calendar drafts, connector readiness, review receipt, and external-write boundary |
+| Assistant daily embed | computed from `/api/daily/summary`: stored mail, grouped review queue, local calendar drafts, connector readiness, Gmail first-run readiness, review receipt, and external-write boundary |
+| Assistant Gmail readiness panel | `gmailReadiness` is computed from `gmail_readiness` inside `/api/daily/summary`; it shows OAuth readiness, local message/cursor evidence, blocked checks, and the safe next command without external reads or writes |
 | Assistant task review card | computed from `/api/tasks`: visible tasks render with value chips, evidence snippet, confidence, priority band/score/reasons, a local-only `查看证据` drill-down from `/api/tasks/evidence`, and local-only `done`, `needs_verification`, `reviewed`, `ignored` controls |
 | Assistant saved task views | `task-view` chips call `/api/tasks?view=...&sort=...` for `all`, `needs_verification`, `payments`, `deadlines_soon`, and `recently_changed`; each view also resets kind/status/sort to its default review preset |
 | Assistant review session summary | `taskSessionSummary` is computed client-side from current view rows plus read-only `view=all` rows; it shows total/current queue/classified counts, explains empty saved views, and offers up to three non-empty saved-view chips without external reads or writes |

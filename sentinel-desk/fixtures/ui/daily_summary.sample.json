@@ -33,6 +33,129 @@
     "items": []
   },
   "connectors": [],
+  "gmail_readiness": {
+    "status": "needs_oauth",
+    "generated_at": "2026-06-25T10:00:00+00:00",
+    "mode": "gmail_first_readiness",
+    "account_id": "default",
+    "credentials_env": "SENTINEL_GOOGLE_CREDENTIALS_JSON",
+    "token_env": "SENTINEL_GOOGLE_TOKEN_JSON",
+    "checks": [
+      {
+        "name": "gmail.credentials_env",
+        "status": "missing",
+        "detail": "SENTINEL_GOOGLE_CREDENTIALS_JSON is not configured.",
+        "metadata": {
+          "env": "SENTINEL_GOOGLE_CREDENTIALS_JSON",
+          "available": false,
+          "secret": "[REDACTED_SECRET_REF]"
+        }
+      },
+      {
+        "name": "gmail.credentials_format",
+        "status": "missing",
+        "detail": "Google OAuth client JSON is not available.",
+        "metadata": {
+          "env": "SENTINEL_GOOGLE_CREDENTIALS_JSON",
+          "secret": "[REDACTED_SECRET_REF]",
+          "json_parseable": false
+        }
+      },
+      {
+        "name": "gmail.token_env",
+        "status": "missing",
+        "detail": "SENTINEL_GOOGLE_TOKEN_JSON is not configured.",
+        "metadata": {
+          "env": "SENTINEL_GOOGLE_TOKEN_JSON",
+          "available": false,
+          "secret": "[REDACTED_SECRET_REF]"
+        }
+      },
+      {
+        "name": "gmail.token_format",
+        "status": "missing",
+        "detail": "Google token JSON is not available.",
+        "metadata": {
+          "env": "SENTINEL_GOOGLE_TOKEN_JSON",
+          "secret": "[REDACTED_SECRET_REF]",
+          "json_parseable": false
+        }
+      },
+      {
+        "name": "gmail.token_scope",
+        "status": "missing",
+        "detail": "Google token scopes are not available.",
+        "metadata": {
+          "env": "SENTINEL_GOOGLE_TOKEN_JSON",
+          "secret": "[REDACTED_SECRET_REF]",
+          "required_scopes": [
+            "https://www.googleapis.com/auth/gmail.readonly"
+          ],
+          "scopes_present": [],
+          "missing_scopes": [
+            "https://www.googleapis.com/auth/gmail.readonly"
+          ]
+        }
+      },
+      {
+        "name": "gmail.dependencies",
+        "status": "missing",
+        "detail": "Install the Gmail optional dependencies before a live sync.",
+        "metadata": {
+          "required_modules": [
+            "googleapiclient.discovery",
+            "google.oauth2.credentials",
+            "google_auth_oauthlib.flow"
+          ],
+          "missing_modules": [
+            "googleapiclient.discovery",
+            "google.oauth2.credentials",
+            "google_auth_oauthlib.flow"
+          ]
+        }
+      },
+      {
+        "name": "gmail.cursor",
+        "status": "missing",
+        "detail": "No stored Gmail cursor yet.",
+        "metadata": {
+          "account_id": "",
+          "connector": "gmail_api",
+          "has_cursor": false,
+          "updated_at": ""
+        }
+      },
+      {
+        "name": "gmail.local_evidence",
+        "status": "ready",
+        "detail": "Stored local email evidence is available.",
+        "metadata": {
+          "stored_message_count": 4,
+          "latest_received_at": "2026-06-25T09:00:00+00:00"
+        }
+      }
+    ],
+    "oauth_ready": false,
+    "has_local_evidence": true,
+    "has_cursor": false,
+    "stored_message_count": 4,
+    "latest_received_at": "2026-06-25T09:00:00+00:00",
+    "connector": {
+      "connector": "gmail_api",
+      "account_id": "",
+      "has_cursor": false,
+      "scopes": [],
+      "updated_at": ""
+    },
+    "next_action": {
+      "kind": "configure_google_credentials",
+      "label": "Configure the Google OAuth client JSON env var",
+      "command": "export SENTINEL_GOOGLE_CREDENTIALS_JSON=\"$(cat <oauth-client.json>)\"",
+      "side_effect": "local_shell_env_only"
+    },
+    "external_network": false,
+    "external_writes_performed": false
+  },
   "review_receipt": {
     "status": "ready",
     "generated_at": "2026-06-25T10:00:00+00:00",

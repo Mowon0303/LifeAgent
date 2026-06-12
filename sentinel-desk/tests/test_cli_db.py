@@ -3,16 +3,19 @@ from __future__ import annotations
 import contextlib
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from sentineldesk import db
 from sentineldesk.cli import main
 from sentineldesk.config import get_paths
 from sentineldesk.daily import build_daily_landing_summary
+from sentineldesk.integrations.google_workspace import GMAIL_READONLY_SCOPE
 
 
 class CliDbTests(unittest.TestCase):
@@ -141,6 +144,77 @@ class CliDbTests(unittest.TestCase):
         self.assertEqual(summary["sync"]["cursor"], "[REDACTED_CONNECTOR_METADATA]")
         self.assertNotIn("student.private@example.com", raw)
         self.assertNotIn("history-secret-123", raw)
+
+    def test_integrations_gmail_readiness_cli_reports_oauth_next_action(self) -> None:
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = main(
+                [
+                    "--home",
+                    self.home,
+                    "integrations",
+                    "gmail-readiness",
+                    "--account",
+                    "student.private@example.com",
+                    "--google-credentials-env",
+                    "SENTINEL_TEST_MISSING_GOOGLE_CREDS",
+                    "--google-token-env",
+                    "SENTINEL_TEST_MISSING_GOOGLE_TOKEN",
+                ]
+            )
+        raw = output.getvalue()
+        payload = json.loads(raw)
+        self.assertEqual(code, 0)
+        self.assertEqual(payload["status"], "needs_oauth")
+        self.assertEqual(payload["next_action"]["kind"], "configure_google_credentials")
+        self.assertFalse(payload["external_network"])
+        self.assertFalse(payload["external_writes_performed"])
+        self.assertNotIn("student.private@example.com", raw)
+
+    def test_daily_summary_embeds_ready_gmail_readiness_without_secret_values(self) -> None:
+        paths = get_paths(self.home)
+        self.assertEqual(main(["--home", self.home, "email", "scan", "--json", str(self.sample_emails)]), 0)
+        db.upsert_connector_state(
+            paths,
+            connector="gmail_api",
+            account_id="student.private@example.com",
+            cursor="history-secret-123",
+            scopes=[GMAIL_READONLY_SCOPE],
+            metadata={"source_type": "gmail_api", "trust_label": "gmail_readonly"},
+            updated_at="2026-06-12T00:00:00+00:00",
+        )
+        env = {
+            "SENTINEL_TEST_GOOGLE_CREDS": json.dumps({"installed": {"client_id": "client-id-test", "client_secret": "client-secret-test"}}),
+            "SENTINEL_TEST_GOOGLE_TOKEN": json.dumps({"refresh_token": "refresh-token-test", "scopes": [GMAIL_READONLY_SCOPE]}),
+        }
+        ready_dependency = {
+            "name": "gmail.dependencies",
+            "status": "ready",
+            "detail": "Gmail optional dependencies are importable.",
+            "metadata": {"required_modules": [], "missing_modules": []},
+        }
+        with mock.patch.dict(os.environ, env, clear=False), mock.patch(
+            "sentineldesk.gmail_readiness._dependency_check",
+            return_value=ready_dependency,
+        ):
+            summary = build_daily_landing_summary(
+                paths,
+                account_id="student.private@example.com",
+                google_credentials_env="SENTINEL_TEST_GOOGLE_CREDS",
+                google_token_env="SENTINEL_TEST_GOOGLE_TOKEN",
+                record_audit=False,
+            )
+        raw = json.dumps(summary)
+        readiness = summary["gmail_readiness"]
+        self.assertEqual(readiness["status"], "ready")
+        self.assertTrue(readiness["oauth_ready"])
+        self.assertTrue(readiness["has_cursor"])
+        self.assertTrue(readiness["has_local_evidence"])
+        self.assertEqual(readiness["next_action"]["kind"], "review_tasks")
+        self.assertNotIn("student.private@example.com", raw)
+        self.assertNotIn("history-secret-123", raw)
+        self.assertNotIn("client-secret-test", raw)
+        self.assertNotIn("refresh-token-test", raw)
 
     def test_daily_run_rejects_multiple_refresh_sources(self) -> None:
         output = io.StringIO()

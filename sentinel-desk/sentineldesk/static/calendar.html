@@ -146,6 +146,7 @@
   .dD-embed.task { border-left-color:#B14228; }
   .dD-embed.session { border-left-color:#6A5BD0; }
   .dD-embed.receipt { border-left-color:#C47A30; }
+  .dD-embed.gmail { border-left-color:#2A6FDB; }
   .dD-embed .etitle { font-size:15px; font-weight:700; color:#2B2622; display:flex; align-items:center; gap:8px; }
   .dD-embed .etitle .pin { width:8px; height:8px; border-radius:50%; background:#6A5BD0; flex:none; }
   .dD-embed .ewhen { font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6A5BD0; margin:7px 0 1px; }
@@ -153,6 +154,8 @@
   .dD-embed .enote { font-size:13.5px; color:#5A5247; line-height:1.5; margin-top:9px; }
   .dD-taskline { font-size:11.5px; color:#9A8E7B; line-height:1.35; border-top:1px solid #F1EADB; padding-top:9px; margin-top:3px; }
   .dD-session-note { font-size:12px; color:#7A705F; line-height:1.45; border-top:1px solid #F1EADB; margin-top:7px; padding-top:8px; }
+  .dD-command { font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:#5C5446; background:#EFE7D8; border-radius:6px;
+    padding:7px 8px; margin-top:8px; overflow-wrap:anywhere; }
   .dD-session-next { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
   .dD-session-next button { border:1px solid transparent; background:#EAE6FA; color:#5C4DB8; border-radius:7px;
     height:27px; padding:0 9px; font-size:11.5px; font-weight:700; cursor:pointer; font-family:inherit; }
@@ -284,6 +287,12 @@
     done: '完成',
     ignored: '忽略',
     all: '全部'
+  };
+  var GMAIL_READINESS_LABEL = {
+    ready: '已就绪',
+    needs_sync: '待首次同步',
+    needs_oauth: '待 OAuth',
+    needs_dependency: '缺依赖'
   };
   var TASK_SORT_LABEL = {
     priority: '优先级',
@@ -658,6 +667,33 @@
       recentNote + '</div>';
   }
 
+  function gmailReadinessPanel() {
+    var readiness = (state.daily && state.daily.gmail_readiness) || {};
+    var status = readiness.status || 'unknown';
+    var statusLabel = GMAIL_READINESS_LABEL[status] || '未检查';
+    var action = readiness.next_action || {};
+    var checks = Array.isArray(readiness.checks) ? readiness.checks : [];
+    var blockers = checks.filter(function (check) {
+      return check && check.status && check.status !== 'ready';
+    }).map(function (check) {
+      return check.detail || check.name || check.status;
+    }).slice(0, 2);
+    var evidenceCount = Number(readiness.stored_message_count || 0);
+    var localText = '本地邮件 ' + evidenceCount + ' · 游标 ' + (readiness.has_cursor ? '有' : '无');
+    var oauthText = readiness.oauth_ready ? 'OAuth 已就绪' : 'OAuth 待配置';
+    var issueText = blockers.length ? blockers.join(' · ') : 'Gmail 只读路径可以进入下一步';
+    var next = action.command
+      ? '<div class="dD-command">' + escapeHtml(action.command) + '</div>'
+      : '';
+    return '<div class="dD-embed gmail" id="gmailReadiness"><h4>Gmail 首次运行 · 就绪检查</h4>' +
+      '<div class="dD-sumrow"><div class="n' + (status === 'ready' ? '' : ' u') + '">' + escapeHtml(statusLabel) + '</div><div><div class="lab">当前状态</div><div class="sub">' +
+        escapeHtml(oauthText) + ' · 只读本地检查</div></div></div>' +
+      '<div class="dD-sumrow"><div class="n">' + evidenceCount + '</div><div><div class="lab">证据与游标</div><div class="sub">' +
+        escapeHtml(localText) + '</div></div></div>' +
+      '<div class="dD-session-note">' + escapeHtml(issueText) + '</div>' +
+      next + '</div>';
+  }
+
   function taskCardMeta(queue) {
     var stats = taskSessionStats();
     return (state.taskCursor + 1) + '/' + queue.length + ' · 已归类 ' + stats.classified + '/' + stats.total;
@@ -900,6 +936,7 @@
       '<div class="dD-sumrow"><div class="n' + ((calendar.pending_count || 0) ? ' u' : '') + '">' + (calendar.pending_count || 0) + '</div><div><div class="lab">本地日历草稿</div><div class="sub">总计 ' + (calendar.total_drafts || 0) + ' · 待核对 ' + (calendar.uncertain_count || 0) + '</div></div></div>' +
       '<div class="dD-sumrow"><div class="n">' + (safety.external_writes_performed ? '!' : '0') + '</div><div><div class="lab">外部写入</div><div class="sub">' + escapeHtml(connectorText) + ' · Gmail 只读</div></div></div>' +
       '<div class="dD-taskline" id="taskReviewQueue">任务操作只写本地 review 状态和 audit，不会发送邮件或写外部日历。</div>' +
+      gmailReadinessPanel() +
       taskFilterControls() +
       taskSessionPanel() +
       reviewReceiptPanel() +
