@@ -38,7 +38,7 @@ Source of truth for every calendar surface (month/week/day/agenda). One item per
 
 ### GET `/api/tasks?status=<optional>` → `Task[]`
 
-Reviewable work items aggregated from calendar drafts and email facts (deadline facts already represented by a draft are deduplicated into the `calendar:` task).
+Reviewable work items aggregated from calendar drafts and email facts (deadline facts already represented by a draft are deduplicated into the `calendar:` task). Email facts are grouped by message and kind, so a single bill with multiple amounts produces one review card with all values instead of several near-duplicate cards.
 
 Common fields present on every task (calendar-derived tasks additionally carry `created_at`; email-derived tasks additionally carry `subject`, `sender`, `received_at`):
 
@@ -48,6 +48,8 @@ Common fields present on every task (calendar-derived tasks additionally carry `
 | `kind` | string | `deadline \| amount \| action` |
 | `title` | string | display title |
 | `value` | string | extracted value (date text, dollar amount, action span) |
+| `values` | string[] | all unique values represented by this review item; length is usually 1 |
+| `fact_count` | number | number of unique extracted values represented by this item |
 | `due_date` | string | date text for deadline tasks, else `""` |
 | `severity` | string | same scale as calendar items |
 | `confidence` | number | 0..1 |

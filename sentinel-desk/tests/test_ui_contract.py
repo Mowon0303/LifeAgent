@@ -39,6 +39,8 @@ TASK_FIELDS = {
     "kind",
     "title",
     "value",
+    "values",
+    "fact_count",
     "due_date",
     "severity",
     "confidence",

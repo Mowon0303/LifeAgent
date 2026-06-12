@@ -43,6 +43,27 @@ class TaskReviewTests(unittest.TestCase):
             self.assertEqual(deadline["source_refs"], ["email:m-task"])
             self.assertEqual(deadline["due_date"], "July 2, 2026")
 
+    def test_list_tasks_groups_same_message_facts_by_kind(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            message = EmailMessage(
+                message_id="m-grouped",
+                thread_id="t-grouped",
+                sender="billing@example.com",
+                subject="Two balances due",
+                received_at="2026-06-10T09:00:00Z",
+                body_text="Please pay $25.00 today. A separate service fee of $30.00 is also due.",
+            )
+            ingest_messages(paths, [message], ingested_at="2026-06-10T12:00:00Z")
+
+            tasks = list_tasks(paths)
+            amount_tasks = [task for task in tasks if task["kind"] == "amount"]
+
+            self.assertEqual(len(amount_tasks), 1)
+            self.assertEqual(amount_tasks[0]["fact_count"], 2)
+            self.assertEqual(set(amount_tasks[0]["values"]), {"$25.00", "$30.00"})
+            self.assertIn("2 amount facts", amount_tasks[0]["title"])
+
     def test_review_task_persists_status_and_audit_event(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             paths = get_paths(tmp)

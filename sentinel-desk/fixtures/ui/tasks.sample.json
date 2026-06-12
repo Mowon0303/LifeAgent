@@ -4,6 +4,10 @@
     "kind": "deadline",
     "title": "Deadline: Rent payment reminder for July",
     "value": "07/01/2026",
+    "values": [
+      "07/01/2026"
+    ],
+    "fact_count": 1,
     "due_date": "07/01/2026",
     "severity": "critical",
     "confidence": 0.82,
@@ -28,6 +32,10 @@
     "kind": "deadline",
     "title": "Deadline: Your June statement is ready",
     "value": "07/02/2026",
+    "values": [
+      "07/02/2026"
+    ],
+    "fact_count": 1,
     "due_date": "07/02/2026",
     "severity": "critical",
     "confidence": 0.82,
@@ -48,36 +56,15 @@
     "reviewed_at": ""
   },
   {
-    "task_id": "email:dbc2e6370e4661a1",
+    "task_id": "email:02a3d0e5955acb41",
     "kind": "amount",
-    "title": "Review amount: Your June statement is ready",
-    "value": "$1,243.87",
-    "due_date": "",
-    "severity": "medium",
-    "confidence": 0.78,
-    "source_type": "email",
-    "source_refs": [
-      "email:ui-sample-card-001"
-    ],
-    "primary_source": "email:ui-sample-card-001",
-    "evidence": "ard.example Your June statement is ready Your June statement is ready. Statement balance: $1,243.87. Minimum payment due: $35.00. Payment due date: 07/02/2026.",
-    "calendar_event_id": "",
-    "sync_state": "",
-    "subject": "Your June statement is ready",
-    "sender": "statements@summitcard.example",
-    "received_at": "2026-06-12T07:00:00+00:00",
-    "updated_at": "2026-06-12T07:00:00+00:00",
-    "needs_verification": false,
-    "status": "new",
-    "review_note": "",
-    "review_actor": "",
-    "reviewed_at": ""
-  },
-  {
-    "task_id": "email:9027ee5229aad3c9",
-    "kind": "amount",
-    "title": "Review amount: Your June statement is ready",
+    "title": "Review 2 amount facts: Your June statement is ready",
     "value": "$35.00",
+    "values": [
+      "$35.00",
+      "$1,243.87"
+    ],
+    "fact_count": 2,
     "due_date": "",
     "severity": "medium",
     "confidence": 0.78,
@@ -100,10 +87,14 @@
     "reviewed_at": ""
   },
   {
-    "task_id": "email:bc90218e49162a44",
+    "task_id": "email:fcd1d57aedd7b64e",
     "kind": "action",
     "title": "Review action: Request for Evidence issued",
     "value": "respond by September 3, 2026. Review the RFE notice and submit the requested documents.",
+    "values": [
+      "respond by September 3, 2026. Review the RFE notice and submit the requested documents."
+    ],
+    "fact_count": 1,
     "due_date": "",
     "severity": "medium",
     "confidence": 0.68,
@@ -126,10 +117,14 @@
     "reviewed_at": ""
   },
   {
-    "task_id": "email:a53265bddbbb6730",
+    "task_id": "email:4950200c2b74bb2e",
     "kind": "amount",
     "title": "Review amount: Rent payment reminder for July",
     "value": "$1,850.00",
+    "values": [
+      "$1,850.00"
+    ],
+    "fact_count": 1,
     "due_date": "",
     "severity": "medium",
     "confidence": 0.78,
@@ -152,10 +147,14 @@
     "reviewed_at": ""
   },
   {
-    "task_id": "email:6f8e0b2ee1b735cc",
+    "task_id": "email:9db795229ff5cd5a",
     "kind": "action",
     "title": "Review action: Rent payment reminder for July",
     "value": "pay online through the resident portal. Parkview Residences",
+    "values": [
+      "pay online through the resident portal. Parkview Residences"
+    ],
+    "fact_count": 1,
     "due_date": "",
     "severity": "medium",
     "confidence": 0.68,
@@ -182,6 +181,10 @@
     "kind": "deadline",
     "title": "Deadline: Request for Evidence issued",
     "value": "September 3, 2026",
+    "values": [
+      "September 3, 2026"
+    ],
+    "fact_count": 1,
     "due_date": "September 3, 2026",
     "severity": "critical",
     "confidence": 0.82,

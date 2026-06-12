@@ -147,7 +147,7 @@ The `ask` command is the first skeleton of the email-first LifeAgent assistant l
 
 The `daily run` command is the repeatable landing workflow for real use. It optionally refreshes readonly Gmail, summarizes stored email evidence, task review state, local calendar drafts, connector readiness, and next safe actions. It writes only local audit state; external calendar sync still requires a separate confirmation-gated `calendar sync`.
 
-The `tasks` commands expose the review layer for extracted LifeAgent work items. `tasks list` merges email facts and local calendar drafts into stable task IDs, and `tasks review` records `new`, `reviewed`, `ignored`, `needs_verification`, or `done` status with an audit event. The same backend is available through `/api/tasks` and `/api/tasks/review`.
+The `tasks` commands expose the review layer for extracted LifeAgent work items. `tasks list` merges email facts and local calendar drafts into stable task IDs, groups same-message same-kind email facts into one review card with `values` and `fact_count`, and `tasks review` records `new`, `reviewed`, `ignored`, `needs_verification`, or `done` status with an audit event. The same backend is available through `/api/tasks` and `/api/tasks/review`.
 
 `chrome launch` starts a detached dedicated Chrome profile under `~/.sentineldesk/chrome-profile` and opens a blank page for the DevTools endpoint. SentinelDesk refuses default Chrome profile paths for remote debugging.
 
