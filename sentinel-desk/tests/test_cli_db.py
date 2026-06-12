@@ -181,7 +181,7 @@ class CliDbTests(unittest.TestCase):
                 raise SecretUnavailable("Missing required environment secret: SENTINEL_TEST_GOOGLE_TOKEN")
 
         output = io.StringIO()
-        with mock.patch("sentineldesk.cli.GoogleWorkspaceFactory", FailingFactory), contextlib.redirect_stdout(output):
+        with mock.patch("sentineldesk.gmail_sync.GoogleWorkspaceFactory", FailingFactory), contextlib.redirect_stdout(output):
             code = main(
                 [
                     "--home",
@@ -226,7 +226,7 @@ class CliDbTests(unittest.TestCase):
                 raise RuntimeError("403 insufficientPermissions token-secret")
 
         output = io.StringIO()
-        with mock.patch("sentineldesk.cli.GoogleWorkspaceFactory", FailingFactory), contextlib.redirect_stdout(output):
+        with mock.patch("sentineldesk.gmail_sync.GoogleWorkspaceFactory", FailingFactory), contextlib.redirect_stdout(output):
             code = main(["--home", self.home, "daily", "run", "--sync-gmail", "--account", "student.private@example.com"])
         raw = output.getvalue()
         payload = json.loads(raw)

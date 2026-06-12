@@ -15,24 +15,24 @@ from .calendar.adapters import AppleCalendarAdapter, GoogleCalendarAdapter, IcsF
 from .calendar.models import CalendarDraft, DeadlineEvent
 from .calendar.source import events_from_calendar_rows
 from .email.models import EmailMessage
-from .email.connectors import EmailSyncRequest, GmailApiEmailConnector, LocalJsonEmailConnector
+from .email.connectors import EmailSyncRequest, LocalJsonEmailConnector
 from .email.ingest import (
     ingest_messages,
     load_email_json,
     reprocess_stored_messages,
     stored_email_messages,
-    sync_connector,
 )
 from .evals.email_extract import evaluate_golden_path, render_markdown_report, render_text_summary
 from .integrations.apple_calendar import AppleCalendarClientFactory, AppleCalendarConfig
 from .integrations.google_oauth import normalize_google_scopes, write_google_oauth_token
-from .integrations.google_workspace import CALENDAR_EVENTS_SCOPE, GMAIL_READONLY_SCOPE, GoogleOAuthConfig, GoogleWorkspaceFactory
+from .integrations.google_workspace import CALENDAR_EVENTS_SCOPE, GoogleOAuthConfig, GoogleWorkspaceFactory
 from .integrations.live_verification import build_completion_audit, build_env_template, format_handoff_checklist, run_verification
 from .chrome import launch as launch_chrome
 from .config import ensure_config, ensure_dirs, file_url, get_paths, project_root, seed_demo_fixtures
 from .daily import build_daily_landing_summary
 from .extract import utc_now
 from .gmail_readiness import build_gmail_readiness
+from .gmail_sync import DEFAULT_DAILY_GMAIL_QUERY, run_gmail_readonly_sync
 from .gmail_sync_diagnostics import build_gmail_sync_diagnostics, record_gmail_sync_failure
 from .monitor import run_all
 from .plantracker import format_plan_summary, summarize_plan
@@ -303,24 +303,18 @@ def cmd_email_sync_gmail(args: argparse.Namespace) -> int:
     paths = paths_from_args(args)
     ensure_dirs(paths)
     db.init_db(paths)
+    query = args.query or ""
     state = db.get_connector_state(paths, connector="gmail_api", account_id=args.account)
     since = args.since if args.since is not None else str((state or {}).get("cursor") or "")
-    query = args.query or ""
     try:
-        config = GoogleOAuthConfig(
-            credentials_json=env_secret(args.credentials_env),
-            token_json=env_secret(args.token_env),
-            scopes=(GMAIL_READONLY_SCOPE,),
-            account_id=args.account,
-        )
-        client = GoogleWorkspaceFactory(config).gmail_client()
-        setattr(client, "account_id", args.account)
-        setattr(client, "scopes", config.scopes)
-        summary = sync_connector(
+        result = run_gmail_readonly_sync(
             paths,
-            GmailApiEmailConnector(client),
-            EmailSyncRequest(query=query, since=since, limit=args.limit),
             account_id=args.account,
+            query=query,
+            since=args.since,
+            limit=args.limit,
+            credentials_env=args.credentials_env,
+            token_env=args.token_env,
         )
     except Exception as error:
         diagnostics = record_gmail_sync_failure(
@@ -337,7 +331,7 @@ def cmd_email_sync_gmail(args: argparse.Namespace) -> int:
         )
         print_json({"error": "gmail_sync_failed", "diagnostics": diagnostics})
         return 1
-    print_json({"oauth": config.safe_summary(), "sync": summary})
+    print_json({"oauth": result["oauth"], "sync": {key: value for key, value in result.items() if key != "oauth"}})
     return 0
 
 
@@ -376,22 +370,17 @@ def cmd_daily_run(args: argparse.Namespace) -> int:
     elif args.sync_gmail:
         state = db.get_connector_state(paths, connector="gmail_api", account_id=args.account)
         since = args.since if args.since is not None else str((state or {}).get("cursor") or "")
-        query = args.query or "deadline OR due OR payment OR notice OR required OR action"
+        query = args.query or DEFAULT_DAILY_GMAIL_QUERY
         try:
-            config = GoogleOAuthConfig(
-                credentials_json=env_secret(args.credentials_env),
-                token_json=env_secret(args.token_env),
-                scopes=(GMAIL_READONLY_SCOPE,),
-                account_id=args.account,
-            )
-            client = GoogleWorkspaceFactory(config).gmail_client()
-            setattr(client, "account_id", args.account)
-            setattr(client, "scopes", config.scopes)
-            summary = sync_connector(
+            sync_summary = run_gmail_readonly_sync(
                 paths,
-                GmailApiEmailConnector(client),
-                EmailSyncRequest(query=query, since=since, limit=args.limit),
                 account_id=args.account,
+                query=args.query or "",
+                default_query=DEFAULT_DAILY_GMAIL_QUERY,
+                since=args.since,
+                limit=args.limit,
+                credentials_env=args.credentials_env,
+                token_env=args.token_env,
             )
         except Exception as error:
             diagnostics = record_gmail_sync_failure(
@@ -423,13 +412,7 @@ def cmd_daily_run(args: argparse.Namespace) -> int:
                 }
             )
             return 1
-        sync_summary = {
-            "mode": "gmail_readonly",
-            "external_network": True,
-            "query": query,
-            "oauth": _redacted_daily_oauth_summary(config.safe_summary()),
-            **summary,
-        }
+        sync_summary = {**sync_summary, "oauth": _redacted_daily_oauth_summary(sync_summary.get("oauth", {}))}
     if args.reprocess_stored:
         reprocess_summary = reprocess_stored_messages(
             paths,

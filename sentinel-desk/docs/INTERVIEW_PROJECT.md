@@ -9,7 +9,7 @@ LifeAgent is an email-first personal operations agent that extracts high-risk de
 - Built an email-first personal operations agent in Python that extracts deadlines, payment amounts, and required actions from Gmail-style evidence and attachments, then turns verified facts into local calendar drafts with source citations and explicit uncertainty.
 - Designed a tool-first agent architecture with optional LangGraph workflow metadata, local RAG for trusted policy explanations, provider-swappable model adapters, and deterministic fallback tools for portal capture, session health, diffing, and fail-loud evidence bundles.
 - Implemented safety and privacy gates for high-stakes personal data: readonly Gmail boundary, confirmation-gated calendar writes, durable approval records, replay protection, prompt-injection-resistant retrieval, redacted share packages, retention controls, and release-audit packaging.
-- Added a reproducible evaluation and CI package: 304 unit tests, a 144-case golden email extraction eval with current raw deadline/amount/action P=1.000 and R=1.000, demo dry-run generation, redacted-output privacy audit, and source-release audit in GitHub Actions.
+- Added a reproducible evaluation and CI package: 307 unit tests, a 144-case golden email extraction eval with current raw deadline/amount/action P=1.000 and R=1.000, demo dry-run generation, redacted-output privacy audit, and source-release audit in GitHub Actions.
 
 ## 45-Second Explanation
 
@@ -53,7 +53,7 @@ The calendar layer is treated as a side-effect boundary. Extracted deadlines bec
 | --- | --- |
 | Extraction is evaluated | 144-case golden email extraction set |
 | Current raw extraction is clean on synthetic eval | deadline, amount, and action P=1.000 / R=1.000 / F1=1.000 |
-| Behavior is regression-tested | 304 unittest cases |
+| Behavior is regression-tested | 307 unittest cases |
 | CI is real | GitHub Actions runs unit tests, compile, eval, demo dry run, privacy audit, source release package, and release audit |
 | Privacy is engineered | redacted-output audit and source-release audit are executable gates |
 | Demo is public-safe | synthetic Gmail-style messages and synthetic portal fixtures; no real credentials or mailbox data required |

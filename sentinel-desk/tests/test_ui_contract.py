@@ -4,6 +4,7 @@ import io
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from sentineldesk import db
@@ -664,6 +665,73 @@ class DailyContractTests(UiContractBase):
         self.assertEqual(audit["actor"], "dashboard")
         self.assertEqual(audit["metadata"]["sync_mode"], "stored_only")
 
+    def test_gmail_sync_api_requires_explicit_confirmation(self) -> None:
+        before = db.list_audit_events(self.paths, limit=20)
+        status, payload = self.json_request("POST", "/api/gmail/sync")
+        after = db.list_audit_events(self.paths, limit=20)
+
+        self.assertEqual(status, 200)
+        self.assertFalse(payload["allowed"])
+        self.assertTrue(payload["requires_confirmation"])
+        self.assertEqual(payload["action"], "gmail.readonly_sync")
+        self.assertEqual(payload["side_effect"], "gmail_readonly_plus_local_db_write")
+        self.assertFalse(payload["external_network"])
+        self.assertFalse(payload["external_writes_performed"])
+        self.assertEqual(before, after)
+
+    def test_gmail_sync_api_failure_updates_redacted_diagnostics(self) -> None:
+        with mock.patch(
+            "sentineldesk.server.run_gmail_readonly_sync",
+            side_effect=RuntimeError("403 insufficientPermissions token-secret student.private@example.com"),
+        ):
+            status, payload = self.json_request(
+                "POST", "/api/gmail/sync?confirm=1&account=student.private@example.com&query=deadline"
+            )
+
+        raw = json.dumps(payload)
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["status"], "failed")
+        self.assertTrue(payload["allowed"])
+        self.assertEqual(payload["error"], "gmail_sync_failed")
+        self.assertTrue(payload["external_network"])
+        self.assertFalse(payload["external_writes_performed"])
+        self.assertEqual(payload["diagnostics"]["latest_failure"]["category"], "permission_denied")
+        self.assertEqual(payload["diagnostics"]["latest_failure"]["command"], "api gmail sync")
+        self.assertEqual(payload["daily_summary"]["gmail_sync_diagnostics"]["status"], "failed")
+        self.assertNotIn("student.private@example.com", raw)
+        self.assertNotIn("token-secret", raw)
+        audit = next(event for event in db.list_audit_events(self.paths, limit=10) if event["action"] == "email.connector.sync.failed")
+        self.assertEqual(audit["action"], "email.connector.sync.failed")
+        self.assertFalse(audit["allowed"])
+
+    def test_gmail_sync_api_success_redacts_sync_summary(self) -> None:
+        sync_summary = {
+            "mode": "gmail_readonly",
+            "external_network": True,
+            "query": "deadline",
+            "account_id": "student.private@example.com",
+            "cursor": "history-secret-123",
+            "cursor_saved": True,
+            "messages_seen": 0,
+            "messages_persisted": 0,
+            "facts_extracted": 0,
+            "deadline_events_drafted": 0,
+        }
+        with mock.patch("sentineldesk.server.run_gmail_readonly_sync", return_value=sync_summary):
+            status, payload = self.json_request("POST", "/api/gmail/sync?confirm=1&account=student.private@example.com")
+
+        raw = json.dumps(payload)
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["status"], "ready")
+        self.assertTrue(payload["allowed"])
+        self.assertTrue(payload["external_network"])
+        self.assertFalse(payload["external_writes_performed"])
+        self.assertEqual(payload["sync"]["account_id"], "[REDACTED_CONNECTOR_METADATA]")
+        self.assertEqual(payload["sync"]["cursor"], "[REDACTED_CONNECTOR_METADATA]")
+        self.assertFalse(payload["daily_summary"]["safety"]["external_writes_performed"])
+        self.assertNotIn("student.private@example.com", raw)
+        self.assertNotIn("history-secret-123", raw)
+
 
 class ConfirmFlowContractTests(UiContractBase):
     def test_confirm_turns_pending_into_approved(self) -> None:
@@ -805,6 +873,7 @@ class CalendarPageTests(UiContractBase):
             "/api/tasks?view=all&sort=priority&limit=1000",
             "/api/daily/summary",
             "/api/daily/run",
+            "/api/gmail/sync?confirm=1",
             "/api/tasks/evidence?task_id=",
             "/api/tasks/review?task_id=",
             "/api/tasks/review/bulk",
@@ -820,6 +889,7 @@ class CalendarPageTests(UiContractBase):
             'id="taskReviewReceipt"',
             'id="gmailReadiness"',
             'id="gmailSyncDiagnostics"',
+            'id="gmailSyncBoundary"',
             'id="taskBulkActions"',
             'data-act="task-view"',
             'data-act="task-sort"',
@@ -828,6 +898,7 @@ class CalendarPageTests(UiContractBase):
             'data-act="task-history"',
             'data-act="task-undo"',
             'data-act="daily-run"',
+            'data-act="gmail-sync"',
             'data-act="show-task"',
             'data-act="task-filter-kind"',
             'data-act="task-filter-status"',

@@ -38,9 +38,10 @@ Agent layer:
 
 ## Current Evidence
 
-- `304` unittest cases pass.
+- `307` unittest cases pass.
 - Golden extraction eval: raw deadline, amount, and action are all `P=1.000 / R=1.000 / F1=1.000` on the current synthetic set.
 - Redacted Gmail-first readiness package shape is regression-tested.
+- The local assistant exposes an explicit Gmail readonly sync/retry control with external-read labeling and redacted failure diagnostics.
 - Daily landing workflow creates 4 synthetic messages, 8 extracted facts, 3 local calendar drafts, 7 grouped reviewable tasks, and a local audit record without external writes.
 - Stored evidence reprocessing applies extractor fixes to already-synced mail without another Gmail call or external calendar writes.
 - Task review groups same-email, same-kind facts into one UI item with `values` and `fact_count`, reducing a real `.demo` queue from 468 raw fact tasks to 112 grouped review items.

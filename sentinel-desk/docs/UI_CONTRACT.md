@@ -159,7 +159,13 @@ Top-level fields: `status`, `generated_at`, `mode`, `sync`, `email`, `tasks`, `c
 
 Read-only local checklist for first-run Gmail setup. It returns `status` (`needs_oauth`, `needs_dependency`, `needs_sync`, or `ready`), redacted `account_id`, env var names, bounded `checks`, `oauth_ready`, `has_local_evidence`, `has_cursor`, stored message counts, latest local mail timestamp, redacted connector metadata, a safe `next_action`, `external_network: false`, and `external_writes_performed: false`.
 
-The endpoint never returns raw OAuth client JSON, tokens, refresh tokens, connector cursors, real account IDs, or local filesystem paths. It does not refresh Gmail; the first external read remains the explicit CLI path `sentineldesk daily run --sync-gmail --account <account>`.
+The endpoint never returns raw OAuth client JSON, tokens, refresh tokens, connector cursors, real account IDs, or local filesystem paths. It does not refresh Gmail; the first external read remains the explicit CLI path `sentineldesk daily run --sync-gmail --account <account>` or the confirmation-gated dashboard path `POST /api/gmail/sync?confirm=1`.
+
+### POST `/api/gmail/sync?confirm=1&account=&query=&since=&limit=` → Gmail readonly sync/retry
+
+User-triggered external read boundary for the assistant. Without `confirm=1`, the endpoint returns `allowed: false`, `requires_confirmation: true`, `external_network: false`, and no audit or Gmail call. With `confirm=1`, it performs a readonly Gmail API sync, writes only local email evidence/connector/audit state, and returns `{status, allowed, sync, daily_summary, external_network, external_writes_performed}` on success.
+
+On failure it returns `{status: "failed", error: "gmail_sync_failed", diagnostics, daily_summary, external_network: true, external_writes_performed: false}` and writes the same redacted `email.connector.sync.failed` audit row used by CLI sync failures. Success and failure responses must redact account IDs, connector cursors, OAuth values, raw exception text, and query text.
 
 ### GET `/api/gmail/sync-diagnostics?account=&limit=` → Gmail sync diagnostics
 
@@ -169,7 +175,7 @@ Failure rows include only classified metadata: `category`, `error_type`, safe `d
 
 ### POST `/api/daily/run?task_limit=&calendar_limit=` → daily landing run
 
-Runs the same stored-evidence daily summary from the dashboard and writes a local `daily.run` audit event. This dashboard route does not refresh Gmail or perform external calendar writes; external reads still happen through the CLI `daily run --sync-gmail` path, and external calendar writes remain behind `/api/calendar/sync?confirm=1`.
+Runs the same stored-evidence daily summary from the dashboard and writes a local `daily.run` audit event. This dashboard route does not refresh Gmail or perform external calendar writes; external reads happen through the CLI `daily run --sync-gmail` path or the explicitly confirmed dashboard `POST /api/gmail/sync?confirm=1` path, and external calendar writes remain behind `/api/calendar/sync?confirm=1`.
 
 ### POST `/api/calendar/sync?confirm=1&confirmation_id=&event_id=&destination=ics` → sync receipt
 
@@ -220,9 +226,10 @@ How backend fields drive the B′ visual spec:
 | All-day vs timed | current extraction has no time-of-day → all events render as all-day chips; the week/day time grid renders the layout (hours, gridlines, now line) with all-day strip populated |
 | **确认加入日历** button | `POST /api/calendar/sync?confirm=1&confirmation_id=ui-<event_id>-<epoch>&event_id=<event_id>&destination=ics`; on `allowed: true` re-fetch events (chip turns solid) |
 | **忽略** button | `POST /api/tasks/review?task_id=calendar:<event_id>&status=ignored`; UI hides the pending suggestion; the draft itself stays in local storage (retention controls own deletion) |
-| Assistant daily embed | computed from `/api/daily/summary`: stored mail, grouped review queue, local calendar drafts, connector readiness, Gmail first-run readiness, Gmail sync diagnostics, review receipt, and external-write boundary |
+| Assistant daily embed | computed from `/api/daily/summary`: stored mail, grouped review queue, local calendar drafts, connector readiness, Gmail first-run readiness, Gmail sync diagnostics, explicit Gmail readonly sync boundary, review receipt, and external-write boundary |
 | Assistant Gmail readiness panel | `gmailReadiness` is computed from `gmail_readiness` inside `/api/daily/summary`; it shows OAuth readiness, local message/cursor evidence, blocked checks, and the safe next command without external reads or writes |
 | Assistant Gmail sync diagnostics panel | `gmailSyncDiagnostics` is computed from `gmail_sync_diagnostics`; it appears after Gmail sync attempts and shows the latest local success/failure classification plus a safe recovery command |
+| Assistant Gmail sync button | `data-act="gmail-sync"` calls `POST /api/gmail/sync?confirm=1`; visible copy must say it is an external readonly Gmail API request and local-only SQLite/audit write, not email sending or external calendar sync |
 | Assistant task review card | computed from `/api/tasks`: visible tasks render with value chips, evidence snippet, confidence, priority band/score/reasons, a local-only `查看证据` drill-down from `/api/tasks/evidence`, and local-only `done`, `needs_verification`, `reviewed`, `ignored` controls |
 | Assistant saved task views | `task-view` chips call `/api/tasks?view=...&sort=...` for `all`, `needs_verification`, `payments`, `deadlines_soon`, and `recently_changed`; each view also resets kind/status/sort to its default review preset |
 | Assistant review session summary | `taskSessionSummary` is computed client-side from current view rows plus read-only `view=all` rows; it shows total/current queue/classified counts, explains empty saved views, and offers up to three non-empty saved-view chips without external reads or writes |

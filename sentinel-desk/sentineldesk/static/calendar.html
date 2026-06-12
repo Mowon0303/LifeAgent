@@ -968,6 +968,7 @@
       '<div class="dD-taskline" id="taskReviewQueue">任务操作只写本地 review 状态和 audit，不会发送邮件或写外部日历。</div>' +
       gmailReadinessPanel() +
       gmailSyncDiagnosticsPanel() +
+      '<div class="dD-taskline" id="gmailSyncBoundary">Gmail 同步会触发外部只读 Gmail API 请求，只写本地 SQLite/audit，不发送邮件或写外部日历。</div>' +
       taskFilterControls() +
       taskSessionPanel() +
       reviewReceiptPanel() +
@@ -977,6 +978,7 @@
       '<button class="dD-cbtn sec" data-act="task-bulk-ignored"' + bulkDisabled + '>批量忽略</button>' +
       '<button class="dD-cbtn warn" data-act="task-bulk-needs-verification"' + bulkDisabled + '>批量核对</button></div>' +
       '<div class="dD-btns"><button class="dD-cbtn sec" data-act="daily-run">刷新今日检查</button>' +
+      '<button class="dD-cbtn warn" data-act="gmail-sync">同步 Gmail（外部只读）</button>' +
       '<button class="dD-cbtn sec" data-act="show-task">打开当前任务</button>' +
       '<button class="dD-cbtn sec" data-act="task-history">查看历史</button></div></div>';
   }
@@ -1174,6 +1176,35 @@
           escapeHtml((summary.calendar || {}).pending_count || 0) + '</b> 条本地日历草稿等待确认。</div>');
       })
       .catch(function (err) { botMessage('<div class="dD-body uncertain">今日检查失败：' + escapeHtml(err) + '</div>'); })
+      .finally(function () {
+        state.busy = false;
+        button.disabled = false;
+      });
+  }
+
+  function handleGmailSync(button) {
+    if (state.busy) return;
+    state.busy = true;
+    button.disabled = true;
+    botMessage('<div class="dD-body uncertain">正在触发 Gmail 外部只读同步。此操作会访问 Gmail API，但不会发送邮件或写外部日历；结果只落到本地证据库和 audit。</div>');
+    fetch('/api/gmail/sync?confirm=1', { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (result) {
+        if (result.daily_summary) state.daily = result.daily_summary;
+        return refresh().then(function () {
+          var summary = result.daily_summary || state.daily || {};
+          if (result.error) {
+            var failure = (result.diagnostics || {}).latest_failure || {};
+            botMessage('<div class="dD-body uncertain">Gmail 同步失败：' +
+              escapeHtml(failure.category || result.error) + '。诊断面板已更新，未发生外部写入。</div>');
+            return;
+          }
+          botMessage('<div class="dD-body">Gmail 只读同步完成：本地邮件 <b>' +
+            escapeHtml(((summary.email || {}).stored_message_count) || 0) + '</b>，待处理任务 <b>' +
+            escapeHtml(((summary.tasks || {}).queue_count) || 0) + '</b>。未发送邮件，未写外部日历。</div>');
+        });
+      })
+      .catch(function (err) { botMessage('<div class="dD-body uncertain">Gmail 同步请求失败：' + escapeHtml(err) + '</div>'); })
       .finally(function () {
         state.busy = false;
         button.disabled = false;
@@ -1412,6 +1443,10 @@
     if (!btn) return;
     if (btn.dataset.act === 'daily-run') {
       handleDailyRun(btn);
+      return;
+    }
+    if (btn.dataset.act === 'gmail-sync') {
+      handleGmailSync(btn);
       return;
     }
     if (btn.dataset.act === 'task-filter-kind') {
