@@ -117,6 +117,7 @@ python3 -B -m sentineldesk privacy release-audit --path "$EXTRACT_DIR" --require
 - [PLAN_TRACKER.md](PLAN_TRACKER.md) - architecture boundary, status table, safety matrix, next plan
 - [sentinel-desk/README.md](sentinel-desk/README.md) - detailed CLI and developer workflow
 - [sentinel-desk/docs/CASE_STUDY.md](sentinel-desk/docs/CASE_STUDY.md) - portfolio case study and GitHub surface copy
+- [sentinel-desk/docs/INTERVIEW_PROJECT.md](sentinel-desk/docs/INTERVIEW_PROJECT.md) - resume bullets and interview talking points
 - [sentinel-desk/docs/ARCHITECTURE.md](sentinel-desk/docs/ARCHITECTURE.md) - system diagram and safety boundaries
 - [sentinel-desk/docs/UI_CONTRACT.md](sentinel-desk/docs/UI_CONTRACT.md) - backend to calendar UI handoff contract
 - [sentinel-desk/docs/EVAL_REPORT.md](sentinel-desk/docs/EVAL_REPORT.md) - extraction golden-set eval report

@@ -6,6 +6,7 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Added
 
+- Rebuilt `sentinel-desk/docs/INTERVIEW_PROJECT.md` as a LifeAgent interview brief with resume bullets, a 45-second explanation, a 2-minute system design answer, architecture talking points, technical proof, tradeoffs/risks, demo checklist, and a concise interview close.
 - Added `sentinel-desk/docs/CASE_STUDY.md`, a portfolio-ready write-up covering the problem, email-first product decision, user flow, architecture, agent boundaries, safety model, evidence table, demo scenario, and recommended GitHub description/topics.
 - Added GitHub Actions CI at `.github/workflows/ci.yml`: Python 3.11 package metadata check, 264 unittests, `compileall`, golden email extraction eval JSON, email-first demo dry run, redacted-output privacy audit, clean source release packaging, and extracted release audit.
 - Added a Gmail-first readiness package shape eval: it seeds a fake readonly Gmail sync with a stored cursor, mocks optional Google dependency availability, runs `integrations check --suite gmail --require-ready --package`, verifies the redacted ZIP file set/manifest/check list, asserts account/cursor/token/client-secret/local-path values are absent, and runs `privacy audit --require-clean` on the generated package.
@@ -145,6 +146,7 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Changed
 
+- Updated the root README key-doc section and plan tracker so the interview brief now reflects the email-first LifeAgent narrative rather than the older portal-first SentinelDesk pitch.
 - Linked the case study from the root README portfolio snapshot and key-doc sections so GitHub visitors can start from a concise product/architecture narrative before reading implementation docs.
 - Reworked the root `README.md` into a GitHub-facing project overview for the email-first LifeAgent: architecture, agent layer, eval/privacy evidence, quickstart, CI gates, privacy boundary, and key docs.
 - Updated `sentinel-desk/README.md` so the first-run demo opens the calendar assistant at `/`, keeps `/ops` as the SentinelDesk reliability surface, and describes synthetic Gmail-style fixtures as the public demo path.
@@ -217,6 +219,7 @@ All notable project updates for LifeAgent are tracked here.
 
 ### Verified
 
+- `python3 -B -m sentineldesk plan status` now reports the interview project brief as done and keeps remote GitHub repository metadata as the remaining partial presentation task.
 - `python3 -B -m sentineldesk plan status` now reports the static portfolio case study as done and leaves remote GitHub repository metadata as the next partial surface task.
 - Local CI-equivalent gate passed after adding the GitHub workflow: package metadata check, `python3 -B -m unittest discover -s tests -q` with 264 tests, `python3 -m compileall -q sentineldesk tests`, and `python3 -B -m sentineldesk eval email-extract --golden evals/golden --json`.
 - `SENTINEL_RECORD_DRY_RUN=1 SENTINEL_RECORD_HOME=/tmp/lifeagent-ci-demo SENTINEL_RECORD_PORT=8787 SENTINEL_RECORD_OUTPUT_DIR=/tmp/lifeagent-recordings bash scripts/record_portfolio_demo.sh` prepared the email-first demo state for CI without starting a recording: 4 email messages, 8 facts, 3 calendar drafts, 8 tasks, 5 ops runs, and 2 alerts.
