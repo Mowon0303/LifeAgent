@@ -1,13 +1,29 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from typing import Any
+
+
+_THREAD_PREFIX = re.compile(r"^\s*(re|fw|fwd|回复|答复|转发)\s*[:：]\s*", re.IGNORECASE)
+
+
+def _normalize_title(title: str) -> str:
+    text = str(title or "").strip()
+    while True:
+        stripped = _THREAD_PREFIX.sub("", text)
+        if stripped == text:
+            break
+        text = stripped
+    return " ".join(text.lower().split())
 
 
 DATE_FORMATS = (
     "%Y-%m-%d",
     "%B %d, %Y",
     "%b %d, %Y",
+    "%d %B %Y",   # 14 July 2026
+    "%d %b %Y",   # 14 Jul 2026
     "%m/%d/%Y",
     "%m/%d/%y",
 )
@@ -29,6 +45,11 @@ def build_calendar_items(drafts: list[dict[str, Any]], approvals: list[dict[str,
     approved_event_ids = _approved_event_ids(approvals)
     items: list[dict[str, Any]] = []
     for draft in drafts:
+        date_key = parse_deadline_date(str(draft.get("date_text") or ""))
+        # a deadline draft with no resolvable date is not a calendar event — skip it so
+        # it is never shown on the board or offered as an "add to calendar" suggestion
+        if not date_key:
+            continue
         event_id = str(draft.get("event_id") or "")
         sync_state = str(draft.get("sync_state") or "local_draft")
         status = str(draft.get("status") or "draft")
@@ -40,7 +61,7 @@ def build_calendar_items(drafts: list[dict[str, Any]], approvals: list[dict[str,
                 "event_id": event_id,
                 "title": str(draft.get("title") or ""),
                 "date_text": str(draft.get("date_text") or ""),
-                "date_key": parse_deadline_date(str(draft.get("date_text") or "")),
+                "date_key": date_key,
                 "severity": str(draft.get("severity") or "medium"),
                 "confidence": confidence,
                 "status": status,
@@ -54,8 +75,39 @@ def build_calendar_items(drafts: list[dict[str, Any]], approvals: list[dict[str,
                 "reminders": list(draft.get("reminders", [])),
             }
         )
+    items = _dedupe_calendar_items(items)
     items.sort(key=lambda item: (item["date_key"] or "9999-99-99", item["title"], item["event_id"]))
     return items
+
+
+def _prefer(candidate: dict[str, Any], current: dict[str, Any]) -> bool:
+    """A confirmed event wins over a draft; otherwise the higher-confidence one wins."""
+    cand_confirmed = candidate["approval_state"] == "approved"
+    cur_confirmed = current["approval_state"] == "approved"
+    if cand_confirmed != cur_confirmed:
+        return cand_confirmed
+    return float(candidate["confidence"]) > float(current["confidence"])
+
+
+def _dedupe_calendar_items(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Collapse events that describe the same deadline arriving repeatedly across a
+    reply thread (same normalized subject + same date) into one event, merging their
+    source ids. Prevents the calendar from showing one chip per reply email."""
+    best: dict[tuple[str, str], dict[str, Any]] = {}
+    order: list[tuple[str, str]] = []
+    for item in items:
+        key = (_normalize_title(item["title"]), item["date_key"])
+        existing = best.get(key)
+        if existing is None:
+            best[key] = item
+            order.append(key)
+            continue
+        winner = dict(item if _prefer(item, existing) else existing)
+        merged = list(dict.fromkeys([*existing["source_ids"], *item["source_ids"]]))
+        winner["source_ids"] = merged
+        winner["source_count"] = len(merged)
+        best[key] = winner
+    return [best[key] for key in order]
 
 
 def _approved_event_ids(approvals: list[dict[str, Any]]) -> set[str]:

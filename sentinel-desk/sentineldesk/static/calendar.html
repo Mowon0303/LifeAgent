@@ -32,40 +32,45 @@
   .dD-week { display:grid; grid-template-columns:repeat(7,1fr); gap:10px; margin-bottom:10px; }
   .dD-week span { font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:500; letter-spacing:.1em; color:#A2937B; text-transform:uppercase; }
   .dD-grid { flex:1; display:grid; grid-template-columns:repeat(7,1fr); gap:10px; min-height:0; }
-  .dD-cell { background:#FBF8F1; border-radius:14px; padding:9px 9px 7px; display:flex; flex-direction:column; gap:5px;
+  .dD-cell { background:#FBF8F1; border-radius:14px; padding:9px 9px 7px; display:flex; flex-direction:column; gap:4px;
     min-height:0; overflow:hidden; box-shadow:0 1px 2px rgba(80,60,20,.04); }
   .dD-cell.out { background:rgba(251,248,241,.45); }
   .dD-cell.today { box-shadow:0 0 0 2px #2A6FDB, 0 6px 16px rgba(42,111,219,.16); }
-  .dD-dn { font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; color:#6B6253; }
+  .dD-cell.has-events { cursor:pointer; }
+  .dD-dn { font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; color:#6B6253; flex:none; }
   .dD-cell.out .dD-dn { color:#C2B6A0; }
   .dD-cell.today .dD-dn { color:#2A6FDB; }
-  .dD-blk { border-radius:7px; padding:4px 8px; font-size:11.5px; font-weight:600; line-height:1.25;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:default; }
+  /* chips take the remaining height and clip cleanly; "+N more" is pinned below so it is never cut off */
+  .dD-cellchips { flex:1; min-height:0; overflow:hidden; display:flex; flex-direction:column; gap:4px; }
+  .dD-blk { border-radius:7px; padding:3px 8px; font-size:11px; font-weight:600; line-height:1.25; flex:none;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer; }
   .dD-blk .tm { font-weight:700; opacity:.7; margin-right:5px; }
-  .dD-blk.pending { background:transparent !important; border:1.5px dashed; }
-  .dD-more { font-size:10.5px; font-weight:600; color:#A2937B; padding-left:2px; }
+  .dD-blk:hover { filter:brightness(.96); }
+  .dD-blk.pending { border-style:solid; }
+  .dD-more { font-size:10.5px; font-weight:700; color:#9A7B53; padding:1px 2px; flex:none; cursor:pointer; border-radius:5px; }
+  .dD-more:hover { background:#EFE7D8; color:#6B6253; }
 
   /* ---- week / day time grid ---- */
   .dD-tg { flex:1; display:flex; flex-direction:column; min-height:0; }
   .dD-tg-head { display:grid; }
-  .wk-dh { text-align:center; padding:2px 0 12px; display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .wk-dh { text-align:center; padding:2px 0 12px; display:flex; flex-direction:column; align-items:center; gap:4px; min-width:0; }
   .wk-dh .wd { font-family:'IBM Plex Mono',monospace; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:#A2937B; }
   .wk-dh .dnum { font-family:'Newsreader',serif; font-size:24px; font-weight:500; color:#3A352D; line-height:1; }
   .wk-dh.is-today .wd { color:#2A6FDB; }
   .wk-dh.is-today .dnum { color:#fff; background:#2A6FDB; width:36px; height:36px; border-radius:50%;
     display:flex; align-items:center; justify-content:center; font-size:19px; box-shadow:0 4px 10px rgba(42,111,219,.3); }
-  .dD-allday { display:grid; border-top:1px solid #E4DBC9; border-bottom:1px solid #E4DBC9; min-height:36px; }
+  .dD-allday { display:grid; border-top:1px solid #E4DBC9; border-bottom:1px solid #E4DBC9; min-height:36px; flex:none; }
   .adg-lab { font-family:'IBM Plex Mono',monospace; font-size:9.5px; letter-spacing:.06em; text-transform:uppercase;
-    color:#B3A893; text-align:right; padding-right:11px; align-self:center; }
-  .adg-cell { padding:5px; display:flex; flex-direction:column; gap:3px; border-left:1px solid #ECE3D2; }
-  .ad-chip { border-radius:6px; padding:3px 8px; font-size:11.5px; font-weight:600;
+    color:#B3A893; padding-right:8px; align-self:center; display:flex; align-items:center; justify-content:flex-end; }
+  .adg-cell { padding:5px; display:flex; flex-direction:column; gap:3px; border-left:1px solid #ECE3D2; min-width:0; overflow:hidden; }
+  .ad-chip { border-radius:6px; padding:3px 8px; font-size:11.5px; font-weight:600; cursor:pointer;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .ad-chip.pending { background:transparent !important; border:1.5px dashed; }
+  .ad-chip.pending { border-style:solid; }
   .dD-tg-body { display:grid; overflow:auto; position:relative; }
   .tg-gutter { position:relative; }
   .tg-hr { position:absolute; right:9px; font-family:'IBM Plex Mono',monospace; font-size:10.5px;
     color:#9A8E7B; transform:translateY(-50%); white-space:nowrap; }
-  .tg-col { position:relative; border-left:1px solid #DDD2BE; }
+  .tg-col { position:relative; border-left:1px solid #DDD2BE; min-width:0; }
   .tg-col .ln { position:absolute; left:0; right:0; border-top:1px solid #DAD0BC; }
   .tg-gutter .gln { position:absolute; right:0; width:6px; border-top:1px solid #DAD0BC; }
   .tg-now { position:absolute; left:0; right:0; height:0; border-top:2px solid #B14228; z-index:5; }
@@ -82,8 +87,9 @@
   .ag-dl .rel { font-size:11px; color:#B3A893; margin-top:7px; }
   .ag-rows { display:flex; flex-direction:column; gap:8px; }
   .ag-row { display:flex; align-items:center; gap:13px; background:#FBF8F1; border-radius:11px; padding:11px 15px;
-    box-shadow:0 1px 2px rgba(80,60,20,.05); }
-  .ag-row.pending { background:transparent; border:1.5px dashed #C9BCEC; box-shadow:none; }
+    box-shadow:0 1px 2px rgba(80,60,20,.05); cursor:pointer; border-left:3px solid transparent; }
+  .ag-row:hover { filter:brightness(.98); }
+  .ag-row.pending { box-shadow:0 1px 2px rgba(80,60,20,.05); }
   .ag-time { font-family:'IBM Plex Mono',monospace; font-size:13px; font-weight:600; color:#6B6253; min-width:50px; }
   .ag-dot { width:9px; height:9px; border-radius:50%; flex:none; }
   .ag-ttl { font-size:15px; font-weight:600; color:#2B2622; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -189,9 +195,9 @@
   .dD-cites { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
   .dD-cite { font-family:'IBM Plex Mono',monospace; font-size:10px; color:#6A5BD0; background:#EAE6FA;
     border-radius:5px; padding:2px 7px; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .dD-btns { display:flex; gap:8px; margin-top:9px; max-width:340px; }
-  .dD-cbtn { height:34px; padding:0 16px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; border:0;
-    display:flex; align-items:center; gap:6px; font-family:inherit; }
+  .dD-btns { display:flex; flex-wrap:wrap; gap:8px; margin-top:9px; max-width:340px; }
+  .dD-cbtn { min-height:30px; padding:5px 12px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; border:0;
+    display:inline-flex; align-items:center; justify-content:center; gap:6px; font-family:inherit; white-space:nowrap; line-height:1.2; }
   .dD-cbtn.prim { background:#2A6FDB; color:#fff; }
   .dD-cbtn.sec { background:#E6DECD; color:#5C5446; }
   .dD-cbtn.warn { background:#F6E4DC; color:#B14228; }
@@ -207,6 +213,60 @@
     font-family:'IBM Plex Sans',sans-serif; }
   .dD-compbox input::placeholder { color:#B3A893; }
   .dD-tools { display:flex; gap:12px; color:#B3A893; font-size:16px; }
+
+  /* ---- compact review panel ---- */
+  .dD-daily-head { font-size:14px; font-weight:600; color:#3A352D; margin-bottom:2px; }
+  .dD-daily-head b { color:#B14228; font-size:16px; }
+  .dD-cardnav { display:flex; align-items:center; gap:8px; margin:10px 0 4px; }
+  .dD-cardnav .meta { flex:1; font-family:'IBM Plex Mono',monospace; font-size:11px; color:#9A8E7B; text-align:center; }
+  .dD-more-toggle { margin-top:12px; background:transparent; border:0; color:#9A8E7B; font-size:12px; font-weight:600;
+    cursor:pointer; font-family:inherit; padding:4px 0; }
+  .dD-more-toggle:hover { color:#6B6253; }
+  .dD-adv { margin-top:6px; border-top:1px dashed #E0D6C4; padding-top:10px; }
+
+  /* ---- event detail / edit popup ---- */
+  .ev-pop-back { position:fixed; inset:0; background:rgba(40,32,24,.32); z-index:50;
+    display:flex; align-items:center; justify-content:center; padding:24px; }
+  .ev-pop { width:420px; max-width:100%; max-height:88vh; overflow:auto; background:#FBF8F1;
+    border:1px solid #E4DBC9; border-radius:16px; box-shadow:0 18px 48px rgba(60,45,20,.28); padding:20px 22px; }
+  .ev-pop h3 { margin:0 0 4px; font-family:'Newsreader',serif; font-size:21px; font-weight:600; color:#2B2622; line-height:1.25; }
+  .ev-pop .ev-status { display:inline-block; font-size:11px; font-weight:700; padding:2px 9px; border-radius:20px; margin-bottom:12px; }
+  .ev-pop .ev-row { display:flex; gap:10px; align-items:baseline; font-size:13px; color:#5C5446; margin:7px 0; }
+  .ev-pop .ev-row .lab { width:54px; flex:none; color:#A2937B; font-size:11.5px; font-weight:600; }
+  .ev-pop .ev-evi { background:#F1ECE1; border-radius:9px; padding:9px 11px; font-size:12.5px; color:#6B6253; margin:10px 0; line-height:1.45; }
+  .ev-pop input[type=text] { flex:1; font-family:inherit; font-size:13px; color:#393429; background:#fff;
+    border:1px solid #E4DBC9; border-radius:8px; padding:6px 9px; outline:none; }
+  .ev-pop .ev-cats { display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 2px; }
+  .ev-cat { font-size:11.5px; font-weight:600; border-radius:20px; padding:3px 11px; cursor:pointer; border:1.5px solid transparent; }
+  .ev-cat.on { box-shadow:0 0 0 2px #fff inset; outline:2px solid currentColor; }
+  .ev-cat-add { font-size:11.5px; font-weight:600; border-radius:20px; padding:3px 10px; cursor:pointer;
+    background:#EFE7D8; color:#6B6253; border:1px dashed #C9BCAE; }
+  .ev-pop-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+  .ev-pop-close { position:absolute; }
+  .ev-pop .ev-x { float:right; cursor:pointer; color:#B3A893; font-size:20px; line-height:1; margin:-4px -4px 0 0; }
+  .day-ev-list { display:flex; flex-direction:column; gap:6px; margin-top:8px; max-height:62vh; overflow:auto; }
+  .day-ev { display:flex; align-items:center; gap:10px; padding:9px 11px; background:#F1ECE1; border-radius:9px; cursor:pointer; }
+  .day-ev:hover { background:#EAE1D0; }
+  .day-dot { width:9px; height:9px; border-radius:50%; flex:none; }
+  .day-ev-t { flex:1; font-size:13.5px; color:#2B2622; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .day-ev-s { font-size:11px; color:#A2937B; flex:none; }
+  .day-date { font-family:'IBM Plex Mono',monospace; font-size:11.5px; color:#A2937B; min-width:44px; flex:none; }
+
+  /* all-day band toggle + expanded scroll (Google/Apple-style top band) */
+  .adg-toggle { border:0; background:#EBE2D2; color:#6B6253; border-radius:6px; font-size:10.5px; font-weight:600;
+    line-height:1; padding:3px 7px; cursor:pointer; font-family:inherit; white-space:nowrap; }
+  .adg-toggle:hover { background:#E0D6C4; }
+  .dD-allday.expanded { max-height:184px; overflow-y:auto; }
+
+  /* ---- toast notifications (with undo) ---- */
+  .dD-toast-wrap { position:fixed; right:24px; bottom:90px; z-index:60; display:flex; flex-direction:column; gap:8px; align-items:flex-end; }
+  .dD-toast { background:#2B2622; color:#F3EEE3; border-radius:11px; padding:11px 14px; box-shadow:0 10px 30px rgba(40,30,15,.32);
+    display:flex; align-items:center; gap:14px; font-size:13px; max-width:340px; animation:toastIn .18s ease; }
+  .dD-toast .msg { flex:1; line-height:1.4; }
+  .dD-toast .undo { background:transparent; border:0; color:#FFCB91; font-weight:700; font-size:13px; cursor:pointer; font-family:inherit; white-space:nowrap; padding:0; }
+  .dD-toast .undo:hover { text-decoration:underline; }
+  .dD-toast .x { background:transparent; border:0; color:#9A8E7B; font-size:17px; cursor:pointer; line-height:1; padding:0; }
+  @keyframes toastIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
 </style>
 </head>
 <body>
@@ -264,6 +324,74 @@
     personal: { label: '个人', ink: '#4F7A4A', soft: '#E4EFE2' },
     ai:       { label: 'AI 建议', ink: '#6A5BD0', soft: '#EAE6FA' }
   };
+
+  // ---- categories: color events by category; user-customizable, stored locally ----
+  var DEFAULT_CATEGORIES = [
+    { key: 'deadline', label: '截止', color: '#B14228' },
+    { key: 'meeting',  label: '会议', color: '#2A6FDB' },
+    { key: 'personal', label: '个人', color: '#4F7A4A' },
+    { key: 'bill',     label: '账单', color: '#B8860B' },
+    { key: 'other',    label: '其他', color: '#6A5BD0' }
+  ];
+  var CAT_STORE = 'lifeagent.categories.v1';
+  var CAT_ASSIGN_STORE = 'lifeagent.eventCategory.v1';
+  function lsGet(key, fallback) {
+    try { var raw = window.localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
+    catch (e) { return fallback; }
+  }
+  function lsSet(key, value) {
+    try { window.localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+  }
+  function loadCategories() {
+    var stored = lsGet(CAT_STORE, null);
+    var list = Array.isArray(stored) && stored.length ? stored : DEFAULT_CATEGORIES.slice();
+    var map = {};
+    list.forEach(function (c) { if (c && c.key) map[c.key] = { key: c.key, label: c.label || c.key, color: c.color || '#6A5BD0' }; });
+    if (!map.deadline) map.deadline = { key: 'deadline', label: '截止', color: '#B14228' };
+    return map;
+  }
+  function categoryList() { return Object.keys(state.categories).map(function (k) { return state.categories[k]; }); }
+  function eventCategoryKey(item) {
+    var assigned = state.eventCategory[item.eventId];
+    if (assigned && state.categories[assigned]) return assigned;
+    return 'deadline';
+  }
+  function categoryFor(item) {
+    return state.categories[eventCategoryKey(item)] || state.categories.deadline || { label: '截止', color: '#B14228' };
+  }
+  // a translucent tint of the category color for a readable filled chip
+  function catTint(color) {
+    var hex = String(color || '#B14228').replace('#', '');
+    if (hex.length === 3) hex = hex.replace(/(.)/g, '$1$1');
+    var r = parseInt(hex.slice(0, 2), 16), g = parseInt(hex.slice(2, 4), 16), b = parseInt(hex.slice(4, 6), 16);
+    if (!isFinite(r)) return 'rgba(177,66,40,.16)';
+    return 'rgba(' + r + ',' + g + ',' + b + ',.16)';
+  }
+  function setEventCategory(eventId, key) {
+    state.eventCategory[eventId] = key;
+    lsSet(CAT_ASSIGN_STORE, state.eventCategory);
+  }
+  function addCategory(label, color) {
+    var key = 'cat_' + Object.keys(state.categories).length + '_' + label.replace(/\s+/g, '').slice(0, 8);
+    state.categories[key] = { key: key, label: label, color: color };
+    lsSet(CAT_STORE, categoryList());
+    return key;
+  }
+
+  // ---- simplified task filter: 全部 / 未读 / 已阅 / 已忽略 ----
+  var TASK_GROUPS = ['all', 'unread', 'read', 'ignored'];
+  var TASK_GROUP_LABEL = { all: '全部', unread: '未读', read: '已阅', ignored: '已忽略' };
+  var TASK_GROUP_STATUSES = {
+    all: null,
+    unread: ['new', 'needs_verification'],
+    read: ['reviewed', 'done'],
+    ignored: ['ignored']
+  };
+  function taskInGroup(task, group) {
+    var statuses = TASK_GROUP_STATUSES[group];
+    if (!statuses) return true;
+    return statuses.indexOf(String(task.status || 'new')) >= 0;
+  }
   var TRUST_LABEL = {
     email_evidence: '邮件证据',
     portal_verified: '门户已验证',
@@ -340,7 +468,7 @@
   };
   var WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']; // Mon-first
   var MONTH_CN = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
-  var START_H = 7, END_H = 21, HPX = 50;
+  var START_H = 0, END_H = 24, HPX = 48;
 
   var state = {
     view: 'month',
@@ -357,10 +485,17 @@
     taskView: 'all',
     taskFilterKind: 'all',
     taskFilterStatus: 'active',
+    taskGroup: 'unread',      // simplified filter: all | unread | read | ignored
     taskSort: 'priority',
-    taskCursor: 0,
+    taskCursor: 0,           // cursor into the unified review queue (calendar + tasks)
+    advOpen: false,          // is the collapsed "更多" advanced block expanded
+    alldayExpanded: false,   // week/day all-day band expanded to show every deadline
+    categories: {},           // key -> {key,label,color}, customizable, localStorage-backed
+    eventCategory: {},        // eventId -> category key, localStorage-backed
     busy: false
   };
+  state.categories = loadCategories();
+  state.eventCategory = lsGet(CAT_ASSIGN_STORE, {}) || {};
 
   // ---------- helpers ----------
   function startOfDay(d) { var x = new Date(d); x.setHours(0, 0, 0, 0); return x; }
@@ -525,13 +660,17 @@
 
   function filteredTaskQueue() {
     return state.taskQueue.filter(function (task) {
-      var reviewOk = shouldShowTaskInReview(task);
-      var kindOk = state.taskFilterKind === 'all' || task.kind === state.taskFilterKind;
-      var status = String(task.status || 'new');
-      var statusOk = state.taskFilterStatus === 'all' ||
-        (state.taskFilterStatus === 'active' ? isActiveTaskStatus(status) : status === state.taskFilterStatus);
-      return reviewOk && kindOk && statusOk;
+      return shouldShowTaskInReview(task) && taskInGroup(task, state.taskGroup);
     });
+  }
+
+  function groupCount(group) {
+    var taskN = state.taskQueue.filter(function (task) {
+      return shouldShowTaskInReview(task) && taskInGroup(task, group);
+    }).length;
+    // pending calendar drafts count as unread (and therefore also 全部)
+    var calN = (group === 'all' || group === 'unread') ? state.queue.length : 0;
+    return taskN + calN;
   }
 
   function clampTaskCursor(items) {
@@ -556,48 +695,13 @@
   }
 
   function taskFilterControls() {
-    var kinds = ['all', 'amount', 'action', 'deadline'];
-    var statuses = ['active', 'new', 'needs_verification', 'reviewed', 'done', 'ignored', 'all'];
-    var sorts = ['priority', 'due_date', 'recent'];
-    var queue = filteredTaskQueue();
-    clampTaskCursor(queue);
-    var current = queue.length ? (state.taskCursor + 1) + '/' + queue.length : '0/0';
-    var kindButtons = kinds.map(function (kind) {
-      var selected = state.taskFilterKind === kind ? ' on' : '';
-      return '<button class="' + selected.trim() + '" data-act="task-filter-kind" data-kind="' +
-        escapeHtml(kind) + '">' + escapeHtml(TASK_KIND_FILTER_LABEL[kind]) + ' ' +
-        taskFilterCount(kind, state.taskFilterStatus) + '</button>';
-    }).join('');
-    var statusButtons = statuses.map(function (status) {
-      var selected = state.taskFilterStatus === status ? ' on' : '';
-      return '<button class="' + selected.trim() + '" data-act="task-filter-status" data-status="' +
-        escapeHtml(status) + '">' + escapeHtml(TASK_STATUS_FILTER_LABEL[status]) + ' ' +
-        taskFilterCount(state.taskFilterKind, status) + '</button>';
-    }).join('');
-    var sortButtons = sorts.map(function (sort) {
-      var selected = state.taskSort === sort ? ' on' : '';
-      return '<button class="' + selected.trim() + '" data-act="task-sort" data-sort="' +
-        escapeHtml(sort) + '">' + escapeHtml(TASK_SORT_LABEL[sort]) + '</button>';
-    }).join('');
-    var viewButtons = TASK_VIEWS.map(function (view) {
-      var selected = state.taskView === view ? ' on' : '';
-      return '<button class="' + selected.trim() + '" data-act="task-view" data-view="' +
-        escapeHtml(view) + '">' + escapeHtml(TASK_VIEW_LABEL[view]) + '</button>';
+    var groupButtons = TASK_GROUPS.map(function (group) {
+      var selected = state.taskGroup === group ? ' on' : '';
+      return '<button class="' + selected.trim() + '" data-act="task-group" data-group="' +
+        group + '">' + escapeHtml(TASK_GROUP_LABEL[group]) + ' ' + groupCount(group) + '</button>';
     }).join('');
     return '<div id="taskQueueFilters">' +
-      '<div class="dD-filterbar" data-task-filter="view">' + viewButtons + '</div>' +
-      '<div class="dD-filterbar" data-task-filter="kind">' + kindButtons + '</div>' +
-      '<div class="dD-filterbar" data-task-filter="status">' + statusButtons + '</div>' +
-      '<div class="dD-filterbar" data-task-filter="sort">' + sortButtons + '</div>' +
-      '<div class="dD-tasknav" id="taskNavState">' +
-      '<button class="dD-mini" data-act="task-prev"' + (queue.length ? '' : ' disabled') + '>‹</button>' +
-      '<div class="meta">' + escapeHtml(current) + ' · ' +
-        escapeHtml(TASK_VIEW_LABEL[state.taskView] || state.taskView) + ' · ' +
-        escapeHtml(TASK_KIND_FILTER_LABEL[state.taskFilterKind] || state.taskFilterKind) + ' · ' +
-        escapeHtml(TASK_STATUS_FILTER_LABEL[state.taskFilterStatus] || state.taskFilterStatus) + ' · ' +
-        escapeHtml(TASK_SORT_LABEL[state.taskSort] || state.taskSort) + '</div>' +
-      '<button class="dD-mini" data-act="task-next"' + (queue.length ? '' : ' disabled') + '>›</button>' +
-      '</div></div>';
+      '<div class="dD-filterbar" data-task-filter="group">' + groupButtons + '</div></div>';
   }
 
   function taskNextViewButtons() {
@@ -624,7 +728,7 @@
     var stats = taskSessionStats();
     var viewStats = taskViewStats(state.taskView);
     var label = TASK_VIEW_LABEL[state.taskView] || state.taskView;
-    var statusLabel = TASK_STATUS_FILTER_LABEL[state.taskFilterStatus] || state.taskFilterStatus;
+    var statusLabel = TASK_GROUP_LABEL[state.taskGroup] || state.taskGroup;
     var nextViews = taskNextViewButtons();
     var emptyNote = !stats.queue
       ? '<div class="dD-empty compact">' + escapeHtml(taskSessionEmptyCopy(stats, viewStats)) + '</div>'
@@ -730,21 +834,18 @@
   }
 
   function taskEmptyStateMessage() {
-    return '<div class="dD-body">当前筛选下没有任务卡。</div>' + taskSessionPanel();
+    var copy = state.taskGroup === 'unread'
+      ? '没有待处理的事项了。已读和已忽略的可以用上面的筛选切换查看。'
+      : (TASK_GROUP_LABEL[state.taskGroup] || '当前') + '里没有事项。';
+    return '<div class="dD-body">' + escapeHtml(copy) + '</div>';
   }
 
   function advancePastTask(taskId) {
-    var queue = filteredTaskQueue();
-    if (!queue.length) {
-      state.taskCursor = 0;
-      return;
-    }
-    var index = queue.findIndex(function (task) { return task.task_id === taskId; });
-    if (index >= 0 && queue.length > 1) {
-      state.taskCursor = (index + 1) % queue.length;
-      return;
-    }
-    clampTaskCursor(queue);
+    // after an action the acted item leaves the queue, so the same cursor index
+    // now points at the next item — just clamp against the unified queue length
+    var n = reviewItems().length;
+    if (state.taskCursor >= n) state.taskCursor = n ? n - 1 : 0;
+    if (state.taskCursor < 0) state.taskCursor = 0;
   }
 
   function byDate() {
@@ -757,14 +858,13 @@
 
   // ---------- calendar rendering ----------
   function chipStyle(item) {
-    var m = TYPE_META[item.type];
-    return item.pending
-      ? 'color:' + m.ink + ';border-color:' + m.ink
-      : 'background:' + m.soft + ';color:' + m.ink;
+    var c = categoryFor(item);
+    return 'background:' + catTint(c.color) + ';color:' + c.color + ';border:1px solid ' + c.color + ';';
   }
   function chipHtml(item, cls) {
-    return '<div class="' + cls + (item.pending ? ' pending' : '') + '" style="' + chipStyle(item) + '" title="' +
-      escapeHtml(item.title + ' · ' + item.source) + '">' +
+    return '<div class="' + cls + (item.pending ? ' pending' : '') + '" data-event-id="' + escapeHtml(item.eventId) +
+      '" style="' + chipStyle(item) + '" title="' +
+      escapeHtml(item.title + ' · ' + item.source + (item.pending ? ' · 草稿' : ' · 已确认')) + '">' +
       escapeHtml(item.title) + (item.uncertain ? ' ?' : '') + '</div>';
   }
 
@@ -799,10 +899,14 @@
       var key = isoKey(date);
       var items = out ? [] : (map[key] || []);
       var isToday = key === todayKey && !out;
-      html += '<div class="dD-cell' + (out ? ' out' : '') + (isToday ? ' today' : '') + '">';
+      var hasEvents = items.length > 0;
+      html += '<div class="dD-cell' + (out ? ' out' : '') + (isToday ? ' today' : '') +
+        (hasEvents ? ' has-events' : '') + '"' + (hasEvents ? ' data-day-key="' + key + '"' : '') + '>';
       html += '<div class="dD-dn">' + (date.getDate() === 1 ? (date.getMonth() + 1) + '/1' : date.getDate()) + '</div>';
+      html += '<div class="dD-cellchips">';
       items.slice(0, 3).forEach(function (item) { html += chipHtml(item, 'dD-blk'); });
-      if (items.length > 3) html += '<div class="dD-more">+' + (items.length - 3) + '</div>';
+      html += '</div>';
+      if (items.length > 3) html += '<div class="dD-more" data-day-key="' + key + '">+' + (items.length - 3) + ' 更多</div>';
       html += '</div>';
     }
     html += '</div>';
@@ -810,9 +914,13 @@
   }
 
   function renderTimeGrid(body, days) {
+    // preserve the user's scroll across the 1-minute now-line refresh; default to 07:00
+    var prevBody = body.querySelector('.dD-tg-body');
+    var prevScroll = prevBody ? prevBody.scrollTop : -1;
     var map = byDate(), todayKey = isoKey(new Date());
     var cols = '56px repeat(' + days.length + ',1fr)';
-    var gridH = (END_H - START_H) * HPX;
+    var PAD = 12;  // top/bottom inset so the 00:00 and 24:00 labels aren't half-clipped
+    var gridH = (END_H - START_H) * HPX + PAD * 2;
     var html = '<div class="dD-tg">';
     html += '<div class="dD-tg-head" style="grid-template-columns:' + cols + '"><div></div>';
     days.forEach(function (d) {
@@ -822,35 +930,56 @@
         '<div class="dnum">' + d.getDate() + '</div></div>';
     });
     html += '</div>';
-    html += '<div class="dD-allday" style="grid-template-columns:' + cols + '"><div class="adg-lab">全天</div>';
+    // all-day band (Google/Apple style): date-only deadlines as chips in a sticky top
+    // band. Collapsed shows ~2 rows with per-day "+N"; the 全天 ▾ toggle expands it
+    // (taller + internally scrollable) so it never grows unbounded or clips.
+    var anyOverflow = days.some(function (d) { return (map[isoKey(d)] || []).length > 2; });
+    var expanded = state.alldayExpanded;
+    var toggle = anyOverflow
+      ? '<button class="adg-toggle" data-act="toggle-allday">全天 ' + (expanded ? '▴' : '▾') + '</button>'
+      : '<span>全天</span>';
+    html += '<div class="dD-allday' + (expanded ? ' expanded' : '') + '" style="grid-template-columns:' + cols + '">' +
+      '<div class="adg-lab">' + toggle + '</div>';
     days.forEach(function (d) {
+      var dayKey = isoKey(d);
+      var dayItems = map[dayKey] || [];
       html += '<div class="adg-cell">';
-      (map[isoKey(d)] || []).forEach(function (item) { html += chipHtml(item, 'ad-chip'); });
+      if (expanded || dayItems.length <= 2) {
+        dayItems.forEach(function (item) { html += chipHtml(item, 'ad-chip'); });
+      } else {
+        html += chipHtml(dayItems[0], 'ad-chip');
+        html += '<div class="dD-more" data-day-key="' + dayKey + '">+' + (dayItems.length - 1) + ' 更多</div>';
+      }
       html += '</div>';
     });
     html += '</div>';
-    html += '<div class="dD-tg-body" style="grid-template-columns:' + cols + ';height:' + gridH + 'px;">';
+    // explicit grid-template-rows keeps the columns (and their vertical borders) full-height
+    // even when the scrollable body is flex-shrunk shorter than the grid
+    html += '<div class="dD-tg-body" style="grid-template-columns:' + cols + ';grid-template-rows:' + gridH + 'px;height:' + gridH + 'px;">';
     html += '<div class="tg-gutter">';
     for (var h = START_H; h <= END_H; h++) {
-      var top = (h - START_H) * HPX;
+      var top = (h - START_H) * HPX + PAD;
       html += '<div class="tg-hr" style="top:' + top + 'px">' + String(h).padStart(2, '0') + ':00</div>';
       html += '<div class="gln" style="top:' + top + 'px"></div>';
     }
     html += '</div>';
     var now = new Date();
-    var nowOffset = (now.getHours() + now.getMinutes() / 60 - START_H) * HPX;
+    var nowOffset = (now.getHours() + now.getMinutes() / 60 - START_H) * HPX + PAD;
     days.forEach(function (d) {
+      var dayKey = isoKey(d);
       html += '<div class="tg-col">';
       for (var h = START_H; h <= END_H; h++) {
-        html += '<div class="ln" style="top:' + ((h - START_H) * HPX) + 'px"></div>';
+        html += '<div class="ln" style="top:' + ((h - START_H) * HPX + PAD) + 'px"></div>';
       }
-      if (isoKey(d) === todayKey && nowOffset >= 0 && nowOffset <= (END_H - START_H) * HPX) {
+      if (dayKey === todayKey && nowOffset >= PAD && nowOffset <= (END_H - START_H) * HPX + PAD) {
         html += '<div class="tg-now" style="top:' + nowOffset + 'px"></div>';
       }
       html += '</div>';
     });
     html += '</div></div>';
     body.innerHTML = html;
+    var newBody = body.querySelector('.dD-tg-body');
+    if (newBody) newBody.scrollTop = prevScroll >= 0 ? prevScroll : Math.max(0, (7 - START_H) * HPX);
   }
 
   function renderAgenda(body) {
@@ -885,12 +1014,13 @@
   }
 
   function agendaRow(item, timeLabel) {
-    var m = TYPE_META[item.type];
-    return '<div class="ag-row' + (item.pending ? ' pending' : '') + '">' +
+    var c = categoryFor(item);
+    return '<div class="ag-row' + (item.pending ? ' pending' : '') + '" data-event-id="' + escapeHtml(item.eventId) +
+      '" style="border-left-color:' + c.color + '">' +
       '<div class="ag-time">' + escapeHtml(timeLabel) + '</div>' +
-      '<span class="ag-dot" style="background:' + m.ink + '"></span>' +
+      '<span class="ag-dot" style="background:' + c.color + '"></span>' +
       '<div class="ag-ttl">' + escapeHtml(item.title) + (item.uncertain ? ' ?' : '') + '</div>' +
-      '<span class="ag-chip" style="background:' + m.soft + ';color:' + m.ink + '">' + m.label + '</span>' +
+      '<span class="ag-chip" style="background:' + catTint(c.color) + ';color:' + c.color + '">' + escapeHtml(c.label) + '</span>' +
       '<div class="ag-src">' + escapeHtml(item.source) + '</div></div>';
   }
 
@@ -907,6 +1037,201 @@
     }
     else if (state.view === 'day') renderTimeGrid(body, [state.cursor]);
     else renderAgenda(body);
+  }
+
+  // ---------- event detail / edit popup ----------
+  function getEventById(id) {
+    return state.events.concat(state.undated).filter(function (it) { return it.eventId === id; })[0];
+  }
+  function catChipsHtml(item) {
+    var current = eventCategoryKey(item);
+    return categoryList().map(function (c) {
+      return '<span class="ev-cat' + (c.key === current ? ' on' : '') + '" data-cat="' + c.key +
+        '" style="background:' + catTint(c.color) + ';color:' + c.color + '">' + escapeHtml(c.label) + '</span>';
+    }).join('');
+  }
+  function catAddHtml(adding) {
+    return adding
+      ? '<input type="text" id="newCatName" placeholder="类别名" style="width:84px">' +
+        '<input type="color" id="newCatColor" value="#C77B30" style="width:32px;height:26px;padding:0;border:1px solid #E4DBC9;border-radius:6px;vertical-align:middle">' +
+        '<span class="ev-cat-add" data-act="ev-add-cat-confirm">添加</span>'
+      : '<span class="ev-cat-add" data-act="ev-add-cat">＋ 新类别</span>';
+  }
+  function renderCatRow(item, adding) {
+    var cats = document.getElementById('evCats');
+    if (cats) cats.innerHTML = catChipsHtml(item) + catAddHtml(adding);
+  }
+  function closeEventPopup() {
+    var back = document.getElementById('evPopBack');
+    if (back) back.remove();
+  }
+  function saveEventEdits(item) {
+    if (state.busy) return;
+    var titleEl = document.getElementById('evTitle');
+    var dateEl = document.getElementById('evDate');
+    var title = titleEl ? titleEl.value : item.title;
+    var date = dateEl ? dateEl.value : (item.dateText || item.dateKey || '');
+    state.busy = true;
+    fetch('/api/calendar/drafts/update?event_id=' + encodeURIComponent(item.eventId) +
+      '&title=' + encodeURIComponent(title || '') + '&date=' + encodeURIComponent(date || ''), { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res.error) { botMessage('<div class="dD-body uncertain">保存失败：' + escapeHtml(res.error) + '</div>'); return; }
+        closeEventPopup();
+        botMessage('<div class="dD-body">已保存对「' + escapeHtml(title) + '」的修改（只写本地草稿，不写外部日历）。</div>');
+        return refresh();
+      })
+      .catch(function (err) { botMessage('<div class="dD-body uncertain">保存失败：' + escapeHtml(err) + '</div>'); })
+      .finally(function () { state.busy = false; });
+  }
+  // a day with many events shows a few chips + "+N more"; this lists ALL of them so
+  // nothing is unreachable when a cell can't fit every chip
+  function openDayPopup(dateKey) {
+    var items = state.events.filter(function (it) { return it.dateKey === dateKey; });
+    if (!items.length) return;
+    closeEventPopup();
+    var d = parseKey(dateKey);
+    var title = d ? ((d.getMonth() + 1) + '月' + d.getDate() + '日') : dateKey;
+    var back = document.createElement('div');
+    back.className = 'ev-pop-back';
+    back.id = 'evPopBack';
+    var rows = items.map(function (it) {
+      var col = categoryFor(it).color;
+      return '<div class="day-ev" data-ev="' + escapeHtml(it.eventId) + '">' +
+        '<span class="day-dot" style="background:' + col + '"></span>' +
+        '<span class="day-ev-t">' + escapeHtml(it.title) + (it.uncertain ? ' ?' : '') + '</span>' +
+        '<span class="day-ev-s">' + (it.pending ? '草稿' : '已确认') + '</span></div>';
+    }).join('');
+    back.innerHTML = '<div class="ev-pop"><span class="ev-x" data-act="ev-close">×</span>' +
+      '<h3>' + escapeHtml(title) + ' · ' + items.length + ' 个事件</h3>' +
+      '<div class="day-ev-list">' + rows + '</div></div>';
+    back.addEventListener('click', function (e) {
+      if (e.target === back || e.target.closest('[data-act="ev-close"]')) { closeEventPopup(); return; }
+      var row = e.target.closest('[data-ev]');
+      if (row) { var it = getEventById(row.dataset.ev); if (it) openEventPopup(it); }
+    });
+    document.body.appendChild(back);
+  }
+
+  function openEventPopup(item) {
+    closeEventPopup();
+    var back = document.createElement('div');
+    back.className = 'ev-pop-back';
+    back.id = 'evPopBack';
+    var statusBadge = item.pending
+      ? '<span class="ev-status" style="background:#EAE6FA;color:#6A5BD0">草稿 · 待确认</span>'
+      : '<span class="ev-status" style="background:#E4EFE2;color:#4F7A4A">已确认</span>';
+    back.innerHTML =
+      '<div class="ev-pop" id="evPop">' +
+      '<span class="ev-x" data-act="ev-close">×</span>' +
+      statusBadge +
+      '<h3>' + escapeHtml(item.title) + (item.uncertain ? ' ?' : '') + '</h3>' +
+      '<div class="ev-row"><span class="lab">标题</span><input type="text" id="evTitle" value="' + escapeHtml(item.title) + '"></div>' +
+      '<div class="ev-row"><span class="lab">日期</span><input type="text" id="evDate" value="' +
+        escapeHtml(item.dateText || item.dateKey || '') + '" placeholder="如 2026-07-01 或 July 1, 2026"></div>' +
+      '<div class="ev-row"><span class="lab">类别</span><div class="ev-cats" id="evCats">' +
+        catChipsHtml(item) + catAddHtml(false) + '</div></div>' +
+      '<div class="ev-row"><span class="lab">来源</span><span>' + escapeHtml(item.source) +
+        ' · 置信 ' + Number(item.confidence || 0).toFixed(2) + (item.uncertain ? ' · 低置信，建议核对原始邮件' : '') + '</span></div>' +
+      '<div class="ev-evi">编辑标题/日期只写本地草稿；「确认加入日历」会经确认门导出本地 ICS，永不写外部日历。</div>' +
+      '<div class="ev-pop-actions">' +
+      '<button class="dD-cbtn prim" data-act="ev-save">保存修改</button>' +
+      (item.pending ? '<button class="dD-cbtn warn" data-act="ev-confirm">✓ 确认加入日历</button>' : '') +
+      '<button class="dD-cbtn sec" data-act="ev-ignore">忽略</button>' +
+      '<button class="dD-cbtn sec" data-act="ev-close">关闭</button>' +
+      '</div></div>';
+    back.addEventListener('click', function (e) {
+      if (e.target === back) { closeEventPopup(); return; }
+      var trigger = e.target.closest('[data-act],[data-cat]');
+      if (!trigger) return;
+      if (trigger.dataset.cat) {
+        setEventCategory(item.eventId, trigger.dataset.cat);
+        renderCalendar();
+        renderCatRow(item, false);
+        return;
+      }
+      var act = trigger.dataset.act;
+      if (act === 'ev-close') { closeEventPopup(); return; }
+      if (act === 'ev-add-cat') { renderCatRow(item, true); return; }
+      if (act === 'ev-add-cat-confirm') {
+        var nameEl = document.getElementById('newCatName');
+        var colorEl = document.getElementById('newCatColor');
+        var name = nameEl && nameEl.value.trim();
+        if (!name) { if (nameEl) nameEl.focus(); return; }
+        var key = addCategory(name, (colorEl && colorEl.value) || '#6A5BD0');
+        setEventCategory(item.eventId, key);
+        renderCalendar();
+        renderCatRow(item, false);
+        return;
+      }
+      if (act === 'ev-save') { saveEventEdits(item); return; }
+      if (act === 'ev-confirm') { closeEventPopup(); handleConfirm(item.eventId, document.createElement('div')); return; }
+      if (act === 'ev-ignore') { closeEventPopup(); handleIgnore(item.eventId, document.createElement('div')); return; }
+    });
+    document.body.appendChild(back);
+  }
+
+  // ---------- toast notifications (replace post-action chat messages; no scroll) ----------
+  var toastTimer = null;
+  function dismissToast() {
+    var wrap = document.getElementById('dDToastWrap');
+    if (wrap) wrap.innerHTML = '';
+    if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+  }
+  function showToast(message, opts) {
+    opts = opts || {};
+    var wrap = document.getElementById('dDToastWrap');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.className = 'dD-toast-wrap';
+      wrap.id = 'dDToastWrap';
+      document.body.appendChild(wrap);
+    }
+    if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+    var undoBtn = opts.onUndo ? '<button class="undo" data-toast-undo>↩ ' + escapeHtml(opts.undoLabel || '退回') + '</button>' : '';
+    wrap.innerHTML = '<div class="dD-toast"><span class="msg">' + escapeHtml(message) + '</span>' + undoBtn +
+      '<button class="x" data-toast-x aria-label="关闭">×</button></div>';
+    var card = wrap.querySelector('.dD-toast');
+    if (opts.onUndo) {
+      card.querySelector('[data-toast-undo]').addEventListener('click', function () { dismissToast(); opts.onUndo(); });
+    }
+    card.querySelector('[data-toast-x]').addEventListener('click', dismissToast);
+    toastTimer = setTimeout(dismissToast, opts.duration || 8000);
+  }
+
+  // Undo the most recent local task review (done/needs_verification/reviewed/ignored).
+  // The action is already persisted in 查看历史; this just reverses the latest one.
+  function undoLatestReview() {
+    fetch('/api/tasks/review/history?limit=1')
+      .then(function (r) { return r.json(); })
+      .then(function (payload) {
+        var entry = ((payload && payload.history) || [])[0];
+        if (!entry || !entry.audit_id || !entry.undoable) { showToast('这条已无法退回（可在“更多 › 查看历史”里查看）'); return null; }
+        var cid = 'ui-undo-' + entry.audit_id + '-' + Date.now();
+        return fetch('/api/tasks/review/undo', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ audit_id: Number(entry.audit_id), confirm: true, confirmation_id: cid })
+        }).then(function (r) { return r.json(); });
+      })
+      .then(function (result) {
+        if (!result) return null;
+        if (result.error || !result.allowed) { showToast('退回失败：' + escapeHtml(result.reason || result.error || '未知')); return null; }
+        state.taskCursor = 0;
+        return refresh().then(function () { renderReviewCard(); showToast('已退回'); });
+      })
+      .catch(function (err) { showToast('退回失败：' + escapeHtml(err)); });
+  }
+
+  // Undo "加入日历": revert the confirmed draft back to a pending suggestion (local-only).
+  function revertConfirm(eventId) {
+    fetch('/api/calendar/unconfirm?event_id=' + encodeURIComponent(eventId), { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (result) {
+        if (result.error) { showToast('退回失败：' + escapeHtml(result.error)); return null; }
+        state.taskCursor = 0;
+        return refresh().then(function () { renderReviewCard(); showToast('已退回，恢复为待确认'); });
+      })
+      .catch(function (err) { showToast('退回失败：' + escapeHtml(err)); });
   }
 
   // ---------- assistant panel ----------
@@ -940,8 +1265,8 @@
     var confirmed = upcoming.filter(function (i) { return !i.pending; }).length;
     var uncertain = upcoming.filter(function (i) { return i.uncertain; }).length;
     return '<div class="dD-embed" id="aiSummary"><h4>日程一览 · 接下来</h4>' +
-      '<div class="dD-sumrow"><div class="n">' + confirmed + '</div><div><div class="lab">已确认日程</div><div class="sub">实线显示，已导出本地 ICS</div></div></div>' +
-      '<div class="dD-sumrow"><div class="n' + (pending ? ' u' : '') + '">' + pending + '</div><div><div class="lab">待你确认</div><div class="sub">虚线显示，确认前不写日历</div></div></div>' +
+      '<div class="dD-sumrow"><div class="n">' + confirmed + '</div><div><div class="lab">已确认日程</div><div class="sub">已导出本地 ICS</div></div></div>' +
+      '<div class="dD-sumrow"><div class="n' + (pending ? ' u' : '') + '">' + pending + '</div><div><div class="lab">待你确认</div><div class="sub">按类别上色，确认前不写日历</div></div></div>' +
       '<div class="dD-sumrow"><div class="n' + (uncertain ? ' u' : '') + '">' + uncertain + '</div><div><div class="lab">低置信抽取</div><div class="sub">标 ? 的事项建议核对原始邮件</div></div></div></div>';
   }
 
@@ -960,7 +1285,17 @@
       ? (connector.connector + (connector.has_cursor ? ' · 已保存游标' : ' · 无游标'))
       : '仅本地';
     var factText = '截止 ' + (facts.deadline || 0) + ' · 金额 ' + (facts.amount || 0) + ' · 动作 ' + (facts.action || 0);
-    return '<div class="dD-embed daily" id="dailySummary"><h4>今日检查 · 本地状态</h4>' +
+    var pendingTotal = reviewItems().length;
+    var advStyle = state.advOpen ? '' : 'display:none';
+    var advLabel = state.advOpen ? '收起详情 ▴' : '更多 · 今日检查/Gmail/批量操作 ▾';
+    return '<div class="dD-embed daily" id="dailySummary">' +
+      // ---- compact first-run view: one summary line + filter + the single review card ----
+      '<div class="dD-daily-head">待处理 · <b>' + pendingTotal + '</b> 条</div>' +
+      taskFilterControls() +
+      '<div id="taskCardSlot">' + reviewCardHtml() + '</div>' +
+      '<button class="dD-more-toggle" data-act="toggle-adv">' + advLabel + '</button>' +
+      // ---- everything advanced is collapsed by default (kept in DOM for wiring/contract) ----
+      '<div id="advBlock" class="dD-adv" style="' + advStyle + '">' +
       '<div class="dD-sumrow"><div class="n">' + (email.stored_message_count || 0) + '</div><div><div class="lab">邮件证据</div><div class="sub">' + escapeHtml(factText) + '</div></div></div>' +
       '<div class="dD-sumrow"><div class="n' + ((tasks.queue_count || 0) ? ' u' : '') + '">' + (tasks.queue_count || 0) + '</div><div><div class="lab">待处理任务</div><div class="sub">总计 ' + (tasks.total || 0) + ' · 按邮件聚合</div></div></div>' +
       '<div class="dD-sumrow"><div class="n' + ((calendar.pending_count || 0) ? ' u' : '') + '">' + (calendar.pending_count || 0) + '</div><div><div class="lab">本地日历草稿</div><div class="sub">总计 ' + (calendar.total_drafts || 0) + ' · 待核对 ' + (calendar.uncertain_count || 0) + '</div></div></div>' +
@@ -969,9 +1304,9 @@
       gmailReadinessPanel() +
       gmailSyncDiagnosticsPanel() +
       '<div class="dD-taskline" id="gmailSyncBoundary">Gmail 同步会触发外部只读 Gmail API 请求，只写本地 SQLite/audit，不发送邮件或写外部日历。</div>' +
-      taskFilterControls() +
       taskSessionPanel() +
       reviewReceiptPanel() +
+      summaryEmbed() +
       '<div class="dD-bulkbar" id="taskBulkActions">' +
       '<button class="dD-cbtn prim" data-act="task-bulk-done"' + bulkDisabled + '>批量完成</button>' +
       '<button class="dD-cbtn sec" data-act="task-bulk-reviewed"' + bulkDisabled + '>批量已阅</button>' +
@@ -980,7 +1315,8 @@
       '<div class="dD-btns"><button class="dD-cbtn sec" data-act="daily-run">刷新今日检查</button>' +
       '<button class="dD-cbtn warn" data-act="gmail-sync">同步 Gmail（外部只读）</button>' +
       '<button class="dD-cbtn sec" data-act="show-task">打开当前任务</button>' +
-      '<button class="dD-cbtn sec" data-act="task-history">查看历史</button></div></div>';
+      '<button class="dD-cbtn sec" data-act="task-history">查看历史</button></div>' +
+      '</div></div>';
   }
 
   function suggestionCard(item) {
@@ -1060,51 +1396,86 @@
     if (!history.length) {
       return html + '<div class="dD-embed evidence"><div class="enote">还没有可显示的任务 review 历史。</div></div>';
     }
+    var ACTION_LABEL = { 'task.review': '任务复核', 'task.review.bulk': '批量复核', 'calendar.sync': '加入日历' };
     history.slice(0, 8).forEach(function (item) {
       var label = REVIEW_STATUS_LABEL[item.status] || item.status || 'unknown';
       var previous = REVIEW_STATUS_LABEL[item.previous_status] || item.previous_status || '无';
       var count = item.reviewed_count || (item.task_ids || []).length || 0;
+      var isCal = item.kind === 'calendar' || item.action === 'calendar.sync';
+      var undoBtn = isCal
+        ? '<button class="dD-cbtn warn" data-act="cal-undo" data-event-id="' + escapeHtml(item.event_id || '') + '"' +
+          (item.undoable ? '' : ' disabled') + '>' + (item.undoable ? '退回' : '已退回') + '</button>'
+        : '<button class="dD-cbtn warn" data-act="task-undo" data-audit-id="' + escapeHtml(item.audit_id) + '"' +
+          (item.undoable ? '' : ' disabled') + '>' + (item.undoable ? '撤销' : '已不可撤销') + '</button>';
       html += '<div class="dD-embed evidence" data-audit-id="' + escapeHtml(item.audit_id) + '">' +
-        '<div class="dD-task-kind">' + escapeHtml(item.action || 'task.review') +
+        '<div class="dD-task-kind">' + escapeHtml(ACTION_LABEL[item.action] || item.action || 'task.review') +
         ' · ' + escapeHtml(item.created_at || '') + '</div>' +
         '<div class="src-title">' + escapeHtml(item.summary || ('标记为 ' + label)) + '</div>' +
         '<div class="src-meta">数量 ' + escapeHtml(count) + ' · 之前 ' + escapeHtml(previous) +
         ' · 当前 ' + escapeHtml(label) + '</div>' +
         (item.confirmation_id ? '<div class="src-meta">确认 ID · ' + escapeHtml(item.confirmation_id) + '</div>' : '') +
-        '<div class="dD-btns">' +
-        '<button class="dD-cbtn warn" data-act="task-undo" data-audit-id="' + escapeHtml(item.audit_id) + '"' +
-        (item.undoable ? '' : ' disabled') + '>' + (item.undoable ? '撤销' : '已不可撤销') + '</button></div></div>';
+        '<div class="dD-btns">' + undoBtn + '</div></div>';
     });
     return html;
   }
 
-  function offerNextSuggestion() {
-    if (!state.queue.length) return;
-    botMessage(suggestionCard(state.queue[0]), { ghost: true });
+  // Unified review queue: pending calendar drafts + email review tasks, one card at a time.
+  // Calendar drafts are inherently unread/pending, so they show under 全部 and 未读 only.
+  function reviewItems() {
+    var items = [];
+    if (state.taskGroup === 'all' || state.taskGroup === 'unread') {
+      state.queue.forEach(function (ev) { items.push({ kind: 'calendar', ev: ev }); });
+    }
+    filteredTaskQueue().forEach(function (t) { items.push({ kind: 'task', task: t }); });
+    return items;
   }
 
-  function offerNextTaskSuggestion() {
-    var queue = filteredTaskQueue();
-    clampTaskCursor(queue);
-    if (!queue.length) {
-      botMessage(taskEmptyStateMessage(), { ghost: true });
-      return;
-    }
-    var task = queue[state.taskCursor];
-    botMessage(taskReviewCard(task, taskCardMeta(queue)), { ghost: true });
+  function calendarReviewCard(ev) {
+    var c = categoryFor(ev);
+    return '<div class="dD-body">这条本地证据是一个截止日程，确认后导出本地 ICS（不写外部日历）。</div>' +
+      '<div class="dD-embed task" style="border-left-color:' + c.color + '">' +
+      '<div class="dD-task-kind">日历草稿 · 截止' + (ev.uncertain ? ' · 低置信' : '') + '</div>' +
+      '<div class="etitle">' + escapeHtml(ev.title) + (ev.uncertain ? ' ?' : '') + '</div>' +
+      '<div class="esrc">' + escapeHtml(ev.dateText || ev.dateKey || '日期待定') + ' · 来源 ' +
+        escapeHtml(ev.source) + ' · 置信 ' + Number(ev.confidence || 0).toFixed(2) + '</div></div>' +
+      '<div class="dD-btns" data-event-id="' + escapeHtml(ev.eventId) + '">' +
+      '<button class="dD-cbtn prim" data-act="confirm">✓ 加入日历</button>' +
+      '<button class="dD-cbtn sec" data-act="ignore">忽略</button></div>';
   }
+
+  function reviewCardHtml() {
+    var items = reviewItems();
+    if (state.taskCursor >= items.length) state.taskCursor = items.length ? items.length - 1 : 0;
+    if (state.taskCursor < 0) state.taskCursor = items.length ? items.length - 1 : 0;
+    var total = items.length;
+    var nav = '<div class="dD-cardnav" id="taskNavState">' +
+      '<button class="dD-mini" data-act="task-prev"' + (total ? '' : ' disabled') + '>‹</button>' +
+      '<span class="meta">' + (total ? state.taskCursor + 1 : 0) + '/' + total + ' · ' +
+        escapeHtml(TASK_GROUP_LABEL[state.taskGroup] || '全部') + '</span>' +
+      '<button class="dD-mini" data-act="task-next"' + (total ? '' : ' disabled') + '>›</button></div>';
+    if (!total) return nav + taskEmptyStateMessage();
+    var item = items[state.taskCursor];
+    return nav + (item.kind === 'calendar' ? calendarReviewCard(item.ev) : taskReviewCard(item.task, ''));
+  }
+
+  // single entry point for (re)rendering the current review card in place — no scroll jump
+  function renderReviewCard(opts) {
+    opts = opts || {};
+    var slot = document.getElementById('taskCardSlot');
+    if (slot) {
+      slot.innerHTML = reviewCardHtml();
+      if (opts.scroll) slot.scrollIntoView({ block: 'nearest' });
+    }
+  }
+  // both legacy offer hooks now drive the one unified card
+  function offerNextSuggestion() { renderReviewCard(); }
+  function offerNextTaskSuggestion(opts) { renderReviewCard(opts); }
 
   function moveTaskCursor(offset) {
-    var queue = filteredTaskQueue();
-    if (!queue.length) {
-      state.taskCursor = 0;
-      updateSummary();
-      botMessage(taskEmptyStateMessage(), { ghost: true });
-      return;
-    }
-    state.taskCursor = (state.taskCursor + offset + queue.length) % queue.length;
-    updateSummary();
-    offerNextTaskSuggestion();
+    var total = reviewItems().length;
+    if (!total) { state.taskCursor = 0; renderReviewCard(); return; }
+    state.taskCursor = (state.taskCursor + offset + total) % total;
+    renderReviewCard();  // in-place: the ‹ › nav sits on the card, so the change is right here
   }
 
   function handleTaskFilter(kind, status) {
@@ -1112,6 +1483,13 @@
     if (status) state.taskFilterStatus = status;
     state.taskCursor = 0;
     updateSummary();
+  }
+
+  function handleTaskGroup(group) {
+    if (!TASK_GROUP_LABEL[group] || state.busy) return;
+    state.taskGroup = group;
+    state.taskCursor = 0;
+    updateSummary();  // re-renders #dailySummary (chips + card) in place — no scroll jump
   }
 
   function handleTaskView(view) {
@@ -1153,13 +1531,11 @@
   function welcome() {
     var today = new Date();
     appendDivider('今天 · ' + (today.getMonth() + 1) + '月' + today.getDate() + '日');
-    var total = state.events.length + state.undated.length;
-    var pending = state.queue.length;
+    var pending = reviewItems().length;
     botMessage(
-      '<div class="dD-body">早上好。本地证据中目前有 <b>' + total + '</b> 条带日期的事项，其中 <b>' + pending +
-      '</b> 条等你确认——日历里虚线显示的就是。外部写入永远先问你。</div>' + dailyEmbed() + summaryEmbed());
-    offerNextSuggestion();
-    offerNextTaskSuggestion();
+      '<div class="dD-body">早上好。本地证据里有 <b>' + pending +
+      '</b> 条待你处理，下面一条一条来——日历里按类别上色的就是，点日历事件可以查看/编辑。外部写入永远先问你。</div>' +
+      dailyEmbed());
   }
 
   function handleDailyRun(button) {
@@ -1220,16 +1596,15 @@
       .then(function (r) { return r.json(); })
       .then(function (result) {
         if (result.allowed) {
-          botMessage('<div class="dD-body">已确认并导出到本地 ICS（确认 ID <code>' + escapeHtml(confirmationId) +
-            '</code> 已记录审批，单次有效）。日历上这条已变成实线。</div>');
+          showToast('已加入日历（本地 ICS）', { onUndo: function () { revertConfirm(eventId); } });
         } else {
-          botMessage('<div class="dD-body uncertain">这次写入被确认门拦下了：' + escapeHtml(result.reason || '未知原因') + '</div>');
+          showToast('被确认门拦下了：' + (result.reason || '未知原因'));
         }
         buttons.remove();
         return refresh();
       })
       .then(offerNextSuggestion)
-      .catch(function (err) { botMessage('<div class="dD-body uncertain">确认失败：' + escapeHtml(err) + '</div>'); })
+      .catch(function (err) { showToast('确认失败：' + err); })
       .finally(function () { state.busy = false; });
   }
 
@@ -1240,12 +1615,12 @@
       '&status=ignored&note=' + encodeURIComponent('dismissed from calendar assistant'), { method: 'POST' })
       .then(function (r) { return r.json(); })
       .then(function () {
-        botMessage('<div class="dD-body">好的，已忽略这条建议（本地草稿仍保留，可在数据保留控制里清理）。</div>');
+        showToast('已忽略这条建议', { onUndo: undoLatestReview });
         buttons.remove();
         return refresh();
       })
       .then(offerNextSuggestion)
-      .catch(function (err) { botMessage('<div class="dD-body uncertain">忽略失败：' + escapeHtml(err) + '</div>'); })
+      .catch(function (err) { showToast('忽略失败：' + err); })
       .finally(function () { state.busy = false; });
   }
 
@@ -1259,9 +1634,7 @@
       .then(function (r) { return r.json(); })
       .then(function (result) {
         if (result.error) throw new Error(result.error);
-        botMessage('<div class="dD-body">已把任务标记为 <b>' +
-          escapeHtml(REVIEW_STATUS_LABEL[status] || status) +
-          '</b>。这只写入本地 task.review audit，没有外部副作用。</div>');
+        showToast('已标记为「' + (REVIEW_STATUS_LABEL[status] || status) + '」', { onUndo: undoLatestReview });
         buttons.remove();
         return refresh();
       })
@@ -1269,7 +1642,7 @@
         advancePastTask(taskId);
         offerNextTaskSuggestion();
       })
-      .catch(function (err) { botMessage('<div class="dD-body uncertain">任务状态更新失败：' + escapeHtml(err) + '</div>'); })
+      .catch(function (err) { showToast('任务状态更新失败：' + err); })
       .finally(function () { state.busy = false; });
   }
 
@@ -1277,7 +1650,7 @@
     if (state.busy) return;
     var queue = filteredTaskQueue();
     if (!queue.length) {
-      botMessage('<div class="dD-body">当前筛选下没有可批量处理的任务。</div>', { ghost: true });
+      showToast('当前筛选下没有可批量处理的任务。');
       return;
     }
     var label = REVIEW_STATUS_LABEL[status] || status;
@@ -1306,17 +1679,14 @@
       .then(function (result) {
         if (result.error) throw new Error(result.error);
         if (!result.allowed) {
-          botMessage('<div class="dD-body uncertain">批量操作被确认门拦下了：' +
-            escapeHtml(result.reason || '未知原因') + '</div>');
+          showToast('批量操作被确认门拦下了：' + (result.reason || '未知原因'));
           return null;
         }
-        botMessage('<div class="dD-body">已把 <b>' + escapeHtml(result.reviewed_count || 0) +
-          '</b> 条任务批量标记为 <b>' + escapeHtml(label) + '</b>。确认 ID <code>' +
-          escapeHtml(confirmationId) + '</code> 已记录；没有外部副作用。</div>');
+        showToast('已批量标记 ' + (result.reviewed_count || 0) + ' 条为「' + label + '」', { onUndo: undoLatestReview });
         state.taskCursor = 0;
         return refresh().then(offerNextTaskSuggestion);
       })
-      .catch(function (err) { botMessage('<div class="dD-body uncertain">批量任务状态更新失败：' + escapeHtml(err) + '</div>'); })
+      .catch(function (err) { showToast('批量任务状态更新失败：' + err); })
       .finally(function () {
         state.busy = false;
         if (wrap) wrap.querySelectorAll('button').forEach(function (btn) { btn.disabled = false; });
@@ -1355,6 +1725,23 @@
         state.busy = false;
         button.disabled = false;
       });
+  }
+
+  // undo a "加入日历" from the history list — reverts the draft to a pending suggestion
+  function handleCalendarUndoFromHistory(eventId, button) {
+    if (state.busy || !eventId) return;
+    state.busy = true;
+    button.disabled = true;
+    fetch('/api/calendar/unconfirm?event_id=' + encodeURIComponent(eventId), { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (result) {
+        if (result.error) { showToast('退回失败：' + escapeHtml(result.error)); button.disabled = false; return null; }
+        button.textContent = '已退回';
+        state.taskCursor = 0;
+        return refresh().then(function () { renderReviewCard(); showToast('已退回，恢复为待确认'); });
+      })
+      .catch(function (err) { showToast('退回失败：' + escapeHtml(err)); button.disabled = false; })
+      .finally(function () { state.busy = false; });
   }
 
   function handleTaskUndo(auditId, button) {
@@ -1428,6 +1815,21 @@
     state.view = btn.dataset.view;
     renderCalendar();
   });
+  document.getElementById('calBody').addEventListener('click', function (e) {
+    if (e.target.closest('[data-act="toggle-allday"]')) {
+      state.alldayExpanded = !state.alldayExpanded;
+      renderCalendar();
+      return;
+    }
+    var evHit = e.target.closest('[data-event-id]');
+    if (evHit) {
+      var item = getEventById(evHit.dataset.eventId);
+      if (item) openEventPopup(item);
+      return;
+    }
+    var dayHit = e.target.closest('[data-day-key]');
+    if (dayHit) { openDayPopup(dayHit.dataset.dayKey); return; }
+  });
   document.getElementById('calPrev').addEventListener('click', function () { step(-1); });
   document.getElementById('calNext').addEventListener('click', function () { step(1); });
   function step(dir) {
@@ -1441,6 +1843,13 @@
   feed.addEventListener('click', function (e) {
     var btn = e.target.closest('button[data-act]');
     if (!btn) return;
+    if (btn.dataset.act === 'toggle-adv') {
+      state.advOpen = !state.advOpen;
+      var adv = document.getElementById('advBlock');
+      if (adv) adv.style.display = state.advOpen ? '' : 'none';
+      btn.textContent = state.advOpen ? '收起详情 ▴' : '更多 · 今日检查/Gmail/批量操作 ▾';
+      return;
+    }
     if (btn.dataset.act === 'daily-run') {
       handleDailyRun(btn);
       return;
@@ -1449,20 +1858,12 @@
       handleGmailSync(btn);
       return;
     }
-    if (btn.dataset.act === 'task-filter-kind') {
-      handleTaskFilter(btn.dataset.kind || 'all', null);
-      return;
-    }
-    if (btn.dataset.act === 'task-filter-status') {
-      handleTaskFilter(null, btn.dataset.status || 'active');
+    if (btn.dataset.act === 'task-group') {
+      handleTaskGroup(btn.dataset.group || 'all');
       return;
     }
     if (btn.dataset.act === 'task-view') {
       handleTaskView(btn.dataset.view || 'all');
-      return;
-    }
-    if (btn.dataset.act === 'task-sort') {
-      handleTaskSort(btn.dataset.sort || 'priority');
       return;
     }
     if (btn.dataset.act === 'task-prev') {
@@ -1474,7 +1875,7 @@
       return;
     }
     if (btn.dataset.act === 'show-task') {
-      offerNextTaskSuggestion();
+      offerNextTaskSuggestion({ scroll: true });
       return;
     }
     if (btn.dataset.act === 'task-history') {
@@ -1483,6 +1884,10 @@
     }
     if (btn.dataset.act === 'task-undo') {
       handleTaskUndo(btn.dataset.auditId || '', btn);
+      return;
+    }
+    if (btn.dataset.act === 'cal-undo') {
+      handleCalendarUndoFromHistory(btn.dataset.eventId || '', btn);
       return;
     }
     var bulkStatus = TASK_BULK_ACTION_STATUS[btn.dataset.act];

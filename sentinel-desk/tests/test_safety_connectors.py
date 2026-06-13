@@ -131,6 +131,98 @@ class SafetyConnectorTests(unittest.TestCase):
             self.assertEqual(code, 0)
             self.assertEqual(json.loads(cli_output.getvalue())[0]["confirmation_id"], "ok-1")
 
+    def test_unconfirm_revokes_calendar_approval_and_reverts_to_pending(self) -> None:
+        from sentineldesk.calendar.view import build_calendar_items
+
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(Path(tmp) / "home")
+            # confirm two distinct deadline drafts to local ICS
+            e1 = DeadlineEvent("Deadline: Rent", "2026-07-01", ("email:m1",))
+            e2 = DeadlineEvent("Deadline: Statement", "2026-07-02", ("email:m2",))
+            sync_calendar_draft(paths, CalendarDraft((e1,)), IcsFileCalendarAdapter(Path(tmp) / "a.ics"),
+                                confirmed=True, confirmation_id="c1", actor="test")
+            sync_calendar_draft(paths, CalendarDraft((e2,)), IcsFileCalendarAdapter(Path(tmp) / "b.ics"),
+                                confirmed=True, confirmation_id="c2", actor="test")
+            self.assertEqual(len(db.list_approval_records(paths)), 2)
+
+            drafts = [
+                {"event_id": e1.event_id, "title": e1.title, "date_text": e1.date_text,
+                 "sync_state": "local_draft", "status": "draft", "confidence": 0.9, "source_ids": ["email:m1"]},
+                {"event_id": e2.event_id, "title": e2.title, "date_text": e2.date_text,
+                 "sync_state": "local_draft", "status": "draft", "confidence": 0.9, "source_ids": ["email:m2"]},
+            ]
+            approved = build_calendar_items(drafts, db.list_approval_records(paths))
+            self.assertTrue(all(item["approval_state"] == "approved" for item in approved))
+
+            # revoke only the first event's confirmation
+            removed = db.delete_calendar_sync_approvals(paths, event_id=e1.event_id)
+            self.assertEqual(removed, 1)
+            self.assertEqual(len(db.list_approval_records(paths)), 1)
+            self.assertEqual(db.delete_calendar_sync_approvals(paths, event_id="does-not-exist"), 0)
+
+            reverted = {item["event_id"]: item["approval_state"]
+                        for item in build_calendar_items(drafts, db.list_approval_records(paths))}
+            self.assertEqual(reverted[e1.event_id], "draft")   # back to pending suggestion
+            self.assertEqual(reverted[e2.event_id], "approved")  # the other one is untouched
+
+    def test_dateless_deadline_is_not_a_calendar_event(self) -> None:
+        from sentineldesk.calendar.draft import draft_events_from_facts
+        from sentineldesk.calendar.view import build_calendar_items
+        from sentineldesk.email.models import EmailFact
+
+        dated = EmailFact(kind="deadline", value="07/04/2026", source_id="email:m1",
+                          source_type="email", trust_label="email_evidence", evidence="due 07/04/2026",
+                          confidence=0.9, received_at="2026-06-20T00:00:00Z", metadata={"subject": "Pay rent"})
+        relative = EmailFact(kind="deadline", value="within 30 days", source_id="email:m2",
+                             source_type="email", trust_label="email_evidence", evidence="act within 30 days",
+                             confidence=0.9, received_at="2026-06-20T00:00:00Z", metadata={"subject": "Renew plan"})
+
+        # generation: only the dated deadline becomes a calendar draft
+        draft = draft_events_from_facts([dated, relative], evidence_uri="evidence://m")
+        self.assertEqual(len(draft.events), 1)
+        self.assertEqual(draft.events[0].date_text, "07/04/2026")
+
+        # display guard: a dateless draft that is already stored is dropped from the board
+        rows = [
+            {"event_id": "e1", "title": "Deadline: Pay rent", "date_text": "07/04/2026", "confidence": 0.9, "source_ids": ["email:m1"]},
+            {"event_id": "e2", "title": "Deadline: Renew plan", "date_text": "within 30 days", "confidence": 0.9, "source_ids": ["email:m2"]},
+        ]
+        items = build_calendar_items(rows, [])
+        self.assertEqual([item["event_id"] for item in items], ["e1"])
+        self.assertTrue(all(item["date_key"] for item in items))
+
+    def test_calendar_confirm_shows_in_review_history_and_marks_reverted(self) -> None:
+        from sentineldesk.tasks import list_review_history
+
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(Path(tmp) / "home")
+            event = DeadlineEvent("Deadline: Rent", "2026-07-01", ("email:m1",))
+            sync_calendar_draft(paths, CalendarDraft((event,)), IcsFileCalendarAdapter(Path(tmp) / "a.ics"),
+                                confirmed=True, confirmation_id="c1", actor="test")
+
+            # calendar confirm only appears when include_calendar is requested (the receipt
+            # summary must stay task-only, so its default is False)
+            self.assertEqual(list_review_history(paths, limit=10), [])
+            history = list_review_history(paths, limit=10, include_calendar=True)
+            self.assertEqual(len(history), 1)
+            entry = history[0]
+            self.assertEqual(entry["action"], "calendar.sync")
+            self.assertEqual(entry["kind"], "calendar")
+            self.assertEqual(entry["event_id"], event.event_id)
+            self.assertTrue(entry["undoable"])
+            self.assertEqual(entry["undo_status"], "available")
+
+            # a later calendar.unsync (what /api/calendar/unconfirm writes) marks it reverted
+            db.insert_audit_event(
+                paths, action="calendar.unsync", actor="dashboard", subject=event.event_id,
+                capability="calendar_draft", side_effect="local_db_write", allowed=True,
+                confirmation_id="", metadata={"removed_approvals": 1, "external_write": False},
+                created_at="2026-07-01T00:00:01Z",
+            )
+            reverted = list_review_history(paths, limit=10, include_calendar=True)[0]
+            self.assertEqual(reverted["undo_status"], "undone")
+            self.assertFalse(reverted["undoable"])
+
     def test_retention_purge_is_preview_first_and_confirmation_gated(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             paths = get_paths(Path(tmp) / "home")

@@ -121,7 +121,19 @@ def list_tasks(
     return tasks[:limit]
 
 
-def list_review_history(paths: Paths, *, limit: int = 20) -> list[dict[str, Any]]:
+def _unconfirmed_event_ids(events: list[dict[str, Any]]) -> set[str]:
+    """Calendar draft event ids that were later reverted via /api/calendar/unconfirm."""
+    reverted: set[str] = set()
+    for event in events:
+        if str(event.get("action") or "") != "calendar.unsync" or not event.get("allowed"):
+            continue
+        subject = str(event.get("subject") or "")
+        if subject:
+            reverted.add(subject)
+    return reverted
+
+
+def list_review_history(paths: Paths, *, limit: int = 20, include_calendar: bool = False) -> list[dict[str, Any]]:
     db.init_db(paths)
     limit = max(0, int(limit))
     if limit == 0:
@@ -129,11 +141,15 @@ def list_review_history(paths: Paths, *, limit: int = 20) -> list[dict[str, Any]
     history_limit = max(limit * 10, 100)
     events = db.list_audit_events(paths, limit=history_limit)
     undone_ids = _undone_source_audit_ids(events)
+    reverted_event_ids = _unconfirmed_event_ids(events) if include_calendar else set()
+    actions = {"task.review", "task.review.bulk"}
+    if include_calendar:
+        actions.add("calendar.sync")
     history: list[dict[str, Any]] = []
     for event in events:
-        if str(event.get("action") or "") not in {"task.review", "task.review.bulk"}:
+        if str(event.get("action") or "") not in actions:
             continue
-        history.append(_review_history_item(event, undone_ids=undone_ids))
+        history.append(_review_history_item(event, undone_ids=undone_ids, reverted_event_ids=reverted_event_ids))
         if len(history) >= limit:
             break
     return history
@@ -1156,10 +1172,45 @@ def _review_undo_state(paths: Paths, *, task_id: str, task: dict[str, Any] | Non
     }
 
 
-def _review_history_item(event: dict[str, Any], *, undone_ids: set[int]) -> dict[str, Any]:
+def _review_history_item(
+    event: dict[str, Any], *, undone_ids: set[int], reverted_event_ids: set[str] | None = None
+) -> dict[str, Any]:
+    reverted_event_ids = reverted_event_ids or set()
     metadata = event.get("metadata") if isinstance(event.get("metadata"), dict) else {}
     action = str(event.get("action") or "")
     audit_id = int(event.get("id") or 0)
+    kind = "task"
+    event_id = ""
+    if action == "calendar.sync":
+        kind = "calendar"
+        event_ids = [str(eid) for eid in (metadata.get("event_ids") or []) if str(eid)]
+        event_id = event_ids[0] if event_ids else ""
+        task_ids = event_ids
+        reviewed_count = len(event_ids)
+        status = "已加入日历"
+        previous_status = "待确认"
+        reverted = bool(event_id) and event_id in reverted_event_ids
+        undoable = bool(event_id) and not reverted
+        undo_status = "undone" if reverted else "available"
+        summary = "加入日历（本地 ICS）"
+        return {
+            "audit_id": audit_id,
+            "action": action,
+            "kind": kind,
+            "event_id": event_id,
+            "actor": str(event.get("actor") or ""),
+            "subject": str(event.get("subject") or ""),
+            "created_at": str(event.get("created_at") or ""),
+            "confirmation_id": str(event.get("confirmation_id") or ""),
+            "status": status,
+            "previous_status": previous_status,
+            "reviewed_count": reviewed_count,
+            "task_ids": task_ids,
+            "undoable": undoable,
+            "undo_status": undo_status,
+            "summary": summary,
+            "external_writes_performed": False,
+        }
     if action == "task.review.bulk":
         undo_items = metadata.get("undo_items") if isinstance(metadata.get("undo_items"), list) else []
         task_ids = [str(item.get("task_id") or "") for item in undo_items if isinstance(item, dict)]
@@ -1183,6 +1234,8 @@ def _review_history_item(event: dict[str, Any], *, undone_ids: set[int]) -> dict
     return {
         "audit_id": audit_id,
         "action": action,
+        "kind": kind,
+        "event_id": event_id,
         "actor": str(event.get("actor") or ""),
         "subject": str(event.get("subject") or ""),
         "created_at": str(event.get("created_at") or ""),

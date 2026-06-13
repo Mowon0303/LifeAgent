@@ -109,7 +109,7 @@ class Handler(BaseHTTPRequestHandler):
             query = parse_qs(parsed.query)
             self.send_json(
                 {
-                    "history": list_review_history(self.paths, limit=_query_int(query, "limit", 20)),
+                    "history": list_review_history(self.paths, limit=_query_int(query, "limit", 20), include_calendar=True),
                     "external_network": False,
                     "external_writes_performed": False,
                 }
@@ -378,6 +378,41 @@ class Handler(BaseHTTPRequestHandler):
                             updated_at=utc_now(),
                         )
                 self.send_json(result.__dict__)
+            except Exception as error:
+                self.send_json({"error": str(error)}, status=500)
+            return
+        if parsed.path == "/api/calendar/unconfirm":
+            # local undo for "加入日历": revert a confirmed draft back to a pending
+            # suggestion by resetting its sync state and removing the calendar.sync
+            # approval. Local-only; the already-exported ICS file is left in place.
+            query = parse_qs(parsed.query)
+            event_id = query.get("event_id", [""])[0]
+            if not event_id:
+                self.send_json({"error": "event_id query parameter required"}, status=400)
+                return
+            try:
+                now = utc_now()
+                db.update_calendar_draft_sync_state(
+                    self.paths,
+                    event_id=event_id,
+                    sync_state="local_draft",
+                    status="draft",
+                    updated_at=now,
+                )
+                removed = db.delete_calendar_sync_approvals(self.paths, event_id=event_id)
+                db.insert_audit_event(
+                    self.paths,
+                    action="calendar.unsync",
+                    actor="dashboard",
+                    subject=event_id,
+                    capability="calendar_draft",
+                    side_effect="local_db_write",
+                    allowed=True,
+                    confirmation_id="",
+                    metadata={"removed_approvals": removed, "external_write": False},
+                    created_at=now,
+                )
+                self.send_json({"reverted": True, "event_id": event_id, "removed_approvals": removed, "external_writes_performed": False})
             except Exception as error:
                 self.send_json({"error": str(error)}, status=500)
             return

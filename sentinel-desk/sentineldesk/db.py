@@ -753,6 +753,27 @@ def list_approval_records(paths: Paths, *, limit: int = 100) -> list[dict[str, A
     return decode_rows(rows)
 
 
+def delete_calendar_sync_approvals(paths: Paths, *, event_id: str) -> int:
+    """Remove the calendar.sync approval(s) that confirmed a given draft event so the
+    event reverts to a pending suggestion. Used by the local 'undo add to calendar' flow."""
+    if not event_id:
+        return 0
+    removed = 0
+    with open_db(paths) as conn:
+        rows = conn.execute(
+            "SELECT id, metadata_json FROM approval_records WHERE action = 'calendar.sync'"
+        ).fetchall()
+        for row in rows:
+            try:
+                metadata = json.loads(row["metadata_json"] or "{}")
+            except (TypeError, ValueError):
+                metadata = {}
+            if event_id in [str(eid) for eid in metadata.get("event_ids", [])]:
+                conn.execute("DELETE FROM approval_records WHERE id = ?", (row["id"],))
+                removed += 1
+    return removed
+
+
 def approval_record_exists(paths: Paths, *, confirmation_id: str, action: str, subject: str) -> bool:
     if not confirmation_id:
         return False
