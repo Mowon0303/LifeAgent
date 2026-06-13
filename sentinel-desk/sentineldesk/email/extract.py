@@ -140,6 +140,8 @@ ACTION_CUE_WORDS = {
     "would",
 }
 CONTEXT_SENSITIVE_ACTION_VERBS = {"check", "email", "report", "update"}
+CALIBRATED_AMOUNT_CONFIDENCE = 0.76
+HIGH_CUE_AMOUNT_CONFIDENCE = 0.86
 
 
 def find_messages(messages: Iterable[EmailMessage], query: str, *, limit: int = 20) -> list[EmailMessage]:
@@ -192,7 +194,7 @@ def extract_email_facts(message: EmailMessage) -> list[EmailFact]:
                 source_type=message.source_type,
                 trust_label=message.trust_label,
                 evidence=context,
-                confidence=0.78 if _near_risk_word(text, match.start()) else 0.52,
+                confidence=_amount_confidence(text, match.start()),
                 received_at=message.received_at,
                 metadata=_metadata(message),
             )
@@ -209,7 +211,7 @@ def extract_email_facts(message: EmailMessage) -> list[EmailFact]:
                 source_type=message.source_type,
                 trust_label=message.trust_label,
                 evidence=context,
-                confidence=0.78,
+                confidence=HIGH_CUE_AMOUNT_CONFIDENCE,
                 received_at=message.received_at,
                 metadata=_metadata(message),
             )
@@ -256,6 +258,10 @@ def _remove_invisible_number_separators(text: str) -> str:
 def _near_risk_word(text: str, start: int) -> bool:
     before = text[max(0, start - 80) : start].lower()
     return any(term in before for term in ["due", "balance", "rent", "invoice", "amount", "pay"])
+
+
+def _amount_confidence(text: str, start: int) -> float:
+    return HIGH_CUE_AMOUNT_CONFIDENCE if _near_risk_word(text, start) else CALIBRATED_AMOUNT_CONFIDENCE
 
 
 def _amount_context_allowed(

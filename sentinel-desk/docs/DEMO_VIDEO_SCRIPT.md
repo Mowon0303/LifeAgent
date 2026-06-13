@@ -1,5 +1,7 @@
 # LifeAgent Demo Video Script
 
+> **Status (archived 2026-06-12):** The recording direction was cancelled by user decision on 2026-06-12. This script is kept as archived/optional tooling only. The commands below remain executable, but recording is not in active scope.
+
 Target length: 2 minutes.
 
 ## Setup

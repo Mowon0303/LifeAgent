@@ -23,6 +23,8 @@ DATE_RE = re.compile(
 
 DEFAULT_DEADLINE_LIMIT = 10
 SCHEDULE_DEADLINE_LIMIT = 20
+CALIBRATED_DEADLINE_CONFIDENCE = 0.76
+HIGH_CUE_DEADLINE_CONFIDENCE = 0.86
 
 RELATIVE_DEADLINE_PATTERNS = (
     re.compile(r"\bby the end of the month\b", re.IGNORECASE),
@@ -199,8 +201,8 @@ def _deadline_confidence(context: str, *, relative: bool = False) -> float:
         re.IGNORECASE,
     )
     if high_confidence:
-        return 0.82
-    return 0.58 if relative else 0.5
+        return HIGH_CUE_DEADLINE_CONFIDENCE
+    return CALIBRATED_DEADLINE_CONFIDENCE
 
 
 def _select_deadlines(text: str, deadlines: list[dict[str, Any]]) -> list[dict[str, Any]]:

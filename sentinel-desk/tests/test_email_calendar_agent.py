@@ -260,7 +260,7 @@ class EmailCalendarAgentTests(unittest.TestCase):
                 amounts = [fact.value for fact in extract_email_facts(message) if fact.kind == "amount"]
                 self.assertEqual(amounts, [])
 
-    def test_extract_email_facts_keeps_low_confidence_obligation_amounts(self) -> None:
+    def test_extract_email_facts_calibrates_retained_obligation_amounts(self) -> None:
         messages_and_amounts = [
             (
                 EmailMessage(
@@ -298,8 +298,27 @@ class EmailCalendarAgentTests(unittest.TestCase):
         ]
         for message, expected in messages_and_amounts:
             with self.subTest(message=message.message_id):
-                amounts = {fact.value for fact in extract_email_facts(message) if fact.kind == "amount"}
+                amount_facts = [fact for fact in extract_email_facts(message) if fact.kind == "amount"]
+                amounts = {fact.value for fact in amount_facts}
                 self.assertTrue(expected.issubset(amounts))
+                for fact in amount_facts:
+                    if fact.value in expected:
+                        self.assertGreaterEqual(fact.confidence, 0.75)
+
+    def test_extract_email_facts_calibrates_retained_deadlines(self) -> None:
+        message = EmailMessage(
+            "m-calibrated-deadlines",
+            "t-calibrated-deadlines",
+            "notices@example.com",
+            "Important account dates",
+            "2026-06-24",
+            "Your promotional rate ends July 31, 2026. Beginning 09/01/2026, the monthly budget billing amount changes.",
+        )
+        deadline_facts = [fact for fact in extract_email_facts(message) if fact.kind == "deadline"]
+        deadlines = {fact.value for fact in deadline_facts}
+        self.assertIn("July 31, 2026", deadlines)
+        self.assertIn("09/01/2026", deadlines)
+        self.assertTrue(all(fact.confidence >= 0.75 for fact in deadline_facts))
 
     def test_extract_email_facts_filters_semantic_amount_noise(self) -> None:
         messages = [

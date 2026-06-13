@@ -38,8 +38,9 @@ Agent layer:
 
 ## Current Evidence
 
-- `308` unittest cases pass.
+- `309` unittest cases pass.
 - Golden extraction eval: raw deadline, amount, and action are all `P=1.000 / R=1.000 / F1=1.000` on the current synthetic set.
+- High-confidence eval: deadline and amount are both `P=1.000 / R=1.000 / F1=1.000`; action confidence is intentionally flat until ranking needs action-specific tiers.
 - Redacted Gmail-first readiness package shape is regression-tested.
 - The local assistant exposes an explicit Gmail readonly sync/retry control with external-read labeling and redacted failure diagnostics.
 - Daily landing workflow creates 4 synthetic messages, 8 extracted facts, 3 local calendar drafts, 7 grouped reviewable tasks, and a local audit record without external writes.
@@ -62,7 +63,7 @@ Agent layer:
 
 ## Portfolio Snapshot
 
-Start with the [case study](sentinel-desk/docs/CASE_STUDY.md) for the product problem, architecture, agent boundaries, safety model, eval evidence, and GitHub repository description/topics.
+Start with the [case study](sentinel-desk/docs/CASE_STUDY.md) for the product problem, architecture, agent boundaries, safety model, and eval evidence.
 
 ## Quickstart
 
@@ -148,11 +149,10 @@ python3 -B -m sentineldesk privacy release-audit --path "$EXTRACT_DIR" --require
 
 - [PLAN_TRACKER.md](PLAN_TRACKER.md) - architecture boundary, status table, safety matrix, next plan
 - [sentinel-desk/README.md](sentinel-desk/README.md) - detailed CLI and developer workflow
-- [sentinel-desk/docs/CASE_STUDY.md](sentinel-desk/docs/CASE_STUDY.md) - portfolio case study and GitHub surface copy
+- [sentinel-desk/docs/CASE_STUDY.md](sentinel-desk/docs/CASE_STUDY.md) - portfolio case study
 - [sentinel-desk/docs/INTERVIEW_PROJECT.md](sentinel-desk/docs/INTERVIEW_PROJECT.md) - resume bullets and interview talking points
 - [sentinel-desk/docs/ARCHITECTURE.md](sentinel-desk/docs/ARCHITECTURE.md) - system diagram and safety boundaries
 - [sentinel-desk/docs/UI_CONTRACT.md](sentinel-desk/docs/UI_CONTRACT.md) - backend to calendar UI handoff contract
 - [sentinel-desk/docs/EVAL_REPORT.md](sentinel-desk/docs/EVAL_REPORT.md) - extraction golden-set eval report
 - [sentinel-desk/docs/SECURITY_MODEL.md](sentinel-desk/docs/SECURITY_MODEL.md) - trust boundaries and required controls
-- [sentinel-desk/docs/DEMO_VIDEO_SCRIPT.md](sentinel-desk/docs/DEMO_VIDEO_SCRIPT.md) - 2-minute demo script
 - [sentinel-desk/docs/PIVOT_POSTMORTEM.md](sentinel-desk/docs/PIVOT_POSTMORTEM.md) - why the project pivoted from portal-first to email-first

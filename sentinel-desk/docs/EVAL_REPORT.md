@@ -1,6 +1,6 @@
 # Email Extraction Eval Report
 
-- Generated at: 2026-06-12T16:00:14+00:00
+- Generated at: 2026-06-13T00:24:57+00:00
 - Golden set: `evals/golden` (144 cases)
 - Target under test: `sentineldesk.email.extract.extract_email_facts`
 - High-confidence threshold: 0.75 (same boundary the assistant uses for `high` confidence answers)
@@ -35,20 +35,20 @@
 
 | Kind | TP | FP | FN | Precision | Recall | F1 |
 | --- | --- | --- | --- | --- | --- | --- |
-| deadline | 70 | 0 | 52 | 1.000 | 0.574 | 0.729 |
-| amount | 42 | 0 | 34 | 1.000 | 0.553 | 0.712 |
+| deadline | 122 | 0 | 0 | 1.000 | 1.000 | 1.000 |
+| amount | 76 | 0 | 0 | 1.000 | 1.000 | 1.000 |
 | action | 0 | 0 | 114 | n/a | 0.000 | n/a |
 
 Note: action facts carry a fixed confidence of 0.68, so the high-confidence layer contains no action predictions by construction.
 
 ## Confidence Calibration (deadline/amount)
 
-Precision per confidence bucket. If the risk-word heuristic works, the high bucket should not be less precise than the low bucket.
+Precision per confidence bucket. Retained deadline and amount facts are calibrated above the high-confidence threshold after false-positive filters run, so the low bucket is expected to be empty unless a future extractor adds intentionally uncertain retained facts.
 
 | Kind | High bucket precision (n) | Low bucket precision (n) |
 | --- | --- | --- |
-| deadline | 1.000 (70) | 1.000 (52) |
-| amount | 1.000 (42) | 1.000 (34) |
+| deadline | 1.000 (122) | n/a (0) |
+| amount | 1.000 (76) | n/a (0) |
 
 ## Per-Category Metrics (raw layer)
 

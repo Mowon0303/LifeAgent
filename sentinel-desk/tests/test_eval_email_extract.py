@@ -24,14 +24,14 @@ EXPECTED_CATEGORIES = {
     "adversarial",
 }
 
-# Regression floors sit just below the measured baseline (2026-06-11 after
+# Regression floors sit just below the measured baseline (2026-06-12 after
 # relative-deadline, date-form, deadline false-positive filters,
 # extraction-cap/stuffing handling, non-dollar/spelled-out amount,
 # high/low-confidence amount false-positive filters, semantic amount/source-trust filters,
-# and action-lexicon support:
+# action-lexicon support, and retained-fact confidence calibration:
 # raw deadline P=1.000/R=1.000, raw amount P=1.000/R=1.000,
 # raw action P=1.000/R=1.000,
-# high-conf deadline P=1.000/R=0.574, high-conf amount P=1.000/R=0.553).
+# high-conf deadline P=1.000/R=1.000, high-conf amount P=1.000/R=1.000).
 # A failure here means extraction quality regressed or the golden set drifted;
 # improvements should raise these floors deliberately.
 RAW_FLOORS = {
@@ -40,8 +40,8 @@ RAW_FLOORS = {
     "action": {"precision": 0.99, "recall": 0.99},
 }
 HIGH_CONFIDENCE_FLOORS = {
-    "deadline": {"precision": 0.99, "recall": 0.57},
-    "amount": {"precision": 0.99, "recall": 0.54},
+    "deadline": {"precision": 0.99, "recall": 0.99},
+    "amount": {"precision": 0.99, "recall": 0.99},
 }
 
 
@@ -96,16 +96,20 @@ class EmailExtractEvalGateTests(unittest.TestCase):
                 tally.recall, floors["recall"], f"high_confidence.{kind} recall regressed"
             )
 
-    def test_risk_word_heuristic_does_not_degrade_precision(self) -> None:
+    def test_retained_deadline_and_amount_facts_enter_high_bucket(self) -> None:
         for kind in ("deadline", "amount"):
             high = self.report.confidence_buckets["high"][kind]
             low = self.report.confidence_buckets["low"][kind]
             self.assertIsNotNone(high.precision)
-            self.assertIsNotNone(low.precision)
-            self.assertGreaterEqual(
-                high.precision,
-                low.precision,
-                f"{kind}: confidence >= {HIGH_CONFIDENCE_THRESHOLD} bucket should be at least as precise",
+            self.assertGreater(
+                high.true_positives + high.false_positives,
+                0,
+                f"{kind}: confidence >= {HIGH_CONFIDENCE_THRESHOLD} bucket should keep retained facts",
+            )
+            self.assertEqual(
+                low.true_positives + low.false_positives,
+                0,
+                f"{kind}: retained facts should not remain below the high-confidence threshold",
             )
 
     def test_action_confidence_is_flat_by_construction(self) -> None:

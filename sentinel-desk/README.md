@@ -42,7 +42,7 @@ Open `http://127.0.0.1:8787/ops` for the SentinelDesk reliability/evidence dashb
 - Gmail readiness and sync diagnostics surfaces
 - explicit proof that the first-run path does not call external networks or write external calendars
 
-For the older ops-heavy recording state with baseline, `critical`, and `uncertain` portal reliability runs plus redacted report/package artifacts, use `python3 -B -m sentineldesk --home .demo demo record-prep --port 8787`.
+The older ops-heavy recording helper remains archived as optional tooling, but it is not part of the active product-landing path.
 
 ## Run The Daily Workflow
 
@@ -121,7 +121,6 @@ python3 -m sentineldesk init
 python3 -m sentineldesk doctor
 python3 -m sentineldesk acceptance first-run
 python3 -m sentineldesk demo seed
-python3 -m sentineldesk demo record-prep
 python3 -m sentineldesk demo scenarios
 python3 -m sentineldesk demo apply opt_action_required --run
 python3 -m sentineldesk demo apply lease_notice_required --run

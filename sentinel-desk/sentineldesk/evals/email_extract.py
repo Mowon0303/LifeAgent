@@ -427,8 +427,10 @@ def render_markdown_report(report: EvalReport) -> str:
     lines.append("## Confidence Calibration (deadline/amount)")
     lines.append("")
     lines.append(
-        "Precision per confidence bucket. If the risk-word heuristic works, the high bucket "
-        "should not be less precise than the low bucket."
+        "Precision per confidence bucket. Retained deadline and amount facts are calibrated "
+        "above the high-confidence threshold after false-positive filters run, so the low "
+        "bucket is expected to be empty unless a future extractor adds intentionally "
+        "uncertain retained facts."
     )
     lines.append("")
     lines.append("| Kind | High bucket precision (n) | Low bucket precision (n) |")

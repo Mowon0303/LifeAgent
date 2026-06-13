@@ -32,6 +32,14 @@ flowchart LR
   confirm --> externalCal["External calendar or ICS"]
   store --> dashboard["Local dashboard<br>alerts, evidence, calendar board, approvals"]
   calendarDraft --> dashboard
+
+  gmailSync["User-triggered readonly Gmail sync<br>POST /api/gmail/sync?confirm=1"] --> extractEmail
+  store --> tasksReview["Task review layer<br>grouping, priority, saved views,<br>bulk review, history and undo"]
+  store --> daily["Daily landing loop<br>stored mail, task queue, drafts,<br>readiness, next safe actions"]
+  gmailCheck["Gmail readiness and sync diagnostics<br>local-only checks, redacted failures"] --> daily
+  tasksReview --> dashboard
+  daily --> dashboard
+  acceptance["First-run acceptance gate<br>synthetic fixtures, runs in CI"] -. verifies .-> daily
 ```
 
 ## Data Flow
@@ -43,8 +51,27 @@ flowchart LR
 5. RAG is used only for explanation over trusted docs, local evidence, and prior runs. Retrieval keeps source trust labels and ranking metadata. It does not override verified latest facts or trigger writes.
 6. Verified deadlines become calendar drafts with reminder policy, source citations, and uncertainty markers.
 7. Any external calendar write must pass a confirmation gate, dedupe/update before create when the remote client supports it, create a durable approval record, and reject confirmation replay.
-8. The dashboard reads local state: evidence, runs, email facts, calendar drafts/events, integration checks, audit events, approvals, and retention previews.
+8. The dashboard reads local state: evidence, runs, email facts, calendar drafts/events, integration checks, audit events, approvals, and retention previews. The calendar assistant page loads the daily landing summary on open and exposes the task review queue, Gmail readiness, and the confirm-gated daily-run and Gmail-sync controls.
 9. Model adapters expose request shapes and structured-output validation. Cloud adapters expose only redacted env-secret status until explicit credentials and provider privacy settings are approved.
+10. The daily landing loop (`sentineldesk daily run`, `GET /api/daily/summary`, `POST /api/daily/run`) rebuilds a Gmail-first summary from stored local state: stored mail and fact counts, the prioritized review queue, calendar drafts, connector states, Gmail readiness, sync diagnostics, review receipts, safety flags, and next safe actions. It performs no external writes; `daily run` and `/api/daily/run` record a local `daily.run` audit event.
+11. Refreshing a real inbox is explicit and readonly: `POST /api/gmail/sync?confirm=1` (or `daily run --sync-gmail`) runs a user-triggered Gmail sync with the `gmail.readonly` scope. Without `confirm=1` the endpoint returns a `requires_confirmation` payload instead of syncing. `GET /api/gmail/readiness` builds a local-only first-run checklist (OAuth env shape, token scope, optional dependencies, stored cursor, stored evidence) without calling the Gmail API, and sync failures are classified into redacted diagnostics at `GET /api/gmail/sync-diagnostics` with a safe next command.
+12. Stored-email reprocessing (`sentineldesk email reprocess`, `daily run --reprocess-stored`) re-runs current extractors over already-synced local mail, so extractor fixes apply without another Gmail call or external calendar writes.
+13. Extracted facts become grouped reviewable tasks: same-email, same-kind facts collapse into one item with `values` and `fact_count`. The task review surface (`/api/tasks`, calendar assistant cards) supports kind/status filters, saved views (`needs_verification`, `payments`, `deadlines_soon`, `recently_changed`), priority scoring and sorting, local evidence expansion, single review actions, confirmation-gated bulk review with single-use confirmation IDs and replay protection, review history with confirmation-gated undo, and review receipt summaries.
+14. The first-run acceptance gate (`sentineldesk acceptance first-run`, run in CI) prepares the synthetic local MVP and asserts email ingest, the grouped review queue, calendar draft visibility, tool-first cited ask behavior, local-only Gmail readiness and diagnostics, calendar UI wiring, audit logging, and zero external network or write side effects.
+
+## Daily Product Surfaces
+
+Shipped 2026-06-12 as the product-landing loop on top of the existing evidence store:
+
+| Surface | Entry points | Side effect |
+| --- | --- | --- |
+| Daily landing summary | `sentineldesk daily run`, `GET /api/daily/summary`, `POST /api/daily/run` | Local read; `daily run` and `/api/daily/run` write a local `daily.run` audit event |
+| Readonly Gmail refresh | `daily run --sync-gmail`, `POST /api/gmail/sync?confirm=1` | External read (`gmail.readonly`) plus local DB write; refused without `confirm=1` |
+| Gmail readiness checklist | `sentineldesk integrations gmail-readiness`, `GET /api/gmail/readiness` | Local read only; no Gmail API call |
+| Gmail sync diagnostics | `GET /api/gmail/sync-diagnostics` | Local read of redacted audit events |
+| Stored-email reprocessing | `sentineldesk email reprocess`, `daily run --reprocess-stored` | Local DB update; no inbox refresh |
+| Task review | `GET /api/tasks`, `GET /api/tasks/evidence`, `POST /api/tasks/review`, `POST /api/tasks/review/bulk`, `POST /api/tasks/review/undo`, `GET /api/tasks/review/history`, `GET /api/tasks/review/summary` | Local DB writes; bulk review and undo are confirmation-gated |
+| First-run acceptance | `sentineldesk acceptance first-run` (also a CI gate) | Local synthetic fixtures only; no external network or writes |
 
 ## Safety Boundaries
 
@@ -59,6 +86,10 @@ flowchart LR
 | Secrets | Persist only redacted environment-backed secret references and scope metadata |
 | Model providers | Local by default; cloud providers must expose privacy status, redacted API-key refs, and structured `AgentAnswer` validation |
 | Calendar | Dedupe before create, update by stable event ID, keep evidence links, never silently delete user-created events |
+| Gmail sync | Readonly scope only; sync must be user-triggered with explicit `confirm=1`; failures persist as redacted local diagnostics without raw OAuth errors, tokens, account IDs, cursors, or query text |
+| Task review | Bulk review and review undo require explicit confirmation with single-use confirmation IDs and replay protection; all review state stays local |
+| Daily landing | `daily run` and `/api/daily/summary` read stored state only; connector account IDs and cursors are redacted before display |
+| Acceptance | `acceptance first-run` uses only local synthetic fixtures and fails if any external network or write path is detected |
 | Portal capture | Treat login expiry, captcha, maintenance, bot walls, short pages, and parser uncertainty as `uncertain` |
 | High-stakes domains | Cite evidence and tell the user when an official source still needs manual verification |
 

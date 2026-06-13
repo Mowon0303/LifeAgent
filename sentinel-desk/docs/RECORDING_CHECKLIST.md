@@ -1,5 +1,7 @@
 # SentinelDesk Recording Checklist
 
+> **Status (archived 2026-06-12):** The recording direction was cancelled by user decision on 2026-06-12. This checklist is kept as archived/optional tooling only. The commands below remain executable, but recording is not in active scope.
+
 Use this checklist before recording the 2-minute portfolio demo.
 
 ## Clean Demo Setup

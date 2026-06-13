@@ -114,7 +114,7 @@ Current public checkpoint:
 | --- | --- |
 | Extraction is regression-tested | 144-case golden email extraction eval |
 | Raw extraction is clean on current synthetic set | deadline, amount, and action are all P=1.000 / R=1.000 / F1=1.000 |
-| Behavior is covered beyond extraction | 308 unittest cases |
+| Behavior is covered beyond extraction | 309 unittest cases |
 | Demo does not need private data | synthetic Gmail-style and portal fixtures |
 | Share output is privacy-checked | redacted-output privacy audit passes |
 | Public release excludes runtime artifacts | source release package + extracted release audit pass |
@@ -134,7 +134,7 @@ Run it locally:
 
 ```bash
 cd sentinel-desk
-python3 -B -m sentineldesk --home .demo demo record-prep --port 8787
+python3 -B -m sentineldesk --home .demo acceptance first-run --port 8787
 python3 -B -m sentineldesk --home .demo serve --port 8787
 ```
 
@@ -142,20 +142,6 @@ Open:
 
 - `http://127.0.0.1:8787/` for the calendar assistant
 - `http://127.0.0.1:8787/ops` for the reliability/evidence dashboard
-
-## GitHub Surface Copy
-
-Recommended repository description:
-
-```text
-Email-first personal operations agent for deadlines, evidence, and calendar-safe actions
-```
-
-Recommended topics:
-
-```text
-agent, email, calendar, rag, langgraph, privacy, evals, python
-```
 
 ## What I Would Discuss In An Interview
 
