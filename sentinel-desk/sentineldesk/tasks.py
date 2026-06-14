@@ -86,6 +86,35 @@ def task_evidence(paths: Paths, *, task_id: str) -> dict[str, Any]:
     }
 
 
+def calendar_event_evidence(paths: Paths, *, event_id: str) -> dict[str, Any]:
+    """Return local email evidence behind a calendar draft without external reads."""
+    db.init_db(paths)
+    event = next(
+        (item for item in db.list_calendar_drafts(paths, limit=1000) if str(item.get("event_id") or "") == event_id),
+        None,
+    )
+    if not event:
+        raise ValueError(f"Calendar event not found: {event_id}")
+
+    source_ids = [str(source_id) for source_id in event.get("source_ids", []) if str(source_id)]
+    source_variants = {variant for source_id in source_ids for variant in _source_id_variants(source_id)}
+    sources: list[dict[str, Any]] = []
+    for message in db.list_email_messages(paths, limit=5000):
+        message_variants = _source_id_variants(str(message.get("message_id") or ""))
+        if not source_variants.intersection(message_variants):
+            continue
+        sources.append(_calendar_source_detail(event, message, source_variants))
+
+    return {
+        "event_id": event_id,
+        "event": event,
+        "sources": sources,
+        "source_count": len(sources),
+        "external_network": False,
+        "external_writes_performed": False,
+    }
+
+
 def list_tasks(
     paths: Paths,
     *,
@@ -94,11 +123,13 @@ def list_tasks(
     sort: str | None = None,
     view: str = "all",
     limit: int = 100,
+    today: str | None = None,
 ) -> list[dict[str, Any]]:
     db.init_db(paths)
     _validate_view(view)
     sort = sort or TASK_VIEW_DEFAULT_SORT[view]
     _validate_sort(sort)
+    today_key = (today or utc_now())[:10]
     reviews = {item["task_id"]: item for item in db.list_task_reviews(paths, limit=1000)}
     tasks = _calendar_tasks(paths, reviews)
     covered_source_ids = {
@@ -108,6 +139,9 @@ def list_tasks(
         if source_id
     }
     tasks.extend(_email_fact_tasks(paths, reviews, covered_source_ids=covered_source_ids))
+    # A deadline whose date is already past is not actionable, so drop it from
+    # the review queue (dateless / relative deadlines have no due_key and stay).
+    tasks = [task for task in tasks if not _deadline_is_past(task, today_key)]
     for task in tasks:
         _apply_priority(task)
     tasks = _apply_view(tasks, view=view)
@@ -733,6 +767,10 @@ def _apply_priority(task: dict[str, Any]) -> None:
     severity = str(task.get("severity") or "medium")
     confidence = _confidence_value(task.get("confidence"))
 
+    # A human-set "needs_verification" status is a real obligation signal (a
+    # person flagged that work is owed). Automatic uncertainty is handled lower
+    # down — as a reason only, never a score boost — so a low-confidence promo
+    # cannot inflate itself into the high band.
     if status == "needs_verification":
         score += 100
         reasons.append("needs_verification_status")
@@ -759,32 +797,31 @@ def _apply_priority(task: dict[str, Any]) -> None:
         score += 20
         reasons.append("action")
 
-    if bool(task.get("needs_verification")):
-        score += 35
-        reasons.append("low_trust_or_missing_source")
-    if confidence < 0.7:
-        score += 35
-        reasons.append("low_confidence")
-    elif confidence < 0.8:
-        score += 15
-        reasons.append("medium_confidence")
-
+    # Obligation signals — a concrete commitment, not "the extractor is unsure".
+    # Only these (or a human needs_verification flag) earn the high band, so the
+    # high lane is reserved for real dates and money owed rather than every
+    # imperative verb the extractor caught in a newsletter.
+    has_obligation = status == "needs_verification"
     due_key = _task_due_key(task)
     if kind == "deadline" and due_key:
         score += 15
         reasons.append("dated_deadline")
+        has_obligation = True
     elif kind == "deadline" and task.get("due_date"):
         score += 10
         reasons.append("relative_or_unparsed_deadline")
+        has_obligation = True
 
     if kind == "amount":
         amount = _max_amount(task)
         if amount >= 1000:
             score += 20
             reasons.append("large_amount")
+            has_obligation = True
         elif amount >= 100:
             score += 10
             reasons.append("meaningful_amount")
+            has_obligation = True
     if _has_payment_context(task):
         score += 15
         reasons.append("payment_context")
@@ -792,17 +829,27 @@ def _apply_priority(task: dict[str, Any]) -> None:
         score += 10
         reasons.append("action_context")
 
+    # Uncertainty is recorded for the reviewer and the needs-verification view,
+    # but it no longer raises priority: a low-confidence item should sink, not
+    # surface. (Previously these two added +70 and pushed junk into "high".)
+    if bool(task.get("needs_verification")):
+        reasons.append("low_trust_or_missing_source")
+    if confidence < 0.7:
+        reasons.append("low_confidence")
+    elif confidence < 0.8:
+        reasons.append("medium_confidence")
+
     if status in {"done", "ignored"}:
         score = min(score, 20)
     task["priority_score"] = max(0, int(score))
-    task["priority_band"] = _priority_band(task["priority_score"], status=status)
+    task["priority_band"] = _priority_band(task["priority_score"], status=status, has_obligation=has_obligation)
     task["priority_reasons"] = _unique_reasons(reasons)
 
 
-def _priority_band(score: int, *, status: str) -> str:
+def _priority_band(score: int, *, status: str, has_obligation: bool = False) -> str:
     if status in {"done", "ignored"}:
         return "closed"
-    if score >= 120:
+    if has_obligation and score >= 100:
         return "high"
     if score >= 80:
         return "medium"
@@ -957,6 +1004,13 @@ def _task_due_key(task: dict[str, Any]) -> str:
     return parse_deadline_date(str(task.get("due_date") or task.get("value") or ""))
 
 
+def _deadline_is_past(task: dict[str, Any], today_key: str) -> bool:
+    if str(task.get("kind") or "") != "deadline":
+        return False
+    due_key = _task_due_key(task)
+    return bool(due_key) and due_key < today_key
+
+
 def _timestamp_value(value: str) -> float:
     text = str(value or "").strip()
     if not text:
@@ -1057,6 +1111,71 @@ def _task_source_detail(task: dict[str, Any], message: dict[str, Any]) -> dict[s
     }
 
 
+def _calendar_source_detail(
+    event: dict[str, Any],
+    message: dict[str, Any],
+    source_variants: set[str],
+) -> dict[str, Any]:
+    message_id = str(message.get("message_id") or "")
+    attachment_names = [str(item) for item in message.get("attachment_names", [])]
+    attachment_texts = list(message.get("attachment_texts", []) or [])
+    facts = [
+        _evidence_fact(fact)
+        for fact in message.get("facts", [])
+        if isinstance(fact, dict) and _fact_matches_calendar_event(fact, event=event, source_variants=source_variants)
+    ]
+    if not facts:
+        facts = [
+            _evidence_fact(fact)
+            for fact in message.get("facts", [])
+            if isinstance(fact, dict) and _source_id_variants(str(fact.get("source_id") or "")).intersection(source_variants)
+        ]
+    facts = _dedupe_evidence_facts(facts)
+    facts.sort(key=lambda fact: _calendar_fact_sort_key(fact, event=event))
+    return {
+        "source_id": str((event.get("source_ids") or [""])[0] or ""),
+        "message_id": message_id,
+        "thread_id": str(message.get("thread_id") or ""),
+        "sender": str(message.get("sender") or ""),
+        "subject": str(message.get("subject") or ""),
+        "received_at": str(message.get("received_at") or ""),
+        "body_preview": _clip(str(message.get("body_text") or ""), 5000),
+        "attachment_names": attachment_names,
+        "attachment_count": max(len(attachment_names), len(attachment_texts)),
+        "matched_facts": facts,
+        "fact_count": len(facts),
+    }
+
+
+def _fact_matches_calendar_event(fact: dict[str, Any], *, event: dict[str, Any], source_variants: set[str]) -> bool:
+    if str(fact.get("kind") or "") != "deadline":
+        return False
+    if not _source_id_variants(str(fact.get("source_id") or "")).intersection(source_variants):
+        return False
+    event_date = str(event.get("date_text") or event.get("date_key") or "").strip().lower()
+    value = str(fact.get("value") or "").strip().lower()
+    event_date_key = parse_deadline_date(event_date) or str(event.get("date_key") or "").strip().lower()
+    value_date_key = parse_deadline_date(value)
+    if event_date_key and value_date_key and event_date_key == value_date_key:
+        return True
+    if event_date and value and (event_date == value or value in event_date or event_date in value):
+        return True
+    return False
+
+
+def _calendar_fact_sort_key(fact: dict[str, Any], *, event: dict[str, Any]) -> tuple[int, float, str]:
+    event_date = str(event.get("date_text") or event.get("date_key") or "").strip().lower()
+    value = str(fact.get("value") or "").strip().lower()
+    evidence = str(fact.get("evidence") or "").strip().lower()
+    event_date_key = parse_deadline_date(event_date) or str(event.get("date_key") or "").strip().lower()
+    value_date_key = parse_deadline_date(value)
+    exact = bool(
+        (event_date_key and value_date_key and event_date_key == value_date_key)
+        or (event_date and (event_date == value or event_date in value or event_date in evidence))
+    )
+    return (0 if exact else 1, -_confidence_value(fact.get("confidence")), value)
+
+
 def _fact_matches_task(fact: dict[str, Any], *, kind: str, source_refs: set[str], message_id: str) -> bool:
     if kind and str(fact.get("kind") or "") != kind:
         return False
@@ -1071,17 +1190,41 @@ def _evidence_fact(fact: dict[str, Any]) -> dict[str, Any]:
         "kind": str(fact.get("kind") or ""),
         "value": str(fact.get("value") or ""),
         "confidence": _confidence_value(fact.get("confidence")),
-        "evidence": _clip(str(fact.get("evidence") or ""), 500),
+        "evidence": _clip(str(fact.get("evidence") or ""), 1000),
         "source_id": str(fact.get("source_id") or ""),
         "source_type": str(fact.get("source_type") or ""),
         "received_at": str(fact.get("received_at") or ""),
     }
 
 
+def _dedupe_evidence_facts(facts: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    deduped: list[dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for fact in facts:
+        value = str(fact.get("value") or "")
+        key = (
+            str(fact.get("kind") or ""),
+            parse_deadline_date(value) or " ".join(value.lower().split()),
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(fact)
+    return deduped
+
+
 def _message_id_from_source_ref(source_ref: str) -> str:
     if ":" not in source_ref:
         return source_ref
     return source_ref.split(":", 1)[1]
+
+
+def _source_id_variants(source_id: str) -> set[str]:
+    source_id = str(source_id or "").strip()
+    if not source_id:
+        return set()
+    bare = _message_id_from_source_ref(source_id)
+    return {source_id, bare, f"email:{bare}", f"gmail:{bare}"}
 
 
 def _clip(text: str, limit: int) -> str:

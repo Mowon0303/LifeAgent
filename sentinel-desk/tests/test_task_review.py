@@ -95,6 +95,56 @@ class TaskReviewTests(unittest.TestCase):
             self.assertIn("needs_verification_status", tasks[0]["priority_reasons"])
             self.assertGreaterEqual(tasks[0]["priority_score"], tasks[-1]["priority_score"])
 
+    def test_uncertainty_is_a_reason_not_a_priority_boost(self) -> None:
+        """A low-confidence action fact (the shape of newsletter/promo noise)
+        must record its uncertainty as a reason without buying a place in the
+        high lane, while a real dated deadline still earns high."""
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            db.init_db(paths)
+            promo = EmailMessage(
+                message_id="m-promo",
+                thread_id="t-promo",
+                sender="offers@shop.example.com",
+                subject="Enjoy 20% off — redeem your reward",
+                received_at="2026-06-10T09:00:00Z",
+                body_text="Redeem your points and enjoy the offer.",
+            )
+            db.upsert_email_message(
+                paths,
+                message=promo,
+                facts=[
+                    {
+                        "kind": "action",
+                        "value": "redeem your points",
+                        "source_id": "email:m-promo",
+                        "source_type": "email",
+                        "trust_label": "email_unverified",
+                        "evidence": "Redeem your points and enjoy the offer.",
+                        "confidence": "unknown",
+                        "received_at": "2026-06-10T09:00:00Z",
+                        "metadata": {},
+                    }
+                ],
+                ingested_at="2026-06-10T12:00:00Z",
+            )
+            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+
+            tasks = list_tasks(paths)
+            promo_task = next(
+                task for task in tasks
+                if task["kind"] == "action" and "m-promo" in str(task.get("primary_source") or "")
+            )
+            deadline_task = next(task for task in tasks if task["kind"] == "deadline")
+
+            # Uncertainty is surfaced for the reviewer ...
+            self.assertIn("low_confidence", promo_task["priority_reasons"])
+            # ... but never on its own promotes into the high band.
+            self.assertNotEqual(promo_task["priority_band"], "high")
+            # A concrete dated obligation still earns high.
+            self.assertIn("dated_deadline", deadline_task["priority_reasons"])
+            self.assertEqual(deadline_task["priority_band"], "high")
+
     def test_due_date_sort_orders_deadlines_by_date(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             paths = get_paths(tmp)

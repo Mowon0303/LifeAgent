@@ -16,10 +16,10 @@ def draft_events_from_facts(facts: list[EmailFact], *, evidence_uri: str = "") -
         # task instead, so we never offer to add a dateless item to the calendar.
         if not parse_deadline_date(fact.value):
             continue
-        subject = fact.metadata.get("subject", "Life admin deadline")
+        subject = _calendar_title(fact.metadata.get("subject", ""))
         events.append(
             DeadlineEvent(
-                title=f"Deadline: {subject}",
+                title=subject,
                 date_text=fact.value,
                 source_ids=(fact.source_id,),
                 severity="critical" if fact.confidence >= 0.8 else "medium",
@@ -28,3 +28,8 @@ def draft_events_from_facts(facts: list[EmailFact], *, evidence_uri: str = "") -
             )
         )
     return CalendarDraft(events=tuple(events))
+
+
+def _calendar_title(subject: object) -> str:
+    title = " ".join(str(subject or "").split())
+    return title or "Life admin deadline"

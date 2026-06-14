@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 
@@ -41,8 +41,14 @@ def parse_deadline_date(value: str) -> str:
     return ""
 
 
-def build_calendar_items(drafts: list[dict[str, Any]], approvals: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def build_calendar_items(
+    drafts: list[dict[str, Any]],
+    approvals: list[dict[str, Any]],
+    *,
+    today: str | None = None,
+) -> list[dict[str, Any]]:
     approved_event_ids = _approved_event_ids(approvals)
+    today_key = (today or datetime.now(timezone.utc).date().isoformat())[:10]
     items: list[dict[str, Any]] = []
     for draft in drafts:
         date_key = parse_deadline_date(str(draft.get("date_text") or ""))
@@ -55,6 +61,11 @@ def build_calendar_items(drafts: list[dict[str, Any]], approvals: list[dict[str,
         status = str(draft.get("status") or "draft")
         confidence = float(draft.get("confidence") or 0.0)
         approval_state = "approved" if event_id in approved_event_ids or sync_state != "local_draft" else "draft"
+        # A deadline already in the past is not actionable. Hide stale draft
+        # suggestions for it, but keep events the user already confirmed so the
+        # board still shows their history.
+        if date_key < today_key and approval_state != "approved":
+            continue
         source_ids = [str(item) for item in draft.get("source_ids", [])]
         items.append(
             {

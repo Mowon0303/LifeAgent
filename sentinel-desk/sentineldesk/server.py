@@ -29,6 +29,7 @@ from .scenarios import apply_scenario, list_scenarios
 from .tasks import (
     build_review_receipt_summary,
     bulk_review_tasks,
+    calendar_event_evidence,
     list_review_history,
     list_tasks,
     review_task,
@@ -182,6 +183,17 @@ class Handler(BaseHTTPRequestHandler):
                     db.list_approval_records(self.paths, limit=200),
                 )
             )
+            return
+        if path == "/api/calendar/evidence":
+            query = parse_qs(parsed.query)
+            event_id = query.get("event_id", [""])[0]
+            if not event_id:
+                self.send_json({"error": "event_id query parameter required"}, status=400)
+                return
+            try:
+                self.send_json(calendar_event_evidence(self.paths, event_id=event_id))
+            except ValueError as error:
+                self.send_json({"error": str(error)}, status=404)
             return
         if path == "/api/audit/events":
             self.send_json(db.list_audit_events(self.paths, limit=100))

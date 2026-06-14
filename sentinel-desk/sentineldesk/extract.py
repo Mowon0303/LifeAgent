@@ -232,7 +232,11 @@ def _absolute_deadline_context_allowed(text: str, start: int, end: int, context:
     lowered_context = context.lower()
     if _injected_or_phishing_deadline_context(lowered_context):
         return False
+    if _reference_date_context(before, after, lowered_context):
+        return False
     if _marketing_deadline_context(before, lowered_context):
+        return False
+    if _email_header_date_context(before, lowered_context):
         return False
     if _narrative_date_context(before, after, lowered_context):
         return False
@@ -258,7 +262,7 @@ def _injected_or_phishing_deadline_context(context: str) -> bool:
 def _marketing_deadline_context(before: str, context: str) -> bool:
     if _immediate_obligation_deadline(before):
         return False
-    if re.search(r"\b(?:offer valid through|offer ends|book by)\s*$", before):
+    if re.search(r"\b(?:offer valid through|book by)\s*$", before):
         return True
     if re.search(
         r"\b("
@@ -270,6 +274,43 @@ def _marketing_deadline_context(before: str, context: str) -> bool:
     ):
         return True
     return bool(re.search(r"\bexpected to arrive by\s*$", before))
+
+
+def _reference_date_context(before: str, after: str, context: str) -> bool:
+    if _immediate_obligation_deadline(before):
+        return False
+    if re.search(r"\b(?:accurate\s+)?as of\s*$", before[-80:]):
+        return True
+    if re.search(
+        r"\b(?:balance|points|status|total|available|account)\b.{0,70}\b(?:accurate\s+)?as of\s*$",
+        before[-110:],
+    ):
+        return True
+    if re.search(r"\bcalendar year\b", context) and (
+        re.search(r"\b(?:from|to)\s*$", before[-50:]) or re.search(r"^\s*(?:to|through|regardless)\b", after[:50])
+    ):
+        return True
+    if re.search(r"\b(?:statement|billing|reporting) period\b", context) and re.search(
+        r"\b(?:from|to|through)\s*$", before[-60:]
+    ):
+        return True
+    return False
+
+
+def _email_header_date_context(before: str, context: str) -> bool:
+    before_tail = before[-100:]
+    if re.search(r"\bdue\s+date:\s*$", before_tail):
+        return False
+    if re.search(
+        r"\b(?:sent|date):\s*(?:(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|"
+        r"thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)[,]?\s+)?$",
+        before_tail,
+    ):
+        return True
+    return bool(
+        re.search(r"\bfrom:\s.{0,240}\b(?:sent|date):\s", context)
+        and re.search(r"\b(?:to|subject):\b", context)
+    )
 
 
 def _narrative_date_context(before: str, after: str, context: str) -> bool:

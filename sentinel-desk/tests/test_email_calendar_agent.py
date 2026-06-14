@@ -10,6 +10,7 @@ from pathlib import Path
 from sentineldesk import db
 from sentineldesk.agent.graph import answer_question
 from sentineldesk.agent.conflict import collect_conflict_facts, detect_fact_conflict, detect_stored_conflict
+from sentineldesk.agent.llm import ModelCallResult
 from sentineldesk.agent.model import detect_model_provider
 from sentineldesk.agent.router import classify_intent
 from sentineldesk.agent.schemas import Intent
@@ -19,6 +20,7 @@ from sentineldesk.calendar.models import CalendarDraft, DeadlineEvent
 from sentineldesk.calendar.sync import dedupe_events, export_ics, plan_calendar_sync
 from sentineldesk.cli import main
 from sentineldesk.config import get_paths
+from sentineldesk.email.deadline_gate import classify_deadline_candidate_with_model
 from sentineldesk.email.extract import extract_email_facts, find_messages
 from sentineldesk.email.ingest import ingest_messages
 from sentineldesk.email.models import EmailFact, EmailMessage
@@ -220,6 +222,154 @@ class EmailCalendarAgentTests(unittest.TestCase):
         amounts = [fact.value for fact in extract_email_facts(message) if fact.kind == "amount"]
         self.assertEqual(amounts, [])
 
+    def test_extract_email_facts_filters_order_confirmation_dates_from_calendar_deadlines(self) -> None:
+        message = EmailMessage(
+            "m-order-confirmation",
+            "t-order-confirmation",
+            "orders@example.com",
+            "Order confirmation",
+            "2026-06-24",
+            "Thanks for your order. Your package is estimated for delivery by July 2, 2026. "
+            "Tracking will update once it ships.",
+        )
+        facts = extract_email_facts(message)
+        deadlines = [fact.value for fact in facts if fact.kind == "deadline"]
+        self.assertEqual(deadlines, [])
+        self.assertEqual(draft_events_from_facts(facts).events, ())
+
+    def test_extract_email_facts_keeps_commerce_payment_due_deadline(self) -> None:
+        message = EmailMessage(
+            "m-commerce-payment-due",
+            "t-commerce-payment-due",
+            "billing@example.com",
+            "Payment due for your order",
+            "2026-06-24",
+            "Action required: payment due date is July 2, 2026. Pay by July 2, 2026 to keep the order active.",
+        )
+        deadlines = {fact.value for fact in extract_email_facts(message) if fact.kind == "deadline"}
+        self.assertIn("July 2, 2026", deadlines)
+
+    def test_extract_email_facts_keeps_offer_end_deadline_not_reference_dates(self) -> None:
+        message = EmailMessage(
+            "m-card-offer",
+            "t-card-offer",
+            "card@example.com",
+            "Earn 130,000 points",
+            "2026-06-04",
+            (
+                "Hilton Honors Points balance accurate as of 6/2/26. "
+                "Enjoy a $0 intro annual fee for the first year, then $150, and earn 130,000 points "
+                "after eligible purchases. Offer ends 7/29/26. "
+                "A calendar year is from January 1 to December 31 regardless of when you open your Card Account."
+            ),
+        )
+        facts = extract_email_facts(message)
+        deadlines = [fact.value for fact in facts if fact.kind == "deadline"]
+        self.assertEqual(deadlines, ["7/29/26"])
+        draft = draft_events_from_facts(facts)
+        self.assertEqual([event.date_text for event in draft.events], ["7/29/26"])
+
+    def test_extract_email_facts_ignores_quoted_reply_header_dates(self) -> None:
+        message = EmailMessage(
+            "m-degree-verification",
+            "t-degree-verification",
+            "registrar@example.edu",
+            "Re: Requesting Verification for degree",
+            "2026-06-04",
+            (
+                "Dear student,\n\n"
+                "Your requested degree verification has been processed and attached.\n"
+                "If you have any further questions, please contact our office.\n\n"
+                "________________________________\n"
+                "From: Student\n"
+                "Sent: Thursday, June 4, 2026 12:59 PM\n"
+                "To: registrar\n"
+                "Subject: Re: Requesting Verification for degree\n"
+                "Hi, thank you for letting me know."
+            ),
+        )
+        facts = extract_email_facts(message)
+        self.assertEqual([fact.value for fact in facts if fact.kind == "deadline"], [])
+        self.assertEqual(draft_events_from_facts(facts).events, ())
+
+    def test_extract_email_facts_ignores_gmail_chinese_reply_headers(self) -> None:
+        message = EmailMessage(
+            "m-degree-verification-cn-reply",
+            "t-degree-verification",
+            "student@example.com",
+            "Re: Requesting Verification for degree",
+            "2026-06-04",
+            (
+                "Hi, thank you for letting me know! Here is attachment.\n\n"
+                "registrar <registrar@example.edu> 于2026年6月4日周四 10:54写道：\n"
+                "> Dear student,\n"
+                "> Please attach proof of identification.\n"
+                "> > > ------------------------------\n"
+                "> *From:* Student\n"
+                "> *Sent:* Thursday, June 4, 2026 10:50 AM\n"
+                "> *To:* registrar\n"
+                "> *Subject:* Requesting Verification for degree\n"
+            ),
+        )
+        facts = extract_email_facts(message)
+        self.assertEqual([fact.value for fact in facts if fact.kind == "deadline"], [])
+        self.assertEqual(draft_events_from_facts(facts).events, ())
+
+    def test_extract_email_facts_keeps_main_body_deadline_before_quoted_reply(self) -> None:
+        message = EmailMessage(
+            "m-main-deadline-before-quote",
+            "t-main-deadline-before-quote",
+            "registrar@example.edu",
+            "Missing form",
+            "2026-06-04",
+            (
+                "Please submit the missing verification form by July 8, 2026.\n\n"
+                "On Thu, Jun 4, 2026 at 12:59 PM Student wrote:\n"
+                "> Thank you for checking."
+            ),
+        )
+        facts = extract_email_facts(message)
+        self.assertEqual([fact.value for fact in facts if fact.kind == "deadline"], ["July 8, 2026"])
+
+    def test_extract_email_facts_allows_model_gate_to_veto_deadline_candidate(self) -> None:
+        message = EmailMessage(
+            "m-model-gate",
+            "t-model-gate",
+            "updates@example.com",
+            "Project update",
+            "2026-06-24",
+            "Please submit the form by July 2, 2026.",
+        )
+        facts = extract_email_facts(message, deadline_gate=lambda _message, _deadline: False)
+        self.assertEqual([fact.value for fact in facts if fact.kind == "deadline"], [])
+
+    def test_model_deadline_gate_blocks_confident_non_deadline(self) -> None:
+        class FakeClient:
+            def chat(self, *, system: str, user: str) -> ModelCallResult:
+                self.system = system
+                self.user = user
+                return ModelCallResult(
+                    text='{"is_deadline": false, "confidence": 0.91, "reason": "delivery estimate"}',
+                    prompt_tokens=10,
+                    completion_tokens=9,
+                    duration_ms=1,
+                )
+
+        message = EmailMessage(
+            "m-model-order",
+            "t-model-order",
+            "orders@example.com",
+            "Order confirmation",
+            "2026-06-24",
+            "Your package is estimated for delivery by July 2, 2026.",
+        )
+        deadline = {"date_text": "July 2, 2026", "context": "estimated for delivery by July 2, 2026"}
+        client = FakeClient()
+        decision = classify_deadline_candidate_with_model(message, deadline, client=client)
+        self.assertFalse(decision.allowed)
+        self.assertTrue(decision.model_used)
+        self.assertIn("candidate_date: July 2, 2026", client.user)
+
     def test_extract_email_facts_filters_marketing_amounts(self) -> None:
         messages = [
             EmailMessage(
@@ -319,6 +469,44 @@ class EmailCalendarAgentTests(unittest.TestCase):
         self.assertIn("July 31, 2026", deadlines)
         self.assertIn("09/01/2026", deadlines)
         self.assertTrue(all(fact.confidence >= 0.75 for fact in deadline_facts))
+
+    def test_extract_email_facts_filters_security_login_dates_and_html_assets(self) -> None:
+        message = EmailMessage(
+            "m-login-alert",
+            "t-login-alert",
+            "Link <notifications@link.example>",
+            "New login from macOS (Safari)",
+            "2026-06-04",
+            (
+                '<html><body><img src="https://stripe-images.example/html_emails/2024-03-27/link/logo.png">'
+                "<p>New login detected. We noticed a login to your Link account from a new device.</p>"
+                "<p>If this was you, no further action is needed.</p>"
+                "<p>Device: macOS (Safari)</p>"
+                "<p>When: June 4, 2026 at 3:07:11 AM PDT</p>"
+                "<p>How: Verified with one-time passcode sent to email.</p>"
+                "</body></html>"
+            ),
+        )
+        facts = extract_email_facts(message)
+        deadlines = [fact.value for fact in facts if fact.kind == "deadline"]
+        self.assertEqual(deadlines, [])
+        self.assertEqual(draft_events_from_facts(facts).events, ())
+
+    def test_extract_email_facts_uses_visible_html_body_for_deadlines(self) -> None:
+        message = EmailMessage(
+            "m-visible-html-deadline",
+            "t-visible-html-deadline",
+            "leasing@example.com",
+            "Move-out Notice Reminder",
+            "2026-06-10",
+            (
+                '<html><body><img src="https://assets.example/html_emails/2024-03-27/logo.png">'
+                "<p>Please submit written notice by July 2, 2026.</p>"
+                "</body></html>"
+            ),
+        )
+        deadlines = {fact.value for fact in extract_email_facts(message) if fact.kind == "deadline"}
+        self.assertEqual(deadlines, {"July 2, 2026"})
 
     def test_extract_email_facts_filters_semantic_amount_noise(self) -> None:
         messages = [
@@ -563,6 +751,7 @@ class EmailCalendarAgentTests(unittest.TestCase):
         self.assertTrue(draft.requires_confirmation)
         self.assertEqual(len(draft.events), 1)
         self.assertIn("Move-out Notice Reminder", draft.events[0].title)
+        self.assertFalse(draft.events[0].title.startswith("Deadline:"))
         self.assertEqual(draft.events[0].source_ids, ("email:m-lease-1",))
 
     def test_calendar_sync_requires_confirmation(self) -> None:
@@ -597,6 +786,20 @@ class EmailCalendarAgentTests(unittest.TestCase):
 
     def test_router_classifies_chinese_deadline_question(self) -> None:
         self.assertEqual(classify_intent("我最晚什么时候交 move-out notice？"), Intent.LATEST_DEADLINE)
+
+    def test_greeting_gets_friendly_capability_reply_not_refusal(self) -> None:
+        for greeting in ("你好", "hello", "在吗"):
+            answer = answer_question(greeting, messages=[])
+            self.assertEqual(answer.intent, Intent.GENERAL)
+            self.assertFalse(answer.uncertain)            # not a "can't answer" refusal
+            self.assertEqual(answer.tool_calls, ())
+            self.assertIn("LifeAgent", answer.answer)      # explains what it can do
+            self.assertIn("截止", answer.answer)
+        # an off-topic question still gets the helpful guide (no greeting prefix)
+        off_topic = answer_question("随便聊聊", messages=[])
+        self.assertEqual(off_topic.intent, Intent.GENERAL)
+        self.assertFalse(off_topic.uncertain)
+        self.assertNotIn("👋", off_topic.answer)
 
     def test_answer_question_uses_email_tool_for_deadline(self) -> None:
         answer = answer_question("What is my move-out deadline?", messages=[lease_message()])

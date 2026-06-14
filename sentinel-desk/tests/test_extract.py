@@ -153,6 +153,27 @@ class ExtractTests(unittest.TestCase):
         self.assertNotIn("July 4, 2026", values)
         self.assertNotIn("July 2, 2026", values)
 
+    def test_filters_reference_dates_but_keeps_offer_end_dates(self) -> None:
+        text = (
+            "Points balance accurate as of 6/2/26. "
+            "Offer ends 7/29/26. "
+            "A calendar year is from January 1 to December 31 regardless of account open date."
+        )
+        values = {item["date_text"] for item in extract_deadlines(text)}
+        self.assertNotIn("6/2/26", values)
+        self.assertNotIn("January 1", values)
+        self.assertNotIn("December 31", values)
+        self.assertIn("7/29/26", values)
+
+    def test_filters_dates_from_email_reply_headers(self) -> None:
+        text = (
+            "Your requested degree verification has been processed and attached. "
+            "________________________________ From: Student Sent: Thursday, June 4, 2026 12:59 PM "
+            "To: registrar Subject: Re: Requesting Verification for degree"
+        )
+        values = {item["date_text"] for item in extract_deadlines(text)}
+        self.assertNotIn("June 4, 2026", values)
+
     def test_filters_history_stuffing_before_real_due_date(self) -> None:
         text = (
             "Account history: statements were generated on 01/05/2026, 02/05/2026, 03/05/2026, "

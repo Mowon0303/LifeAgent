@@ -113,6 +113,8 @@ def _with_connector_labels(message: EmailMessage, *, source_type: str, trust_lab
         attachment_names=message.attachment_names,
         source_type=message.source_type or source_type,
         trust_label=message.trust_label if message.trust_label != "email_unverified" else trust_label,
+        labels=message.labels,
+        list_unsubscribe=message.list_unsubscribe,
     )
 
 
@@ -128,4 +130,6 @@ def _gmail_message_from_dict(item: dict[str, Any]) -> EmailMessage:
         attachment_names=tuple(item.get("attachment_names") or []),
         source_type="gmail",
         trust_label="email_provider_api",
+        labels=tuple(item.get("labels") or []),
+        list_unsubscribe=str(item.get("list_unsubscribe") or ""),
     )

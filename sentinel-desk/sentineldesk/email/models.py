@@ -15,10 +15,34 @@ class EmailMessage:
     attachment_names: tuple[str, ...] = ()
     source_type: str = "email"
     trust_label: str = "email_unverified"
+    # Provider-side routing signals (Gmail labelIds, the List-Unsubscribe
+    # header). These are the cheapest, most reliable "this is bulk/promo mail"
+    # signal there is — captured at the connector boundary, empty for older
+    # evidence and non-Gmail sources.
+    labels: tuple[str, ...] = ()
+    list_unsubscribe: str = ""
 
     @property
     def source_id(self) -> str:
         return f"{self.source_type}:{self.message_id}"
+
+    @property
+    def gmail_category(self) -> str:
+        """Gmail inbox tab for this message: promotions/social/updates/forums,
+        or "primary" when Gmail labelled it but not into a tab. Empty when no
+        labels were captured (older evidence or a non-Gmail source)."""
+        for label in self.labels:
+            upper = str(label).upper()
+            if upper.startswith("CATEGORY_"):
+                tab = upper[len("CATEGORY_") :].lower()
+                return "primary" if tab == "personal" else tab
+        return "primary" if self.labels else ""
+
+    @property
+    def is_bulk(self) -> bool:
+        """True when the sender advertised a List-Unsubscribe header — i.e. this
+        is list/bulk mail rather than a personal message."""
+        return bool(self.list_unsubscribe.strip())
 
     @property
     def searchable_text(self) -> str:

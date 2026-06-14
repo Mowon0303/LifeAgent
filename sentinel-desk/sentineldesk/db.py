@@ -63,6 +63,8 @@ CREATE TABLE IF NOT EXISTS email_messages (
     body_text TEXT NOT NULL,
     attachment_names_json TEXT NOT NULL,
     attachment_texts_json TEXT NOT NULL,
+    labels_json TEXT NOT NULL DEFAULT '[]',
+    list_unsubscribe TEXT NOT NULL DEFAULT '',
     facts_json TEXT NOT NULL,
     ingested_at TEXT NOT NULL
 );
@@ -225,6 +227,19 @@ def open_db(paths: Paths) -> Iterator[sqlite3.Connection]:
 def init_db(paths: Paths) -> None:
     with open_db(paths) as conn:
         conn.executescript(SCHEMA)
+        _ensure_column(conn, "email_messages", "labels_json", "TEXT NOT NULL DEFAULT '[]'")
+        _ensure_column(conn, "email_messages", "list_unsubscribe", "TEXT NOT NULL DEFAULT ''")
+
+
+def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+    if column not in columns:
+        try:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+        except sqlite3.OperationalError as exc:
+            if "readonly" in str(exc).lower():
+                return
+            raise
 
 
 def _json(value: Any) -> str:
@@ -399,6 +414,8 @@ def _calendar_event_dict(event: Any) -> dict[str, Any]:
 def upsert_email_message(paths: Paths, *, message: Any, facts: Iterable[Any], ingested_at: str) -> int:
     attachment_names = list(getattr(message, "attachment_names", ()) or ())
     attachment_texts = list(getattr(message, "attachment_texts", ()) or ())
+    labels = list(getattr(message, "labels", ()) or ())
+    list_unsubscribe = str(getattr(message, "list_unsubscribe", "") or "")
     fact_payload = [_email_fact_dict(fact) for fact in facts]
     values = (
         str(getattr(message, "thread_id", "")),
@@ -408,6 +425,8 @@ def upsert_email_message(paths: Paths, *, message: Any, facts: Iterable[Any], in
         str(getattr(message, "body_text", "")),
         _json(attachment_names),
         _json(attachment_texts),
+        _json(labels),
+        list_unsubscribe,
         _json(fact_payload),
         ingested_at,
         str(getattr(message, "message_id", "")),
@@ -422,7 +441,9 @@ def upsert_email_message(paths: Paths, *, message: Any, facts: Iterable[Any], in
                 """
                 UPDATE email_messages
                 SET thread_id = ?, sender = ?, subject = ?, received_at = ?, body_text = ?,
-                    attachment_names_json = ?, attachment_texts_json = ?, facts_json = ?, ingested_at = ?
+                    attachment_names_json = ?, attachment_texts_json = ?,
+                    labels_json = ?, list_unsubscribe = ?,
+                    facts_json = ?, ingested_at = ?
                 WHERE message_id = ?
                 """,
                 values,
@@ -432,9 +453,11 @@ def upsert_email_message(paths: Paths, *, message: Any, facts: Iterable[Any], in
             """
             INSERT INTO email_messages(
                 thread_id, sender, subject, received_at, body_text,
-                attachment_names_json, attachment_texts_json, facts_json, ingested_at, message_id
+                attachment_names_json, attachment_texts_json,
+                labels_json, list_unsubscribe,
+                facts_json, ingested_at, message_id
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             values,
         )
@@ -526,6 +549,33 @@ def list_calendar_drafts(paths: Paths, *, limit: int = 100) -> list[dict[str, An
     return decode_rows(rows)
 
 
+def delete_stale_local_drafts(paths: Paths, *, keep_event_ids: set[str]) -> list[str]:
+    """Delete local draft calendar events that a full re-extraction no longer
+    produces, returning the removed event ids.
+
+    Only ``local_draft`` rows are eligible: a draft the user already confirmed
+    or that synced to an external calendar is never removed here. Callers must
+    pass the complete set of event ids re-drafted by the same pass — anything
+    outside it is a stale draft whose backing deadline fact disappeared (the
+    source was filtered out, or the source message is gone entirely).
+    """
+    removed: list[str] = []
+    with open_db(paths) as conn:
+        rows = conn.execute(
+            "SELECT event_id FROM calendar_drafts WHERE sync_state = 'local_draft'"
+        ).fetchall()
+        for row in rows:
+            event_id = str(row["event_id"])
+            if event_id in keep_event_ids:
+                continue
+            conn.execute(
+                "DELETE FROM calendar_drafts WHERE event_id = ? AND sync_state = 'local_draft'",
+                (event_id,),
+            )
+            removed.append(event_id)
+    return removed
+
+
 def update_calendar_draft(
     paths: Paths,
     *,
@@ -574,28 +624,33 @@ def insert_model_call(
     detail: str = "",
 ) -> int:
     with open_db(paths) as conn:
-        cursor = conn.execute(
-            """
-            INSERT INTO model_calls(
-                created_at, provider, model, stage, intent, status,
-                prompt_tokens, completion_tokens, duration_ms, detail
+        try:
+            cursor = conn.execute(
+                """
+                INSERT INTO model_calls(
+                    created_at, provider, model, stage, intent, status,
+                    prompt_tokens, completion_tokens, duration_ms, detail
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    created_at,
+                    provider,
+                    model,
+                    stage,
+                    intent,
+                    status,
+                    int(prompt_tokens),
+                    int(completion_tokens),
+                    int(duration_ms),
+                    detail,
+                ),
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                created_at,
-                provider,
-                model,
-                stage,
-                intent,
-                status,
-                int(prompt_tokens),
-                int(completion_tokens),
-                int(duration_ms),
-                detail,
-            ),
-        )
-        return int(cursor.lastrowid)
+            return int(cursor.lastrowid)
+        except sqlite3.OperationalError as exc:
+            if "readonly" in str(exc).lower():
+                return 0
+            raise
 
 
 def list_model_calls(paths: Paths, *, limit: int = 100) -> list[dict[str, Any]]:

@@ -153,9 +153,14 @@
   .dD-embed.session { border-left-color:#6A5BD0; }
   .dD-embed.receipt { border-left-color:#C47A30; }
   .dD-embed.gmail { border-left-color:#2A6FDB; }
+  .dD-embed.cal-source-card { cursor:pointer; transition:transform .12s ease, box-shadow .12s ease; }
+  .dD-embed.cal-source-card:hover { transform:translateY(-1px); box-shadow:0 5px 16px rgba(80,60,20,.10); }
   .dD-embed .etitle { font-size:15px; font-weight:700; color:#2B2622; display:flex; align-items:center; gap:8px; }
   .dD-embed .etitle .pin { width:8px; height:8px; border-radius:50%; background:#6A5BD0; flex:none; }
   .dD-embed .ewhen { font-family:'IBM Plex Mono',monospace; font-size:12px; color:#6A5BD0; margin:7px 0 1px; }
+  .dD-embed .ddl-line { display:flex; align-items:baseline; gap:8px; margin:8px 0 3px; font-size:12.5px; color:#5C5446; }
+  .dD-embed .ddl-label { color:#B14228; font-size:11px; font-weight:700; white-space:nowrap; }
+  .dD-embed .ddl-date { font-family:'IBM Plex Mono',monospace; font-size:13px; color:#2B2622; }
   .dD-embed .esrc { font-size:11.5px; color:#A89A86; }
   .dD-embed .enote { font-size:13.5px; color:#5A5247; line-height:1.5; margin-top:9px; }
   .dD-taskline { font-size:11.5px; color:#9A8E7B; line-height:1.35; border-top:1px solid #F1EADB; padding-top:9px; margin-top:3px; }
@@ -232,8 +237,15 @@
   .ev-pop h3 { margin:0 0 4px; font-family:'Newsreader',serif; font-size:21px; font-weight:600; color:#2B2622; line-height:1.25; }
   .ev-pop .ev-status { display:inline-block; font-size:11px; font-weight:700; padding:2px 9px; border-radius:20px; margin-bottom:12px; }
   .ev-pop .ev-row { display:flex; gap:10px; align-items:baseline; font-size:13px; color:#5C5446; margin:7px 0; }
-  .ev-pop .ev-row .lab { width:54px; flex:none; color:#A2937B; font-size:11.5px; font-weight:600; }
+  .ev-pop .ev-row .lab { width:76px; flex:none; color:#A2937B; font-size:11.5px; font-weight:600; }
   .ev-pop .ev-evi { background:#F1ECE1; border-radius:9px; padding:9px 11px; font-size:12.5px; color:#6B6253; margin:10px 0; line-height:1.45; }
+  .ev-pop .ev-source { border-left:4px solid #4F7A4A; background:#F5EFE3; border-radius:8px; padding:11px 13px; margin-top:10px; }
+  .ev-pop .ev-source-title { font-size:14px; font-weight:700; color:#2B2622; line-height:1.35; }
+  .ev-pop .ev-source-meta { font-size:11.5px; color:#8A7F6D; margin-top:4px; overflow-wrap:break-word; }
+  .ev-pop .ev-source-preview { font-size:12.5px; color:#514A3F; line-height:1.45; background:#FBF8F1;
+    border-radius:7px; padding:9px 10px; margin-top:9px; max-height:360px; overflow:auto; white-space:pre-wrap; }
+  .ev-pop .ev-fact { border-top:1px solid #E4DBC9; padding-top:7px; margin-top:8px; font-size:12px; color:#5C5446; line-height:1.4; }
+  .ev-pop .ev-fact b { font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:#B14228; text-transform:uppercase; }
   .ev-pop input[type=text] { flex:1; font-family:inherit; font-size:13px; color:#393429; background:#fff;
     border:1px solid #E4DBC9; border-radius:8px; padding:6px 9px; outline:none; }
   .ev-pop .ev-cats { display:flex; flex-wrap:wrap; gap:6px; margin:4px 0 2px; }
@@ -473,8 +485,8 @@
   var state = {
     view: 'month',
     cursor: startOfDay(new Date()),
-    events: [],          // mapped calendar items
-    undated: [],         // items with no parseable date_key
+    events: [],          // confirmed calendar items with a parseable date_key
+    undated: [],         // confirmed calendar items with no parseable date_key
     ignored: {},         // task_id -> true (calendar:<event_id> ignored via review)
     tasks: [],           // raw task review rows from /api/tasks
     allTasks: [],        // unfiltered local tasks used for saved-view session summaries
@@ -521,6 +533,20 @@
     var s = String(text == null ? '' : text).replace(/\s+/g, ' ').trim();
     return s.length > limit ? s.slice(0, limit - 1) + '…' : s;
   }
+  function eventDateText(item) {
+    return (item && (item.dateText || item.dateKey)) || '日期待定';
+  }
+  function deadlineLineHtml(item) {
+    return '<div class="ddl-line"><span class="ddl-label">候选截止日</span><span class="ddl-date">' +
+      escapeHtml(eventDateText(item)) + '</span></div>';
+  }
+  function receivedMetaText(source) {
+    var parts = [];
+    if (source.sender) parts.push(source.sender);
+    if (source.received_at) parts.push('收到 ' + source.received_at);
+    if (source.message_id) parts.push(source.message_id);
+    return parts.join(' · ');
+  }
 
   // ---------- data ----------
   function taskApiUrl() {
@@ -540,8 +566,20 @@
       confidence: raw.confidence,
       type: pending ? 'ai' : 'deadline',
       source: TRUST_LABEL[raw.source_trust] || raw.source_trust || '本地证据',
+      sourceIds: raw.source_ids || [],
+      sourceTrust: raw.source_trust || '',
+      sourceCount: raw.source_count || 0,
+      evidenceUri: raw.evidence_uri || '',
       syncState: raw.sync_state
     };
+  }
+
+  function visibleCalendarItems(items) {
+    return items.filter(function (item) { return !item.pending; });
+  }
+
+  function pendingCalendarItems(items) {
+    return items.filter(function (item) { return item.pending; });
   }
 
   function loadData() {
@@ -562,9 +600,10 @@
       var mapped = (events || []).map(mapItem).filter(function (item) {
         return !(item.pending && state.ignored['calendar:' + item.eventId]);
       });
-      state.events = mapped.filter(function (item) { return item.dateKey; });
-      state.undated = mapped.filter(function (item) { return !item.dateKey; });
-      state.queue = mapped.filter(function (item) { return item.pending; });
+      var visible = visibleCalendarItems(mapped);
+      state.events = visible.filter(function (item) { return item.dateKey; });
+      state.undated = visible.filter(function (item) { return !item.dateKey; });
+      state.queue = pendingCalendarItems(mapped);
       state.taskQueue = tasks;
       clampTaskCursor();
     });
@@ -990,7 +1029,7 @@
     var keys = Object.keys(groups).sort();
     var html = '<div class="dD-ag">';
     if (!keys.length && !state.undated.length) {
-      html += '<div class="dD-empty">接下来没有已提取的日程。试试在右侧问助手，或先同步邮件证据。</div>';
+      html += '<div class="dD-empty">接下来没有已确认日程。候选截止在右侧复核，点击加入日历后才会显示在这里。</div>';
     }
     keys.forEach(function (key) {
       var d = parseKey(key);
@@ -1127,15 +1166,16 @@
       statusBadge +
       '<h3>' + escapeHtml(item.title) + (item.uncertain ? ' ?' : '') + '</h3>' +
       '<div class="ev-row"><span class="lab">标题</span><input type="text" id="evTitle" value="' + escapeHtml(item.title) + '"></div>' +
-      '<div class="ev-row"><span class="lab">日期</span><input type="text" id="evDate" value="' +
+      '<div class="ev-row"><span class="lab">候选截止日</span><input type="text" id="evDate" value="' +
         escapeHtml(item.dateText || item.dateKey || '') + '" placeholder="如 2026-07-01 或 July 1, 2026"></div>' +
       '<div class="ev-row"><span class="lab">类别</span><div class="ev-cats" id="evCats">' +
         catChipsHtml(item) + catAddHtml(false) + '</div></div>' +
       '<div class="ev-row"><span class="lab">来源</span><span>' + escapeHtml(item.source) +
-        ' · 置信 ' + Number(item.confidence || 0).toFixed(2) + (item.uncertain ? ' · 低置信，建议核对原始邮件' : '') + '</span></div>' +
+        (item.uncertain ? ' · 需核对原始邮件' : '') + '</span></div>' +
       '<div class="ev-evi">编辑标题/日期只写本地草稿；「确认加入日历」会经确认门导出本地 ICS，永不写外部日历。</div>' +
       '<div class="ev-pop-actions">' +
       '<button class="dD-cbtn prim" data-act="ev-save">保存修改</button>' +
+      '<button class="dD-cbtn sec" data-act="ev-source">查看来源</button>' +
       (item.pending ? '<button class="dD-cbtn warn" data-act="ev-confirm">✓ 确认加入日历</button>' : '') +
       '<button class="dD-cbtn sec" data-act="ev-ignore">忽略</button>' +
       '<button class="dD-cbtn sec" data-act="ev-close">关闭</button>' +
@@ -1165,6 +1205,7 @@
         return;
       }
       if (act === 'ev-save') { saveEventEdits(item); return; }
+      if (act === 'ev-source') { openCalendarEvidence(item.eventId); return; }
       if (act === 'ev-confirm') { closeEventPopup(); handleConfirm(item.eventId, document.createElement('div')); return; }
       if (act === 'ev-ignore') { closeEventPopup(); handleIgnore(item.eventId, document.createElement('div')); return; }
     });
@@ -1261,12 +1302,14 @@
   function summaryEmbed() {
     var todayKey = isoKey(new Date());
     var upcoming = state.events.filter(function (i) { return i.dateKey >= todayKey; });
-    var pending = upcoming.filter(function (i) { return i.pending; }).length + state.undated.filter(function (i) { return i.pending; }).length;
-    var confirmed = upcoming.filter(function (i) { return !i.pending; }).length;
-    var uncertain = upcoming.filter(function (i) { return i.uncertain; }).length;
-    return '<div class="dD-embed" id="aiSummary"><h4>日程一览 · 接下来</h4>' +
+    var pending = state.queue.length;
+    var confirmed = upcoming.length + state.undated.length;
+    var uncertain = upcoming.filter(function (i) { return i.uncertain; }).length +
+      state.undated.filter(function (i) { return i.uncertain; }).length +
+      state.queue.filter(function (i) { return i.uncertain; }).length;
+    return '<div class="dD-embed" id="aiSummary"><h4>已确认日程 · 接下来</h4>' +
       '<div class="dD-sumrow"><div class="n">' + confirmed + '</div><div><div class="lab">已确认日程</div><div class="sub">已导出本地 ICS</div></div></div>' +
-      '<div class="dD-sumrow"><div class="n' + (pending ? ' u' : '') + '">' + pending + '</div><div><div class="lab">待你确认</div><div class="sub">按类别上色，确认前不写日历</div></div></div>' +
+      '<div class="dD-sumrow"><div class="n' + (pending ? ' u' : '') + '">' + pending + '</div><div><div class="lab">待你确认</div><div class="sub">确认前不显示在日历，也不写外部日历</div></div></div>' +
       '<div class="dD-sumrow"><div class="n' + (uncertain ? ' u' : '') + '">' + uncertain + '</div><div><div class="lab">低置信抽取</div><div class="sub">标 ? 的事项建议核对原始邮件</div></div></div></div>';
   }
 
@@ -1323,8 +1366,8 @@
     return '<div class="dD-body">我在本地证据里发现这条日程，要加入日历吗？</div>' +
       '<div class="dD-embed ev">' +
       '<div class="etitle"><span class="pin"></span>' + escapeHtml(item.title) + (item.uncertain ? ' ?' : '') + '</div>' +
-      '<div class="ewhen">' + escapeHtml(item.dateText || item.dateKey || '日期待定') + '</div>' +
-      '<div class="esrc">来源 · ' + escapeHtml(item.source) + ' · 置信 ' + Number(item.confidence).toFixed(2) + '</div>' +
+      deadlineLineHtml(item) +
+      '<div class="esrc">来源 · ' + escapeHtml(item.source) + '</div>' +
       '</div>' +
       '<div class="dD-btns" data-event-id="' + escapeHtml(item.eventId) + '">' +
       '<button class="dD-cbtn prim" data-act="confirm">✓ 确认加入日历</button>' +
@@ -1389,6 +1432,71 @@
     return html;
   }
 
+  function calendarEvidenceSourceHtml(source) {
+    var facts = [];
+    var seen = {};
+    (source.matched_facts || []).forEach(function (fact) {
+      var key = String(fact.kind || '') + '|' + String(fact.value || '').toLowerCase();
+      if (seen[key]) return;
+      seen[key] = true;
+      facts.push(fact);
+    });
+    var factHtml = facts.map(function (fact) {
+      return '<div class="ev-fact"><b>' + escapeHtml(TASK_KIND_LABEL[fact.kind] || fact.kind || 'fact') +
+        '</b> ' + escapeHtml(fact.value || '') +
+        (fact.evidence ? '<div class="ev-source-meta">证据片段 · ' + escapeHtml(clip(fact.evidence, 360)) + '</div>' : '') +
+        '</div>';
+    }).join('');
+    return '<div class="ev-source">' +
+      '<div class="ev-source-title">' + escapeHtml(source.subject || '(no subject)') + '</div>' +
+      '<div class="ev-source-meta">' + escapeHtml(receivedMetaText(source)) + '</div>' +
+      (factHtml ? '<div>' + factHtml + '</div>' : '<div class="ev-fact">没有匹配到可展开的 fact。</div>') +
+      (source.body_preview ? '<div class="ev-source-meta">邮件正文</div><div class="ev-source-preview">' +
+        escapeHtml(source.body_preview) + '</div>' : '') +
+      '</div>';
+  }
+
+  function openCalendarEvidence(eventId) {
+    closeEventPopup();
+    var back = document.createElement('div');
+    back.className = 'ev-pop-back';
+    back.id = 'evPopBack';
+    back.innerHTML = '<div class="ev-pop"><span class="ev-x" data-act="ev-close">×</span>' +
+      '<span class="ev-status" style="background:#E4EFE2;color:#4F7A4A">本地邮件证据</span>' +
+      '<h3>读取来源...</h3>' +
+      '<div class="ev-evi">正在从本地 SQLite 读取邮件来源。</div></div>';
+    back.addEventListener('click', function (e) {
+      if (e.target === back || e.target.closest('[data-act="ev-close"]')) closeEventPopup();
+    });
+    document.body.appendChild(back);
+
+    fetch('/api/calendar/evidence?event_id=' + encodeURIComponent(eventId))
+      .then(function (r) { return r.json(); })
+      .then(function (payload) {
+        var event = payload.event || {};
+        var sources = payload.sources || [];
+        var sourceHtml = sources.length
+          ? sources.map(calendarEvidenceSourceHtml).join('')
+          : '<div class="ev-source"><div class="ev-source-title">没有找到可展开的本地邮件来源</div>' +
+            '<div class="ev-source-meta">source ids: ' + escapeHtml((event.source_ids || []).join(', ')) + '</div></div>';
+        var pop = document.getElementById('evPopBack');
+        if (!pop) return;
+        pop.innerHTML = '<div class="ev-pop"><span class="ev-x" data-act="ev-close">×</span>' +
+          '<span class="ev-status" style="background:#E4EFE2;color:#4F7A4A">本地邮件证据</span>' +
+          '<h3>' + escapeHtml(event.title || '日历草稿') + '</h3>' +
+          '<div class="ev-row"><span class="lab">候选截止日</span><span>' + escapeHtml(event.date_text || '') + '</span></div>' +
+          '<div class="ev-row"><span class="lab">来源</span><span>' + escapeHtml(event.evidence_uri || '本地邮件证据') + '</span></div>' +
+          '<div class="ev-evi">这次展开只读本地 SQLite，不刷新 Gmail，也不写外部日历。</div>' +
+          sourceHtml +
+          '<div class="ev-pop-actions"><button class="dD-cbtn sec" data-act="ev-close">关闭</button></div></div>';
+      })
+      .catch(function (err) {
+        var pop = document.getElementById('evPopBack');
+        if (pop) pop.innerHTML = '<div class="ev-pop"><span class="ev-x" data-act="ev-close">×</span>' +
+          '<h3>来源读取失败</h3><div class="ev-evi">' + escapeHtml(err) + '</div></div>';
+      });
+  }
+
   function taskHistoryEmbed(payload) {
     var history = (payload && payload.history) || [];
     state.reviewHistory = history;
@@ -1433,12 +1541,14 @@
   function calendarReviewCard(ev) {
     var c = categoryFor(ev);
     return '<div class="dD-body">这条本地证据是一个截止日程，确认后导出本地 ICS（不写外部日历）。</div>' +
-      '<div class="dD-embed task" style="border-left-color:' + c.color + '">' +
-      '<div class="dD-task-kind">日历草稿 · 截止' + (ev.uncertain ? ' · 低置信' : '') + '</div>' +
+      '<div class="dD-embed task cal-source-card" data-act="calendar-evidence" data-event-id="' +
+        escapeHtml(ev.eventId) + '" role="button" tabindex="0" title="查看来源邮件" style="border-left-color:' + c.color + '">' +
+      '<div class="dD-task-kind">日历草稿 · 截止' + (ev.uncertain ? ' · 需核对' : '') + '</div>' +
       '<div class="etitle">' + escapeHtml(ev.title) + (ev.uncertain ? ' ?' : '') + '</div>' +
-      '<div class="esrc">' + escapeHtml(ev.dateText || ev.dateKey || '日期待定') + ' · 来源 ' +
-        escapeHtml(ev.source) + ' · 置信 ' + Number(ev.confidence || 0).toFixed(2) + '</div></div>' +
+      deadlineLineHtml(ev) +
+      '<div class="esrc">来源 · ' + escapeHtml(ev.source) + '</div></div>' +
       '<div class="dD-btns" data-event-id="' + escapeHtml(ev.eventId) + '">' +
+      '<button class="dD-cbtn sec" data-act="calendar-evidence">查看来源</button>' +
       '<button class="dD-cbtn prim" data-act="confirm">✓ 加入日历</button>' +
       '<button class="dD-cbtn sec" data-act="ignore">忽略</button></div>';
   }
@@ -1523,9 +1633,9 @@
     if (embed) embed.outerHTML = summaryEmbed();
     var daily = document.getElementById('dailySummary');
     if (daily) daily.outerHTML = dailyEmbed();
-    var dailyTasks = state.daily && state.daily.tasks ? state.daily.tasks.queue_count : state.queue.length;
+    var dailyTasks = reviewItems().length;
     document.getElementById('aiTopic').textContent =
-      '本地证据 · ' + (state.events.length + state.undated.length) + ' 条事项 · ' + dailyTasks + ' 条待处理';
+      '本地日历 · ' + (state.events.length + state.undated.length) + ' 条已确认 · ' + dailyTasks + ' 条待处理';
   }
 
   function welcome() {
@@ -1534,7 +1644,7 @@
     var pending = reviewItems().length;
     botMessage(
       '<div class="dD-body">早上好。本地证据里有 <b>' + pending +
-      '</b> 条待你处理，下面一条一条来——日历里按类别上色的就是，点日历事件可以查看/编辑。外部写入永远先问你。</div>' +
+      '</b> 条待你处理，下面一条一条来。候选截止默认不进入日历，点「加入日历」后才会显示；外部写入永远先问你。</div>' +
       dailyEmbed());
   }
 
@@ -1841,6 +1951,13 @@
     renderCalendar();
   }
   feed.addEventListener('click', function (e) {
+    var calendarEvidenceHit = e.target.closest('[data-act="calendar-evidence"]');
+    if (calendarEvidenceHit) {
+      var owner = calendarEvidenceHit.closest('[data-event-id]');
+      var calendarEvidenceId = calendarEvidenceHit.dataset.eventId || (owner && owner.dataset.eventId) || '';
+      if (calendarEvidenceId) openCalendarEvidence(calendarEvidenceId);
+      return;
+    }
     var btn = e.target.closest('button[data-act]');
     if (!btn) return;
     if (btn.dataset.act === 'toggle-adv') {

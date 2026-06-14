@@ -127,6 +127,11 @@ def _gmail_message_payload(detail: dict[str, Any]) -> dict[str, Any]:
         "subject": headers.get("subject", ""),
         "date": headers.get("date", ""),
         "body": body_text,
+        # Already present in the format="full" response — no extra request or
+        # scope. labelIds carry Gmail's own promotions/social/updates tabbing;
+        # List-Unsubscribe marks bulk mail.
+        "labels": list(detail.get("labelIds", []) or []),
+        "list_unsubscribe": headers.get("list-unsubscribe", ""),
     }
 
 

@@ -21,12 +21,31 @@ def answer_question(
     if intent in {Intent.LATEST_DEADLINE, Intent.LATEST_AMOUNT}:
         active_registry.assert_can_call("search_latest_email")
         tool_calls = ["search_latest_email"]
-        facts = []
-        for message in find_messages(messages or [], question, limit=10):
-            facts.extend(extract_email_facts(message))
         wanted = "deadline" if intent == Intent.LATEST_DEADLINE else "amount"
-        matches = [fact for fact in facts if fact.kind == wanted]
-        if not matches:
+        keyword_matches = [
+            fact
+            for message in find_messages(messages or [], question, limit=10)
+            for fact in extract_email_facts(message)
+            if fact.kind == wanted
+        ]
+        # A narrow, specific query ("when is my rent due") keyword-matches a few
+        # emails about the same obligation — keep the conflict-aware path there.
+        # A broad query ("latest deadline"), a cross-language one, or a keyword
+        # miss instead needs every deadline on file: scan all messages and answer
+        # with the single nearest/latest, never a false "conflict" across
+        # unrelated items or a guessed portal.
+        narrow = bool(keyword_matches) and len({fact.source_id for fact in keyword_matches}) <= 3
+        if not narrow:
+            global_matches = [
+                fact
+                for message in messages or []
+                for fact in extract_email_facts(message)
+                if fact.kind == wanted
+            ]
+            if global_matches:
+                return _latest_global_answer(
+                    global_matches, wanted=wanted, intent=intent, tool_calls=tool_calls
+                )
             if wanted == "deadline" and _should_verify_portal(messages or []):
                 portal_answer = _verify_deadline_from_portal(
                     active_registry,
@@ -42,6 +61,7 @@ def answer_question(
                 tool_calls=tuple(tool_calls),
                 uncertain=True,
             )
+        matches = keyword_matches
         conflict = detect_fact_conflict(matches, wanted)
         if conflict.has_conflict:
             citations = tuple(
@@ -151,9 +171,80 @@ def answer_question(
     if intent == Intent.POLICY_QUESTION:
         return _answer_policy_question(active_registry, question)
 
+    return _general_answer(question)
+
+
+def _latest_global_answer(
+    matches: list,
+    *,
+    wanted: str,
+    intent: Intent,
+    tool_calls: list[str],
+) -> AgentAnswer:
+    """Answer a broad "what's my latest/nearest X" query that spans many
+    unrelated emails. The conflict path assumes the facts describe the *same*
+    obligation, so it would wrongly report "conflicting evidence" across N
+    different deadlines. Pick the single most relevant fact instead — the
+    nearest upcoming deadline, or the most recent amount — and say how many
+    others exist."""
+    chosen = _nearest_deadline_fact(matches) if wanted == "deadline" else _most_recent_fact(matches)
+    others = len(matches) - 1
+    lead = "Nearest deadline" if wanted == "deadline" else "Latest amount"
+    suffix = f" ({others} other {wanted} item{'s' if others != 1 else ''} on file.)" if others > 0 else ""
     return AgentAnswer(
         intent=intent,
-        answer="This question should use retrieval over trusted docs or local evidence before synthesis.",
+        answer=f"{lead}: {chosen.value}.{suffix}",
+        confidence="high" if chosen.confidence >= 0.75 else "medium",
+        citations=(
+            Citation(
+                source_id=chosen.source_id,
+                source_type=chosen.source_type,
+                evidence=chosen.evidence,
+                captured_at=chosen.received_at,
+            ),
+        ),
+        tool_calls=tuple(tool_calls),
+        metadata={"scanned": "all_messages", "candidate_count": len(matches)},
+    )
+
+
+def _nearest_deadline_fact(matches: list):
+    """The soonest upcoming deadline (or, if all are past, the most recent)."""
+    from sentineldesk.calendar.view import parse_deadline_date
+    from sentineldesk.extract import utc_now
+
+    today = utc_now()[:10]
+    dated = [(parse_deadline_date(fact.value), fact) for fact in matches]
+    dated = [(iso, fact) for iso, fact in dated if iso]
+    if not dated:
+        return sorted(matches, key=lambda fact: (fact.confidence, fact.received_at), reverse=True)[0]
+    upcoming = sorted(((iso, fact) for iso, fact in dated if iso >= today), key=lambda item: item[0])
+    if upcoming:
+        return upcoming[0][1]
+    return sorted(dated, key=lambda item: item[0])[-1][1]
+
+
+def _most_recent_fact(matches: list):
+    return sorted(matches, key=lambda fact: (fact.received_at, fact.confidence), reverse=True)[0]
+
+
+def _general_answer(question: str) -> AgentAnswer:
+    """Greetings and anything off-topic should get a friendly, helpful reply that
+    explains what the assistant can do — not a cryptic "needs retrieval" refusal."""
+    text = question.strip().lower()
+    greeting = any(term in text for term in (
+        "你好", "您好", "哈喽", "嗨", "在吗", "在么", "你是谁", "hi", "hello", "hey", "谢谢", "thank",
+    ))
+    prefix = "你好 👋 " if greeting else ""
+    return AgentAnswer(
+        intent=Intent.GENERAL,
+        answer=(
+            prefix
+            + "我是 LifeAgent 本地日程助手，只读你本地的邮件证据、不外发。"
+            + "可以帮你查最近的截止日期/待办、待缴金额和账单、解释某个状态或提醒为什么触发、"
+            + "给下一步建议，或把某条加入日历（确认后才写）。"
+            + "试着问我「最近有什么截止？」或「这个月要交多少钱？」。"
+        ),
         confidence="medium",
         tool_calls=(),
     )

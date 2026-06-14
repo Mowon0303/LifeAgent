@@ -293,6 +293,28 @@ class CalendarEventsContractTests(UiContractBase):
             self.assertEqual(item["approval_state"], "draft")
             self.assertEqual(item["source_trust"], "email_evidence")
 
+    def test_calendar_evidence_expands_source_email(self) -> None:
+        status, events = self.json_request("GET", "/api/calendar/events")
+        self.assertEqual(status, 200)
+        event_id = events[0]["event_id"]
+
+        status, payload = self.json_request("GET", f"/api/calendar/evidence?event_id={event_id}")
+        self.assertEqual(status, 200)
+        self.assertEqual(payload["event_id"], event_id)
+        self.assertFalse(payload["external_network"])
+        self.assertFalse(payload["external_writes_performed"])
+        self.assertGreaterEqual(payload["source_count"], 1)
+        source = payload["sources"][0]
+        self.assertIn("subject", source)
+        self.assertIn("sender", source)
+        self.assertIn("body_preview", source)
+        self.assertIsInstance(source["matched_facts"], list)
+
+    def test_calendar_evidence_requires_event_id(self) -> None:
+        status, payload = self.json_request("GET", "/api/calendar/evidence")
+        self.assertEqual(status, 400)
+        self.assertIn("event_id", payload["error"])
+
 
 class TaskContractTests(UiContractBase):
     def test_tasks_shape(self) -> None:
@@ -877,6 +899,7 @@ class CalendarPageTests(UiContractBase):
             "/api/daily/run",
             "/api/gmail/sync?confirm=1",
             "/api/tasks/evidence?task_id=",
+            "/api/calendar/evidence?event_id=",
             "/api/tasks/review?task_id=",
             "/api/tasks/review/bulk",
             "/api/tasks/review/history",
@@ -910,6 +933,14 @@ class CalendarPageTests(UiContractBase):
             'data-act="task-bulk-ignored"',
             'data-act="task-bulk-needs-verification"',
             'data-act="task-evidence"',
+            'data-act="calendar-evidence"',
+            "function openCalendarEvidence",
+            "function calendarEvidenceSourceHtml",
+            "function visibleCalendarItems",
+            "function pendingCalendarItems",
+            "确认前不显示在日历",
+            "候选截止日",
+            "收到 ",
             'data-act="task-done"',
             'data-act="task-needs-verification"',
             'data-act="task-reviewed"',

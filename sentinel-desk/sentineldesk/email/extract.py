@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 
-from sentineldesk.extract import extract_deadlines, normalize_text
+from sentineldesk.extract import extract_deadlines, normalize_text, visible_text
 
 from .models import EmailFact, EmailMessage
 
@@ -119,6 +119,107 @@ ACTION_RE = re.compile(
     r"\b(?P<verb>" + "|".join(ACTION_VERBS) + r")\b.{0,90}",
     re.IGNORECASE,
 )
+HTML_MARKUP_RE = re.compile(
+    r"</?(?:html|body|head|table|tbody|tr|td|div|span|p|a|img|br|style|font)\b|"
+    r"&(?:amp|nbsp|quot|lt|gt|#\d+);",
+    re.IGNORECASE,
+)
+HTML_DATE_ARTIFACT_RE = re.compile(
+    r"(?:https?://|src=|href=|style=|class=|font-weight|html_emails|stripe-images|"
+    r"\.(?:png|jpe?g|gif|webp|svg)\b|utm_|ct=|mar=)",
+    re.IGNORECASE,
+)
+EMAIL_HEADER_LINE_RE = re.compile(
+    r"^\s*(?:>\s*)*\*?(?:from|sent|date|to|cc|bcc|subject)\*?\s*:",
+    re.IGNORECASE,
+)
+EMAIL_QUOTED_REPLY_LINE_RE = re.compile(
+    r"^\s*(?:on .{0,180}\bwrote:|.{1,180}于.{1,120}写道[:：])\s*$",
+    re.IGNORECASE,
+)
+FLAT_QUOTED_HEADER_RE = re.compile(
+    r"(?:\s|^)(?:>\s*)?[_-]{5,}\s*(?:>\s*)?\*?from\*?\s*:\s.{0,360}?\b\*?(?:sent|date)\*?\s*:\s|"
+    r"(?:\s|^)(?:>\s*)?\*?from\*?\s*:\s.{0,360}?\b\*?(?:sent|date)\*?\s*:\s.{0,280}?"
+    r"\b\*?(?:to|subject)\*?\s*:\s",
+    re.IGNORECASE,
+)
+FLAT_ON_WROTE_RE = re.compile(r"(?:\s|^)(?:on\s.{0,260}?\bwrote:|.{1,220}于.{1,140}写道[:：])\s", re.IGNORECASE)
+SECURITY_NOTIFICATION_RE = re.compile(
+    r"\b("
+    r"new login|login detected|new sign[- ]?in|sign[- ]?in alert|security alert|"
+    r"new device|password (?:was )?changed|one[- ]?time passcode|verification code|"
+    r"two[- ]?factor|2fa|if this was not you|not you"
+    r")\b",
+    re.IGNORECASE,
+)
+COMMERCE_NOTIFICATION_RE = re.compile(
+    r"\b("
+    r"order confirmation|order confirmed|purchase confirmation|your order|thanks for your order|"
+    r"order receipt|purchase receipt|invoice for your order|we (?:received|got) your order|"
+    r"shipped|shipment|shipping|tracking|delivery|delivered|arriv(?:es|ing|al)|"
+    r"estimated delivery|out for delivery|package|return window"
+    r")\b",
+    re.IGNORECASE,
+)
+STRONG_DEADLINE_CUE_RE = re.compile(
+    r"\b("
+    r"deadline|due date|payment due|balance due|respond by|submit\b.{0,60}\bby|"
+    r"upload\b.{0,60}\bby|pay\b.{0,60}\bby|must\b.{0,60}\bby|"
+    r"expires? on|grace period ends"
+    r")\b",
+    re.IGNORECASE,
+)
+USER_OBLIGATION_DEADLINE_RE = re.compile(
+    r"\b("
+    r"action required|deadline|due date|payment due|balance due|past due|final notice|"
+    r"respond by|reply by|submit\b.{0,60}\bby|upload\b.{0,60}\bby|"
+    r"pay\b.{0,60}\bby|must\b.{0,60}\bby|need(?:s)?\b.{0,60}\bby|"
+    r"required\b.{0,60}\bby|cancel\b.{0,60}\bby|renew\b.{0,60}\bby|"
+    r"schedule\b.{0,60}\bby|complete\b.{0,60}\bby|grace period ends"
+    r")\b",
+    re.IGNORECASE,
+)
+PROMOTIONAL_HARD_OBLIGATION_RE = re.compile(
+    r"\b("
+    r"action required|deadline|due date|payment due|balance due|past due|final notice|"
+    r"respond by|reply by|submit\b.{0,60}\bby|upload\b.{0,60}\bby|"
+    r"pay\b.{0,60}\bby|complete\b.{0,60}\bby|verify\b.{0,60}\bby|"
+    r"sign\b.{0,60}\bby|renew\b.{0,60}\bby|cancel\b.{0,60}\bby|"
+    r"claim\b.{0,80}\bno later than|ensure\b.{0,80}\bno later than|"
+    r"entry deadline|grace period ends"
+    r")\b",
+    re.IGNORECASE,
+)
+# Real "money the user owes" language. Deliberately narrow so promo prices
+# ("$129 getaway", "earn 160K points", "$0 intro annual fee") do NOT match,
+# while genuine bills do — used to keep amounts in promotional mail only when
+# they are an actual obligation.
+PAYMENT_OBLIGATION_RE = re.compile(
+    r"\b("
+    r"amount due|balance due|payment due|total due|amount owed|you owe|"
+    r"outstanding balance|statement balance|minimum (?:payment|amount due)|"
+    r"please (?:pay|remit)|pay (?:your|the|this) (?:bill|invoice|balance|rent|premium|statement)|"
+    r"auto[- ]?pay|autopay|automatic payment|your payment (?:of|will|is|has)|"
+    r"rent\b.{0,20}\bdue|bill is due|remit payment|invoice"
+    r")\b",
+    re.IGNORECASE,
+)
+PROMOTIONAL_OFFER_CONTEXT_RE = re.compile(
+    r"\b("
+    r"vacation package|offer|bonus points|honors points|getaway|intro annual fee|"
+    r"terms and conditions|sale|discount|deal|limited time|promotion"
+    r")\b",
+    re.IGNORECASE,
+)
+COMMERCE_DATE_CONTEXT_RE = re.compile(
+    r"\b("
+    r"ordered on|order placed|purchase date|transaction date|payment processed|"
+    r"shipping date|shipped on|delivered on|delivery date|estimated delivery|"
+    r"arrives? (?:by|on)|arriving (?:by|on)|out for delivery|tracking|"
+    r"return window|receipt|order total"
+    r")\b",
+    re.IGNORECASE,
+)
 ACTION_CUE_WORDS = {
     "and",
     "after",
@@ -164,10 +265,17 @@ def find_messages(messages: Iterable[EmailMessage], query: str, *, limit: int = 
     return [message for _, message in scored[:limit]]
 
 
-def extract_email_facts(message: EmailMessage) -> list[EmailFact]:
-    text = normalize_text(_remove_invisible_number_separators(message.searchable_text))
+DeadlineGate = Callable[[EmailMessage, dict[str, object]], bool]
+
+
+def extract_email_facts(message: EmailMessage, *, deadline_gate: DeadlineGate | None = None) -> list[EmailFact]:
+    text = _message_fact_text(message)
     facts: list[EmailFact] = []
     for deadline in extract_deadlines(text):
+        if not _deadline_context_allowed_for_message(message, deadline):
+            continue
+        if deadline_gate is not None and not deadline_gate(message, deadline):
+            continue
         facts.append(
             EmailFact(
                 kind="deadline",
@@ -203,6 +311,8 @@ def extract_email_facts(message: EmailMessage) -> list[EmailFact]:
         context = _context(text, match.start(), match.end())
         if not _spelled_amount_context_allowed(context):
             continue
+        if _promotional_message_without_payment_obligation(message, context):
+            continue
         facts.append(
             EmailFact(
                 kind="amount",
@@ -216,7 +326,10 @@ def extract_email_facts(message: EmailMessage) -> list[EmailFact]:
                 metadata=_metadata(message),
             )
         )
+    suppress_promo_actions = _promotional_message_without_user_action(message)
     for match in ACTION_RE.finditer(text):
+        if suppress_promo_actions:
+            break
         verb = match.group("verb").lower()
         action = normalize_text(match.group(0))
         if not _action_context_allowed(text, match.start(), verb, action):
@@ -235,6 +348,152 @@ def extract_email_facts(message: EmailMessage) -> list[EmailFact]:
             )
         )
     return facts
+
+
+def _message_fact_text(message: EmailMessage) -> str:
+    body_text = _fact_body_text(message.body_text)
+    attachment_texts = [_visible_message_text(str(item)) for item in message.attachment_texts]
+    return normalize_text(
+        _remove_invisible_number_separators(
+            "\n".join(part for part in [message.sender, message.subject, body_text, *attachment_texts] if part)
+        )
+    )
+
+
+def _subject_body_text(message: EmailMessage) -> str:
+    return normalize_text(
+        _remove_invisible_number_separators(
+            "\n".join(part for part in [message.subject, _fact_body_text(message.body_text)] if part)
+        )
+    )
+
+
+def _fact_body_text(raw: str) -> str:
+    return _strip_quoted_reply_text(_visible_message_text(raw))
+
+
+def _visible_message_text(raw: str) -> str:
+    text = str(raw or "")
+    if not text:
+        return ""
+    if not HTML_MARKUP_RE.search(text):
+        return text
+    _, parsed = visible_text(text)
+    return parsed
+
+
+def _strip_quoted_reply_text(text: str) -> str:
+    line_cleaned = _strip_quoted_reply_lines(str(text or ""))
+    return _strip_flat_quoted_headers(line_cleaned).strip()
+
+
+def _strip_quoted_reply_lines(text: str) -> str:
+    lines = text.splitlines()
+    if len(lines) <= 1:
+        return text
+    kept: list[str] = []
+    for index, line in enumerate(lines):
+        if EMAIL_QUOTED_REPLY_LINE_RE.match(line):
+            break
+        if _quoted_header_block_starts(lines, index):
+            break
+        kept.append(line)
+    return "\n".join(kept)
+
+
+def _quoted_header_block_starts(lines: list[str], index: int) -> bool:
+    line = lines[index]
+    if not EMAIL_HEADER_LINE_RE.match(line):
+        return False
+    window = lines[index : min(len(lines), index + 5)]
+    header_count = sum(1 for item in window if EMAIL_HEADER_LINE_RE.match(item))
+    if header_count < 2:
+        return False
+    if index == 0:
+        return True
+    previous = "\n".join(lines[max(0, index - 2) : index]).strip()
+    return bool(not previous or re.search(r"(?:^|\n)\s*(?:>\s*)*(?:[_=-]{5,}|-{5,})\s*$", previous))
+
+
+def _strip_flat_quoted_headers(text: str) -> str:
+    cut = len(text)
+    for pattern in (FLAT_ON_WROTE_RE, FLAT_QUOTED_HEADER_RE):
+        match = pattern.search(text)
+        if match:
+            cut = min(cut, match.start())
+    return text[:cut]
+
+
+def _deadline_context_allowed_for_message(message: EmailMessage, deadline: dict[str, object]) -> bool:
+    context = str(deadline.get("context") or "")
+    if _deadline_looks_like_html_artifact(context):
+        return False
+    if _security_notification_without_deadline(message):
+        return False
+    if _commerce_notification_without_user_deadline(message, context):
+        return False
+    if _promotional_message_without_user_deadline(message, deadline):
+        return False
+    return True
+
+
+def _promotional_message_without_user_deadline(message: EmailMessage, deadline: dict[str, object]) -> bool:
+    """Veto deadlines from mail Gmail itself routed outside Primary (or
+    list/bulk mail) unless the candidate date carries an explicit user
+    obligation. A creator post, newsletter, update, or marketing blast that
+    merely *mentions* a date is not a deadline."""
+    if message.gmail_category not in {"promotions", "social", "forums", "updates"} and not message.is_bulk:
+        return False
+    context = normalize_text(" ".join([message.subject, str(deadline.get("context") or "")]))
+    if (
+        message.gmail_category == "promotions"
+        and PROMOTIONAL_OFFER_CONTEXT_RE.search(context)
+        and not PROMOTIONAL_HARD_OBLIGATION_RE.search(context)
+    ):
+        return True
+    return not USER_OBLIGATION_DEADLINE_RE.search(context)
+
+
+def _promotional_message_without_payment_obligation(message: EmailMessage, context: str) -> bool:
+    """Drop dollar amounts from Promotions/Social/Forums mail unless the text
+    around them is a real bill. A "$129 getaway", "50,000 points", or "$0 intro
+    annual fee" is a marketing figure, not money the user owes — symmetric with
+    the deadline gate so promo mail stops minting fake obligations."""
+    if message.gmail_category not in {"promotions", "social", "forums"}:
+        return False
+    combined = normalize_text(" ".join([message.subject, context]))
+    return not PAYMENT_OBLIGATION_RE.search(combined)
+
+
+def _promotional_message_without_user_action(message: EmailMessage) -> bool:
+    """Drop imperative-verb "actions" from Promotions/Social/Forums mail unless
+    the message states a real obligation. "Redeem your points", "shop now",
+    "enjoy the offer" are calls to buy, not tasks the user owes."""
+    if message.gmail_category not in {"promotions", "social", "forums"}:
+        return False
+    subject_body = normalize_text(_subject_body_text(message))
+    return not (USER_OBLIGATION_DEADLINE_RE.search(subject_body) or PAYMENT_OBLIGATION_RE.search(subject_body))
+
+
+def _deadline_looks_like_html_artifact(context: str) -> bool:
+    return bool(HTML_DATE_ARTIFACT_RE.search(context))
+
+
+def _security_notification_without_deadline(message: EmailMessage) -> bool:
+    subject_body = _subject_body_text(message)
+    if not SECURITY_NOTIFICATION_RE.search(subject_body):
+        return False
+    return not STRONG_DEADLINE_CUE_RE.search(subject_body)
+
+
+def _commerce_notification_without_user_deadline(message: EmailMessage, context: str) -> bool:
+    subject_body = _subject_body_text(message)
+    combined = normalize_text(" ".join([subject_body, context]))
+    if not COMMERCE_NOTIFICATION_RE.search(combined):
+        return False
+    if USER_OBLIGATION_DEADLINE_RE.search(combined):
+        return False
+    return bool(COMMERCE_DATE_CONTEXT_RE.search(combined) or COMMERCE_NOTIFICATION_RE.search(subject_body))
 
 
 def _metadata(message: EmailMessage) -> dict[str, str]:
@@ -293,6 +552,8 @@ def _amount_context_allowed(
     if re.search(r"\b(?:amount billed|plan paid):\s*$", before):
         return False
     if _semantic_amount_noise(message, lowered_context):
+        return False
+    if _promotional_message_without_payment_obligation(message, context):
         return False
     return not _low_confidence_amount_noise(before, lowered_context)
 
