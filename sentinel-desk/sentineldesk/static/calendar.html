@@ -1969,12 +1969,14 @@
     if (el) el.style.display = 'none';
   }
 
+  var askHistory = [];  // last few {question, intent} turns, for follow-up context
+
   function askAssistant(question) {
     userMessage(question);
     fetch('/api/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question: question })
+      body: JSON.stringify({ question: question, history: askHistory.slice(-3) })
     })
       .then(function (r) { return r.json(); })
       .then(function (answer) {
@@ -1982,6 +1984,8 @@
           botMessage('<div class="dD-body uncertain">' + escapeHtml(answer.error) + '</div>');
           return;
         }
+        askHistory.push({ question: question, intent: answer.intent || '' });
+        if (askHistory.length > 6) askHistory = askHistory.slice(-6);
         var cards = answer.metadata && answer.metadata.cards;
         var hasCards = cards && cards.length;
         // When we have structured cards, the answer text's first line is the

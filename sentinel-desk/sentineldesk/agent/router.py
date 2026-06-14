@@ -5,7 +5,30 @@ import re
 from .schemas import Intent
 
 
-def classify_intent(question: str) -> Intent:
+FOLLOWUP_TERMS = (
+    "其他的呢", "其他呢", "其它的呢", "其它呢", "别的呢", "还有呢", "还有吗", "还有别的",
+    "更多", "继续", "接着", "more", "what else", "anything else", "the rest", "go on",
+)
+
+
+def is_followup(question: str) -> bool:
+    """A short 'and the others?' style continuation that only makes sense against
+    the previous turn."""
+    text = question.strip().lower()
+    return len(text) <= 16 and any(term in text for term in FOLLOWUP_TERMS)
+
+
+def _continue_intent(previous_intent: str) -> Intent | None:
+    if previous_intent in {"latest_deadline", "latest_amount", "task_overview"}:
+        return Intent.TASK_OVERVIEW
+    return None
+
+
+def classify_intent(question: str, *, previous_intent: str | None = None) -> Intent:
+    if previous_intent and is_followup(question):
+        followed = _continue_intent(previous_intent)
+        if followed is not None:
+            return followed
     text = question.lower()
     if _has_any(text, ["calendar", "日历", "提醒", "remind", "schedule this", "put this"]):
         return Intent.CALENDAR_ACTION

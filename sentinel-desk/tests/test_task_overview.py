@@ -51,5 +51,34 @@ class TaskOverviewAnswerTests(unittest.TestCase):
         self.assertIn("don't see any upcoming", answer.answer)
 
 
+class FollowupContextTests(unittest.TestCase):
+    def test_followup_after_deadline_becomes_overview(self) -> None:
+        # "其他的呢" alone is a GENERAL blurb...
+        self.assertEqual(classify_intent("其他的呢"), Intent.GENERAL)
+        # ...but after a deadline question it continues into the overview.
+        self.assertEqual(
+            classify_intent("其他的呢", previous_intent="latest_deadline"),
+            Intent.TASK_OVERVIEW,
+        )
+        self.assertEqual(
+            classify_intent("还有呢", previous_intent="latest_amount"),
+            Intent.TASK_OVERVIEW,
+        )
+
+    def test_followup_does_not_hijack_a_real_question(self) -> None:
+        # a substantive question keeps its own intent even with a follow-up word
+        self.assertEqual(
+            classify_intent("这个月要交多少钱", previous_intent="latest_deadline"),
+            Intent.LATEST_AMOUNT,
+        )
+
+    def test_answer_question_uses_previous_intent(self) -> None:
+        messages = [
+            _message("m1", "Rent due", "Please pay your rent by July 1, 2026."),
+        ]
+        answer = answer_question("其他的呢", messages=messages, previous_intent="latest_deadline")
+        self.assertEqual(answer.intent, Intent.TASK_OVERVIEW)
+
+
 if __name__ == "__main__":
     unittest.main()

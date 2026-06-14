@@ -35,9 +35,15 @@ def answer_with_workflow(
     registry: ToolRegistry | None = None,
     paths: Paths | None = None,
     chat_client: ChatClient | None = None,
+    history: list[dict[str, Any]] | None = None,
 ) -> AgentAnswer:
     runtime = runtime_for(provider)
-    initial_state = {"question": question, "messages": messages or [], "registry": registry}
+    initial_state = {
+        "question": question,
+        "messages": messages or [],
+        "registry": registry,
+        "previous_intent": _previous_intent(history),
+    }
     answer: AgentAnswer | None = None
     if runtime.engine == "langgraph":
         runnable = build_langgraph_workflow()
@@ -114,8 +120,19 @@ def build_langgraph_workflow() -> Any | None:
     return graph.compile()
 
 
+def _previous_intent(history: list[dict[str, Any]] | None) -> str | None:
+    """The intent of the most recent prior turn, used to resolve a follow-up
+    like "其他的呢" against what was just asked."""
+    for turn in reversed(history or []):
+        if isinstance(turn, dict) and turn.get("intent"):
+            return str(turn.get("intent"))
+    return None
+
+
 def _route_stage(state: dict[str, Any]) -> dict[str, Any]:
-    intent = classify_intent(str(state.get("question") or ""))
+    intent = classify_intent(
+        str(state.get("question") or ""), previous_intent=state.get("previous_intent")
+    )
     state["intent"] = intent.value
     _append_trace(state, "route", {"intent": intent.value})
     return state
@@ -133,6 +150,7 @@ def _finalize_stage(state: dict[str, Any]) -> dict[str, Any]:
         str(state.get("question") or ""),
         messages=list(state.get("messages") or []),
         registry=state.get("registry"),
+        previous_intent=state.get("previous_intent"),
     )
     state["answer"] = answer
     _append_trace(state, "finalize", {"confidence": answer.confidence, "uncertain": answer.uncertain})

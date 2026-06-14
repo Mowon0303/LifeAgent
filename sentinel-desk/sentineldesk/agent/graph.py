@@ -14,9 +14,10 @@ def answer_question(
     *,
     messages: list[EmailMessage] | None = None,
     registry: ToolRegistry | None = None,
+    previous_intent: str | None = None,
 ) -> AgentAnswer:
     active_registry = registry or default_tool_registry()
-    intent = classify_intent(question)
+    intent = classify_intent(question, previous_intent=previous_intent)
 
     if intent in {Intent.LATEST_DEADLINE, Intent.LATEST_AMOUNT}:
         active_registry.assert_can_call("search_latest_email")

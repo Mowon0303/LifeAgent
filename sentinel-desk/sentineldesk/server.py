@@ -42,6 +42,28 @@ def json_bytes(value: object) -> bytes:
     return json.dumps(value, ensure_ascii=False, indent=2, default=str).encode("utf-8")
 
 
+ASK_HISTORY_TURNS = 3
+
+
+def _sanitize_ask_history(raw: object) -> list[dict[str, str]]:
+    """Keep only the last few turns and only their question + intent — the
+    context the follow-up resolver needs, not the whole transcript or card data.
+    """
+    if not isinstance(raw, list):
+        return []
+    turns: list[dict[str, str]] = []
+    for item in raw[-ASK_HISTORY_TURNS:]:
+        if not isinstance(item, dict):
+            continue
+        turns.append(
+            {
+                "question": str(item.get("question") or "")[:300],
+                "intent": str(item.get("intent") or ""),
+            }
+        )
+    return turns
+
+
 class Handler(BaseHTTPRequestHandler):
     paths: Paths
 
@@ -311,6 +333,8 @@ class Handler(BaseHTTPRequestHandler):
             if not question:
                 self.send_json({"error": "question field required"}, status=400)
                 return
+            raw_history = body.get("history") if isinstance(body, dict) else None
+            history = _sanitize_ask_history(raw_history)
             try:
                 answer = answer_with_workflow(
                     question,
@@ -318,6 +342,7 @@ class Handler(BaseHTTPRequestHandler):
                     messages=stored_email_messages(self.paths),
                     registry=default_tool_registry(self.paths),
                     paths=self.paths,
+                    history=history,
                 )
                 self.send_json(
                     {
