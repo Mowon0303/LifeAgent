@@ -39,6 +39,11 @@ class TaskOverviewAnswerTests(unittest.TestCase):
         self.assertIn("2026-07-01", answer.answer)
         self.assertIn("2026-08-15", answer.answer)
         self.assertNotIn("2026-05-01", answer.answer)  # past deadline not surfaced
+        # structured cards for the UI: subject as title, resolved date, source
+        cards = answer.metadata.get("cards")
+        self.assertTrue(cards)
+        self.assertEqual({c["date"] for c in cards}, {"2026-07-01", "2026-08-15"})
+        self.assertTrue(all(c["title"] and c["source_id"] for c in cards))
 
     def test_overview_handles_no_evidence(self) -> None:
         answer = answer_question("what's on my plate", messages=[])

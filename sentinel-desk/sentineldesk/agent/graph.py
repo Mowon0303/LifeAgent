@@ -232,13 +232,18 @@ def _task_overview_answer(messages: list[EmailMessage]) -> AgentAnswer:
         )
         for iso, fact in deduped[:3]
     )
+    cards = [
+        {"kind": "deadline", "title": str(fact.metadata.get("subject") or fact.value),
+         "value": fact.value, "date": iso, "source_id": fact.source_id}
+        for iso, fact in deduped[:5]
+    ]
     return AgentAnswer(
         intent=Intent.TASK_OVERVIEW,
         answer=answer,
         confidence="medium",
         citations=citations,
         tool_calls=("search_latest_email",),
-        metadata={"deadline_count": len(deduped), "amount_count": amount_count},
+        metadata={"deadline_count": len(deduped), "amount_count": amount_count, "cards": cards},
     )
 
 
@@ -272,8 +277,25 @@ def _latest_global_answer(
             ),
         ),
         tool_calls=tuple(tool_calls),
-        metadata={"scanned": "all_messages", "candidate_count": len(matches)},
+        metadata={"scanned": "all_messages", "candidate_count": len(matches), "cards": [_fact_card(chosen, wanted)]},
     )
+
+
+def _fact_card(fact, kind: str) -> dict:
+    """A compact, UI-renderable summary of a fact: the email subject as the
+    headline, the resolved date for deadlines, and the source for the chip."""
+    card = {
+        "kind": kind,
+        "title": str(fact.metadata.get("subject") or fact.value),
+        "value": fact.value,
+        "date": "",
+        "source_id": fact.source_id,
+    }
+    if kind == "deadline":
+        from sentineldesk.calendar.view import parse_deadline_date
+
+        card["date"] = parse_deadline_date(fact.value) or fact.value
+    return card
 
 
 def _nearest_deadline_fact(matches: list):

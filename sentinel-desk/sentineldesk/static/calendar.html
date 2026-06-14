@@ -200,6 +200,13 @@
   .dD-cites { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
   .dD-cite { font-family:'IBM Plex Mono',monospace; font-size:10px; color:#6A5BD0; background:#EAE6FA;
     border-radius:5px; padding:2px 7px; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  /* structured answer cards (nearest deadline / overview) */
+  .dD-anscards { display:flex; flex-direction:column; gap:7px; margin-top:8px; max-width:340px; }
+  .dD-anscard { border-left:3px solid #B14228; background:#FBF8F1; border-radius:6px; padding:9px 12px;
+    box-shadow:0 1px 2px rgba(80,60,20,.05); }
+  .dD-anscard .d { font-family:'IBM Plex Mono',monospace; font-size:11.5px; font-weight:700; color:#B14228; letter-spacing:.02em; }
+  .dD-anscard .t { font-size:14px; font-weight:600; color:#2B2622; margin:3px 0 4px; line-height:1.35; }
+  .dD-anscard .s { font-size:11px; color:#9A8E7B; }
   .dD-btns { display:flex; flex-wrap:wrap; gap:8px; margin-top:9px; max-width:340px; }
   .dD-cbtn { min-height:30px; padding:5px 12px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; border:0;
     display:inline-flex; align-items:center; justify-content:center; gap:6px; font-family:inherit; white-space:nowrap; line-height:1.2; }
@@ -1897,6 +1904,22 @@
       });
   }
 
+  function answerCardsHtml(cards) {
+    return '<div class="dD-anscards">' + cards.map(function (c) {
+      var head = c.kind === 'deadline'
+        ? '截止 · ' + escapeHtml(c.date || c.value || '')
+        : escapeHtml(c.value || '');
+      var src = c.source_id
+        ? '<div class="s">来源 · <span class="dD-cite">' + escapeHtml(c.source_id) + '</span></div>'
+        : '';
+      return '<div class="dD-anscard">' +
+        '<div class="d">' + head + '</div>' +
+        '<div class="t">' + escapeHtml(c.title || c.value || '') + '</div>' +
+        src +
+        '</div>';
+    }).join('') + '</div>';
+  }
+
   function askAssistant(question) {
     userMessage(question);
     fetch('/api/ask', {
@@ -1910,8 +1933,16 @@
           botMessage('<div class="dD-body uncertain">' + escapeHtml(answer.error) + '</div>');
           return;
         }
-        var html = '<div class="dD-body' + (answer.uncertain ? ' uncertain' : '') + '">' + escapeHtml(answer.answer) + '</div>';
-        if (answer.citations && answer.citations.length) {
+        var cards = answer.metadata && answer.metadata.cards;
+        var hasCards = cards && cards.length;
+        // When we have structured cards, the answer text's first line is the
+        // headline (e.g. "Upcoming on your plate:") and the cards carry the
+        // detail — so we don't repeat the list as plain text.
+        var bodyText = hasCards ? String(answer.answer || '').split('\n')[0] : answer.answer;
+        var html = '<div class="dD-body' + (answer.uncertain ? ' uncertain' : '') + '">' + escapeHtml(bodyText) + '</div>';
+        if (hasCards) {
+          html += answerCardsHtml(cards);
+        } else if (answer.citations && answer.citations.length) {
           html += '<div class="dD-cites">' + answer.citations.map(function (c) {
             return '<span class="dD-cite" title="' + escapeHtml(c.evidence || '') + '">' + escapeHtml(c.source_id) + '</span>';
           }).join('') + '</div>';
