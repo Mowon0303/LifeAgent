@@ -239,11 +239,17 @@ def refine_answer(
     question: str,
     provider: ModelProvider,
     client: ChatClient | None = None,
+    context: str = "",
 ) -> tuple[AgentAnswer, ModelCallRecord | None]:
     """Optionally rewrite the deterministic answer text with a local model.
 
     Returns the (possibly rewritten) answer and a call record for cost
     attribution. The record is None only when no model path is configured.
+
+    ``context`` is the rendered conversation memory. It lets the model write a
+    follow-up-aware, natural reply — but it is reference only: the anchor/invent
+    guards below still key on this turn's answer + evidence, so a date or amount
+    that appears only in the conversation context can never leak into the answer.
     """
 
     active_client = client if client is not None else chat_client_for(provider)
@@ -278,7 +284,8 @@ def refine_answer(
         for citation in answer.citations[: 5 if free else 3]
     )
     user_prompt = (
-        "<question>\n" + question.strip() + "\n</question>\n"
+        (context + "\n" if context else "")
+        + "<question>\n" + question.strip() + "\n</question>\n"
         "<verified_answer>\n" + answer.answer.strip() + "\n</verified_answer>\n"
         "<evidence>\n" + evidence + "\n</evidence>\n"
         + ("Write a short, natural report for the user." if free else "Rewrite the verified answer naturally for the user.")

@@ -9,12 +9,15 @@ def json_bytes(value: object) -> bytes:
     return json.dumps(value, ensure_ascii=False, indent=2, default=str).encode("utf-8")
 
 
-ASK_HISTORY_TURNS = 3
+# Upper bound on raw turns the client may send; the conversation-memory token
+# budget (agent.memory) does the real windowing/compaction from here.
+ASK_HISTORY_TURNS = 16
 
 
 def sanitize_ask_history(raw: object) -> list[dict[str, str]]:
-    """Keep only the last few turns and only their question + intent — the
-    context the follow-up resolver needs, not the whole transcript or card data.
+    """Keep the last few turns and only their question, intent, and a trimmed
+    answer digest — the context the follow-up resolver and conversation memory
+    need, not the whole transcript or card data.
     """
     if not isinstance(raw, list):
         return []
@@ -26,6 +29,7 @@ def sanitize_ask_history(raw: object) -> list[dict[str, str]]:
             {
                 "question": str(item.get("question") or "")[:300],
                 "intent": str(item.get("intent") or ""),
+                "answer": str(item.get("answer") or "")[:600],
             }
         )
     return turns
