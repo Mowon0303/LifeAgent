@@ -28,6 +28,7 @@ def answer_question(
     previous_intent: str | None = None,
     intent_override: Intent | None = None,
     general_mode: str | None = None,
+    calendar: list[dict] | None = None,
 ) -> AgentAnswer:
     active_registry = registry or default_tool_registry()
     # intent_override carries the workflow's LLM-resolved intent; without it we
@@ -117,7 +118,7 @@ def answer_question(
 
     if intent == Intent.TASK_OVERVIEW:
         active_registry.assert_can_call("search_latest_email")
-        return _task_overview_answer(messages or [])
+        return _task_overview_answer(calendar or [])
 
     if intent == Intent.CALENDAR_ACTION:
         active_registry.assert_can_call("draft_calendar_event")

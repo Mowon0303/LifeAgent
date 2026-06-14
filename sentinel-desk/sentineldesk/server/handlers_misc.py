@@ -10,6 +10,7 @@ from ..agent.model import load_model_provider
 from ..agent.rag_index import search_index
 from ..agent.tools import default_tool_registry
 from ..agent.workflow import answer_with_workflow
+from ..calendar.view import build_calendar_items
 from ..email.ingest import stored_email_messages
 from ..retention import plan_purge, purge, result_to_dict
 from .helpers import sanitize_ask_history
@@ -68,6 +69,12 @@ def handle_ask(h: "Handler", parsed: "ParseResult") -> None:
         return
     raw_history = body.get("history") if isinstance(body, dict) else None
     history = sanitize_ask_history(raw_history)
+    # The task overview answers from accepted calendar deadlines (facts), not raw
+    # extraction — so build the same calendar view the board uses and pass it in.
+    calendar_items = build_calendar_items(
+        db.list_calendar_drafts(h.paths, limit=200),
+        db.list_approval_records(h.paths, limit=200),
+    )
     try:
         answer = answer_with_workflow(
             question,
@@ -76,6 +83,7 @@ def handle_ask(h: "Handler", parsed: "ParseResult") -> None:
             registry=default_tool_registry(h.paths),
             paths=h.paths,
             history=history,
+            calendar=calendar_items,
         )
         h.send_json(
             {

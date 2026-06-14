@@ -1,83 +1,95 @@
-"""Answers built directly from extracted email facts: task overview and the
-broad "nearest/latest X" query, plus the UI fact-card shape."""
+"""Answers grounded in facts: the task overview (from the user's *accepted*
+calendar deadlines) and the broad "nearest/latest X" query over email facts, plus
+the UI fact-card shape."""
 
 from __future__ import annotations
-
-from sentineldesk.email.extract import extract_email_facts
-from sentineldesk.email.models import EmailMessage
 
 from ..schemas import AgentAnswer, Citation, Intent
 
 
-def _task_overview_answer(messages: list[EmailMessage]) -> AgentAnswer:
-    """Answer "what's on my plate" with a short list of upcoming deadlines. Facts
-    come through extract_email_facts, so promotional noise is already gated;
-    amounts are summarized as a count (ask "how much do I owe" for detail) rather
-    than listed, since a raw amount is often a receipt, not an obligation."""
-    from sentineldesk.calendar.view import parse_deadline_date
+def _task_overview_answer(calendar_items: list[dict]) -> AgentAnswer:
+    """Answer "what's on my plate" from the deadlines the user has *accepted* into
+    the calendar — those are the established facts. Extraction still runs and feeds
+    the review queue with candidates, but a candidate only counts here once the user
+    confirms it. That's also how promotional/competition noise stays out: you simply
+    never accept it, so it never becomes a "fact". When nothing is accepted yet, we
+    point at the pending review queue instead of going blank."""
     from sentineldesk.extract import utc_now
 
     today = utc_now()[:10]
-    upcoming: list[tuple[str, object]] = []
-    amount_count = 0
-    for message in messages:
-        for fact in extract_email_facts(message):
-            if fact.kind == "deadline":
-                iso = parse_deadline_date(fact.value)
-                if iso and iso >= today:
-                    upcoming.append((iso, fact))
-            elif fact.kind == "amount":
-                amount_count += 1
+    approved = sorted(
+        (
+            item
+            for item in calendar_items
+            if item.get("approval_state") == "approved" and str(item.get("date_key") or "") >= today
+        ),
+        key=lambda item: str(item.get("date_key") or ""),
+    )
+    pending_count = sum(
+        1
+        for item in calendar_items
+        if item.get("approval_state") != "approved" and str(item.get("date_key") or "") >= today
+    )
 
-    deduped: list[tuple[str, object]] = []
-    seen_dates: set[str] = set()
-    for iso, fact in sorted(upcoming, key=lambda item: item[0]):
-        if iso in seen_dates:
-            continue
-        seen_dates.add(iso)
-        deduped.append((iso, fact))
-
-    if not deduped and not amount_count:
+    if not approved:
+        # Cold start: don't go silent. Send the user to the review card, where the
+        # candidates live, so accepting one is one step away.
+        if pending_count:
+            answer = (
+                f"你还没把任何截止加入日历。我找到 {pending_count} 条候选，"
+                "在上面的复核卡里逐条确认后就会算进来。"
+            )
+        else:
+            answer = "你的日历里还没有截止，我也没有待复核的候选。"
         return AgentAnswer(
             intent=Intent.TASK_OVERVIEW,
-            answer="I don't see any upcoming deadlines in your local evidence right now.",
+            answer=answer,
             confidence="medium",
             tool_calls=("search_latest_email",),
+            metadata={"deadline_count": 0, "pending_count": pending_count, "cards": []},
         )
 
-    # The per-item detail lives in the cards below, so the answer text stays a
-    # short headline — otherwise the model rephrases the whole list into prose
-    # that just repeats the cards.
-    count = len(deduped)
-    answer = (
-        f"You have {count} upcoming deadline{'s' if count != 1 else ''}."
-        if count
-        else "Nothing dated is upcoming."
-    )
-    if amount_count:
-        answer += f" ({amount_count} amount(s) on file — ask \"how much do I owe\" for detail.)"
-    # Surface only the nearest deadline as evidence: one card, and the model's
-    # grounding scoped to that single fact. Showing every upcoming deadline made a
-    # wall of mostly-noise cards, and citing them all let the free rewrite braid one
-    # email's amount onto another's date.
+    # The per-item detail lives in the cards below, so the answer text stays a short
+    # headline — otherwise the model just rephrases the whole list back as prose.
+    count = len(approved)
+    answer = f"You have {count} upcoming deadline{'s' if count != 1 else ''} on your calendar."
+    if pending_count:
+        answer += f"（另有 {pending_count} 条候选待复核。）"
+    # Model grounding (citations) stays scoped to the *nearest* deadline so the prose
+    # can't braid one event's detail onto another's date — the same anti-braid scope
+    # that matters on the fuzzy RAG path. The cards, by contrast, list every accepted
+    # deadline: each is a confirmed, individually grounded fact.
     citations = tuple(
         Citation(
-            source_id=fact.source_id,
-            source_type=fact.source_type,
-            evidence=fact.evidence,
-            captured_at=fact.received_at,
+            source_id=(item.get("source_ids") or [""])[0],
+            source_type="calendar",
+            evidence=str(item.get("date_text") or item.get("title") or ""),
+            captured_at="",
         )
-        for iso, fact in deduped[:1]
+        for item in approved[:1]
     )
-    cards = [_fact_card(fact, "deadline") for iso, fact in deduped[:1]]
+    cards = [_calendar_card(item) for item in approved]
     return AgentAnswer(
         intent=Intent.TASK_OVERVIEW,
         answer=answer,
         confidence="medium",
         citations=citations,
         tool_calls=("search_latest_email",),
-        metadata={"deadline_count": len(deduped), "amount_count": amount_count, "cards": cards},
+        metadata={"deadline_count": count, "pending_count": pending_count, "cards": cards},
     )
+
+
+def _calendar_card(item: dict) -> dict:
+    source_ids = item.get("source_ids") or []
+    return {
+        "kind": "deadline",
+        "title": str(item.get("title") or ""),
+        "date": str(item.get("date_key") or ""),
+        "value": str(item.get("date_text") or ""),
+        "source_id": str(source_ids[0]) if source_ids else "",
+        "event_id": str(item.get("event_id") or ""),
+        "evidence": str(item.get("date_text") or ""),
+    }
 
 
 def _latest_global_answer(

@@ -37,6 +37,7 @@ def answer_with_workflow(
     paths: Paths | None = None,
     chat_client: ChatClient | None = None,
     history: list[dict[str, Any]] | None = None,
+    calendar: list[dict[str, Any]] | None = None,
 ) -> AgentAnswer:
     runtime = runtime_for(provider)
     resolved_client = chat_client if chat_client is not None else chat_client_for(provider)
@@ -50,6 +51,7 @@ def answer_with_workflow(
         "previous_intent": _previous_intent(history),
         "chat_client": resolved_client,  # the route stage uses it for LLM intent fallback
         "memory_block": memory_block,
+        "calendar": calendar or [],  # accepted deadlines = the overview's facts
     }
     answer: AgentAnswer | None = None
     if runtime.engine == "langgraph":
@@ -192,6 +194,7 @@ def _finalize_stage(state: dict[str, Any]) -> dict[str, Any]:
         previous_intent=state.get("previous_intent"),
         intent_override=Intent(intent_value) if intent_value else None,
         general_mode=state.get("general_mode"),
+        calendar=list(state.get("calendar") or []),
     )
     state["answer"] = answer
     _append_trace(state, "finalize", {"confidence": answer.confidence, "uncertain": answer.uncertain})
