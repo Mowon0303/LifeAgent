@@ -110,6 +110,32 @@ class RefineAnswerTests(unittest.TestCase):
         self.assertEqual(answer.answer, uncertain.answer)
         self.assertEqual(client.calls, [])
 
+    def test_free_mode_keeps_a_rewrite_the_guard_would_reject(self) -> None:
+        # The rewrite drops the explicit date — guarded refine falls back, but
+        # free_refine keeps the natural synthesis and uses the report prompt.
+        free = ModelProvider(provider="ollama", model="qwen2.5:7b", free_refine=True)
+        client = FakeChatClient("房租快到期了，记得尽快缴纳 1850 元。")
+        answer, record = refine_answer(
+            verified_answer(), question="最近截止？", provider=free, client=client
+        )
+        self.assertEqual(record.status, "ok_free")
+        self.assertEqual(answer.answer, "房租快到期了，记得尽快缴纳 1850 元。")
+        self.assertIn("report", client.calls[0]["system"].lower())
+
+    def test_free_mode_also_rewrites_uncertain_answers(self) -> None:
+        free = ModelProvider(provider="ollama", model="qwen2.5:7b", free_refine=True)
+        client = FakeChatClient("有几个互相冲突的截止日期，建议你逐一核对。")
+        uncertain = AgentAnswer(
+            intent=Intent.LATEST_DEADLINE,
+            answer="Conflicting deadline evidence found: 07/01/2026, 07/02/2026.",
+            confidence="uncertain",
+            uncertain=True,
+        )
+        answer, record = refine_answer(uncertain, question="最近截止？", provider=free, client=client)
+        self.assertEqual(record.status, "ok_free")
+        self.assertEqual(answer.answer, "有几个互相冲突的截止日期，建议你逐一核对。")
+        self.assertTrue(answer.uncertain)  # still flagged uncertain, just phrased naturally
+
     def test_confirmation_boundaries_are_never_sent_to_the_model(self) -> None:
         client = FakeChatClient("should never be used")
         boundary = AgentAnswer(

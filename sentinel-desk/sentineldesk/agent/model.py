@@ -16,6 +16,11 @@ class ModelProvider:
     api_key_env: str = ""
     privacy: str = "local-first"
     structured_output: bool = True
+    # "free_refine" drops the fail-loud guardrails on the model rewrite (the
+    # anchor check, the uncertain/confirmation skips) and lets it synthesize a
+    # natural report grounded in the evidence. Opt-in, for experimentation —
+    # tighten back up before relying on it.
+    free_refine: bool = False
     langchain_available: bool = False
     langgraph_available: bool = False
 
@@ -42,6 +47,8 @@ def load_model_provider(paths: Paths) -> ModelProvider:
         api_key_env=str(model_config.get("api_key_env") or _default_api_key_env(provider)),
         privacy=str(model_config.get("privacy") or _default_privacy(provider)),
         structured_output=bool(model_config.get("structured_output", True)),
+        free_refine=bool(model_config.get("free_refine"))
+        or str(model_config.get("refine") or "").lower() == "free",
         langchain_available=importlib.util.find_spec("langchain_core") is not None,
         langgraph_available=importlib.util.find_spec("langgraph") is not None,
     )
