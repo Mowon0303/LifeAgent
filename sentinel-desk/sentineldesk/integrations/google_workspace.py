@@ -140,7 +140,16 @@ def _decode_body(payload: dict[str, Any]) -> str:
     if data:
         return base64.urlsafe_b64decode(data + "=" * (-len(data) % 4)).decode("utf-8", errors="replace")
     parts = payload.get("parts") or []
-    return "\n".join(_decode_body(part) for part in parts if part)
+    if not parts:
+        return ""
+    # text/plain and text/html alternatives carry the SAME content; concatenating
+    # both stored every value twice (a "$998" in the text and again in a
+    # <td>$998</td>). Prefer the plain-text part; fall back to HTML (tags are
+    # stripped downstream) only when no plain alternative exists.
+    plain = [part for part in parts if str(part.get("mimeType") or "").startswith("text/plain")]
+    html = [part for part in parts if str(part.get("mimeType") or "").startswith("text/html")]
+    chosen = plain or html or parts
+    return "\n".join(_decode_body(part) for part in chosen if part)
 
 
 def _date_text(value: str) -> str:

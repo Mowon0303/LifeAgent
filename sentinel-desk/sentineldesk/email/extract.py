@@ -113,7 +113,23 @@ def extract_email_facts(message: EmailMessage, *, deadline_gate: DeadlineGate | 
                 metadata=_metadata(message),
             )
         )
-    return facts
+    return _dedup_facts(facts)
+
+
+def _dedup_facts(facts: list[EmailFact]) -> list[EmailFact]:
+    """Collapse to one fact per (kind, value). A multipart email renders the same
+    value in both its text and HTML parts, so the regex matches it twice ("$998"
+    in the plain text and in a <td>$998</td>) — but it is one obligation, not two.
+    Keeps the first occurrence, so confidence/evidence stay deterministic."""
+    seen: set[tuple[str, str]] = set()
+    deduped: list[EmailFact] = []
+    for fact in facts:
+        key = (fact.kind, " ".join(str(fact.value).lower().split()))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(fact)
+    return deduped
 
 
 def _message_fact_text(message: EmailMessage) -> str:

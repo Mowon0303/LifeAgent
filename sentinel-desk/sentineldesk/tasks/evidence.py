@@ -79,11 +79,13 @@ def _task_source_detail(task: dict[str, Any], message: dict[str, Any]) -> dict[s
     message_id = str(message.get("message_id") or "")
     attachment_names = [str(item) for item in message.get("attachment_names", [])]
     attachment_texts = list(message.get("attachment_texts", []) or [])
-    facts = [
+    # Dedupe by (kind, value): an email that names the same amount twice
+    # ("$998 ... Price Match Benefit $998") otherwise lists it twice in evidence.
+    facts = _dedupe_evidence_facts([
         _evidence_fact(fact)
         for fact in message.get("facts", [])
         if isinstance(fact, dict) and _fact_matches_task(fact, kind=kind, source_refs=source_refs, message_id=message_id)
-    ]
+    ])
     return {
         "source_id": str(task.get("primary_source") or (source_refs_list[0] if source_refs_list else "")),
         "message_id": message_id,

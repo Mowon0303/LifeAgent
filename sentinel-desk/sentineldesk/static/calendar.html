@@ -193,6 +193,10 @@
   .dD-task-fact .fk { font-family:'IBM Plex Mono',monospace; font-size:9.5px; font-weight:700; letter-spacing:.06em;
     color:#B14228; text-transform:uppercase; min-width:34px; flex:0 0 auto; }
   .dD-task-fact .fv { display:flex; flex-wrap:wrap; gap:5px; }
+  .dD-embed.task.tappable { cursor:pointer; transition:background .12s, border-color .12s; }
+  .dD-embed.task.tappable:hover { background:#FBF6EC; border-left-color:#B14228; }
+  .dD-tap-hint { margin-top:9px; font-size:11px; color:#B49A6A; font-weight:600; }
+  .dD-embed.task.tappable:hover .dD-tap-hint { color:#B14228; }
   .dD-adv-head { font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700; letter-spacing:.06em;
     color:#8A6D3B; text-transform:uppercase; margin:6px 0 4px; }
   .dD-emailrow { border-top:1px dashed #E0D6C2; padding-top:10px; margin-top:10px; }
@@ -1558,8 +1562,6 @@
     var kinds = Array.isArray(task.kinds) && task.kinds.length ? task.kinds : [task.kind];
     var kindLabel = kinds.map(function (k) { return TASK_KIND_LABEL[k] || k; }).filter(Boolean).join('·') || '任务';
     var status = REVIEW_STATUS_LABEL[task.status] || task.status || 'new';
-    var priority = task.priority_band ? (task.priority_band + ' · ' + (task.priority_score || 0)) : '';
-    var reasons = Array.isArray(task.priority_reasons) ? task.priority_reasons.slice(0, 3).join(', ') : '';
     var facts = Array.isArray(task.facts) && task.facts.length
       ? task.facts
       : [{ kind: task.kind, values: (Array.isArray(task.values) && task.values.length ? task.values : (task.value ? [task.value] : [])) }];
@@ -1574,26 +1576,23 @@
         '<span class="fv">' + vals + '</span></div>';
     }).join('');
     var ids = (Array.isArray(task.task_ids) && task.task_ids.length ? task.task_ids : [task.task_id]).join(',');
-    var doneLabel = task.child_count > 1 ? '完成整封 (' + task.child_count + ')' : '完成';
+    var doneLabel = task.child_count > 1 ? '✓ 处理完 · ' + task.child_count + ' 项' : '✓ 处理完';
     return '<div class="dD-body">这封邮件有 ' + (task.child_count || 1) + ' 项待处理。操作只更新本地任务状态。</div>' +
-      '<div class="dD-embed task">' +
+      '<div class="dD-embed task tappable" data-act="task-card" data-task-id="' + escapeHtml(task.task_id) +
+        '" role="button" tabindex="0" title="点击查看邮件内容">' +
       '<div class="dD-task-kind">' + (meta ? escapeHtml(meta) + ' · ' : '') +
-      escapeHtml(kindLabel) + ' · ' + escapeHtml(status) +
-      (priority ? ' · 优先 ' + escapeHtml(priority) : '') + '</div>' +
+      escapeHtml(kindLabel) + ' · ' + escapeHtml(status) + '</div>' +
       '<div class="etitle">' + escapeHtml(task.subject || task.title || 'Review task') + '</div>' +
       (factHtml ? '<div class="dD-task-facts">' + factHtml + '</div>' : '') +
       '<div class="esrc">来源 · ' + escapeHtml(task.subject || task.primary_source || task.source_type || '本地证据') +
       ' · 置信 ' + Number(task.confidence || 0).toFixed(2) + '</div>' +
-      (reasons ? '<div class="enote">排序原因：' + escapeHtml(reasons) + '</div>' : '') +
       (task.needs_verification ? '<div class="enote">这封里有置信度较低的项，建议先核对原始邮件或门户。</div>' : '') +
       (task.evidence ? '<div class="enote">' + escapeHtml(clip(task.evidence, 160)) + '</div>' : '') +
+      '<div class="dD-tap-hint">点击查看邮件内容 ›</div>' +
       '</div>' +
       '<div class="dD-btns dD-task-actions" data-task-id="' + escapeHtml(task.task_id) +
         '" data-task-ids="' + escapeHtml(ids) + '">' +
-      '<button class="dD-cbtn sec" data-act="task-evidence">查看证据</button>' +
       '<button class="dD-cbtn prim" data-act="task-done">' + escapeHtml(doneLabel) + '</button>' +
-      '<button class="dD-cbtn warn" data-act="task-needs-verification">需核对</button>' +
-      '<button class="dD-cbtn sec" data-act="task-reviewed">已审阅</button>' +
       '<button class="dD-cbtn sec" data-act="task-ignored">忽略</button></div>';
   }
 
@@ -2223,6 +2222,12 @@
       var owner = calendarEvidenceHit.closest('[data-event-id]');
       var calendarEvidenceId = calendarEvidenceHit.dataset.eventId || (owner && owner.dataset.eventId) || '';
       if (calendarEvidenceId) openCalendarEvidence(calendarEvidenceId);
+      return;
+    }
+    // the whole task card is tappable → open its email evidence (same as 查看证据)
+    var taskCardHit = e.target.closest('[data-act="task-card"]');
+    if (taskCardHit && taskCardHit.dataset.taskId) {
+      handleTaskEvidence(taskCardHit.dataset.taskId, taskCardHit);
       return;
     }
     var btn = e.target.closest('button[data-act]');
