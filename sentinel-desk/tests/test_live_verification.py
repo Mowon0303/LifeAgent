@@ -436,7 +436,7 @@ class LiveVerificationTests(unittest.TestCase):
 
                 output = io.StringIO()
                 with patch(
-                    "sentineldesk.integrations.live_verification.importlib.util.find_spec",
+                    "sentineldesk.integrations.live_verification.checks.importlib.util.find_spec",
                     return_value=object(),
                 ):
                     with contextlib.redirect_stdout(output):

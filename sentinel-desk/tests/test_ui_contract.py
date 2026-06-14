@@ -706,7 +706,7 @@ class DailyContractTests(UiContractBase):
 
     def test_gmail_sync_api_failure_updates_redacted_diagnostics(self) -> None:
         with mock.patch(
-            "sentineldesk.server.run_gmail_readonly_sync",
+            "sentineldesk.server.handlers_daily_gmail.run_gmail_readonly_sync",
             side_effect=RuntimeError("403 insufficientPermissions token-secret student.private@example.com"),
         ):
             status, payload = self.json_request(
@@ -742,7 +742,7 @@ class DailyContractTests(UiContractBase):
             "facts_extracted": 0,
             "deadline_events_drafted": 0,
         }
-        with mock.patch("sentineldesk.server.run_gmail_readonly_sync", return_value=sync_summary):
+        with mock.patch("sentineldesk.server.handlers_daily_gmail.run_gmail_readonly_sync", return_value=sync_summary):
             status, payload = self.json_request("POST", "/api/gmail/sync?confirm=1&account=student.private@example.com")
 
         raw = json.dumps(payload)

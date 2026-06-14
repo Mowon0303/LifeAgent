@@ -186,8 +186,17 @@
   .dD-task-kind { font-family:'IBM Plex Mono',monospace; font-size:10.5px; font-weight:700; letter-spacing:.08em;
     color:#B14228; text-transform:uppercase; margin-bottom:6px; }
   .dD-task-values { display:flex; flex-wrap:wrap; gap:5px; margin-top:9px; }
-  .dD-task-values span { font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:#5C5446; background:#F1EADB;
+  .dD-task-values span, .dD-task-fact .fv span { font-family:'IBM Plex Mono',monospace; font-size:10.5px; color:#5C5446; background:#F1EADB;
     border-radius:5px; padding:3px 7px; max-width:154px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .dD-task-facts { display:flex; flex-direction:column; gap:5px; margin-top:9px; }
+  .dD-task-fact { display:flex; align-items:center; gap:8px; }
+  .dD-task-fact .fk { font-family:'IBM Plex Mono',monospace; font-size:9.5px; font-weight:700; letter-spacing:.06em;
+    color:#B14228; text-transform:uppercase; min-width:34px; flex:0 0 auto; }
+  .dD-task-fact .fv { display:flex; flex-wrap:wrap; gap:5px; }
+  .dD-adv-head { font-family:'IBM Plex Mono',monospace; font-size:11px; font-weight:700; letter-spacing:.06em;
+    color:#8A6D3B; text-transform:uppercase; margin:6px 0 4px; }
+  .dD-emailrow { border-top:1px dashed #E0D6C2; padding-top:10px; margin-top:10px; }
+  .dD-emailrow:first-child { border-top:none; padding-top:0; margin-top:4px; }
   .dD-task-actions { flex-wrap:wrap; }
   .dD-evidence { border-left-color:#4F7A4A; }
   .dD-evidence .src-title { font-size:13.5px; font-weight:700; color:#2B2622; line-height:1.35; }
@@ -518,7 +527,8 @@
     taskFilterStatus: 'active',
     taskGroup: 'unread',      // simplified filter: all | unread | read | ignored
     taskSort: 'priority',
-    taskCursor: 0,           // cursor into the unified review queue (calendar + tasks)
+    taskCursor: 0,           // cursor into the primary deadline→calendar card
+    emailCursor: 0,          // cursor into the demoted email-review pager (更多 block)
     advOpen: false,          // is the collapsed "更多" advanced block expanded
     alldayExpanded: false,   // week/day all-day band expanded to show every deadline
     categories: {},           // key -> {key,label,color}, customizable, localStorage-backed
@@ -570,7 +580,8 @@
   // ---------- data ----------
   function taskApiUrl() {
     return '/api/tasks?view=' + encodeURIComponent(state.taskView || 'all') +
-      '&sort=' + encodeURIComponent(state.taskSort || 'priority');
+      '&sort=' + encodeURIComponent(state.taskSort || 'priority') +
+      '&limit=1000';  // one email can yield 2-3 fact tasks; don't truncate the queue at the default 100
   }
 
   function mapItem(raw) {
@@ -722,17 +733,140 @@
     });
   }
 
+  // ---- email aggregation: present ONE card per source email, not one per fact ----
+  // The backend yields a task per (kind, email) — a single notice can become a
+  // 截止 + 金额 + 动作 trio. Counting cards made "处理一封邮件" feel like nothing
+  // moved (the same email's sibling cards stayed). Here the dashboard collapses a
+  // source email's facts into one card whose actions resolve all of them at once,
+  // so the count tracks emails and drops by one per email handled.
+  var TASK_KIND_ORDER = { deadline: 0, amount: 1, action: 2 };
+
+  function emailGroupKey(task) {
+    return String(task.primary_source || task.task_id || '');
+  }
+
+  function rollupGroupStatus(children) {
+    var statuses = children.map(function (c) { return String(c.status || 'new'); });
+    // any unresolved fact keeps the whole email in the unread review flow
+    if (statuses.some(function (s) { return s === 'new' || s === 'needs_verification'; })) {
+      return statuses.some(function (s) { return s === 'new'; }) ? 'new' : 'needs_verification';
+    }
+    if (statuses.some(function (s) { return s === 'done'; })) return 'done';
+    if (statuses.some(function (s) { return s === 'reviewed'; })) return 'reviewed';
+    return 'ignored';  // every fact was ignored
+  }
+
+  function aggregateEmailGroup(children) {
+    var primary = children.reduce(function (best, c) {
+      return Number(c.priority_score || 0) > Number(best.priority_score || 0) ? c : best;
+    }, children[0]);
+    var kinds = [];
+    var reasons = [];
+    children.forEach(function (c) {
+      if (kinds.indexOf(c.kind) < 0) kinds.push(c.kind);
+      (c.priority_reasons || []).forEach(function (r) { if (reasons.indexOf(r) < 0) reasons.push(r); });
+    });
+    kinds.sort(function (a, b) {
+      return (TASK_KIND_ORDER[a] == null ? 9 : TASK_KIND_ORDER[a]) -
+             (TASK_KIND_ORDER[b] == null ? 9 : TASK_KIND_ORDER[b]);
+    });
+    var facts = children.slice().sort(function (a, b) {
+      return (TASK_KIND_ORDER[a.kind] == null ? 9 : TASK_KIND_ORDER[a.kind]) -
+             (TASK_KIND_ORDER[b.kind] == null ? 9 : TASK_KIND_ORDER[b.kind]);
+    }).map(function (c) {
+      var vals = Array.isArray(c.values) && c.values.length ? c.values : (c.value ? [c.value] : []);
+      return { kind: c.kind, values: vals };
+    });
+    var allValues = [];
+    facts.forEach(function (f) {
+      f.values.forEach(function (v) { if (v && allValues.indexOf(v) < 0) allValues.push(v); });
+    });
+    return {
+      task_id: primary.task_id,
+      task_ids: children.map(function (c) { return c.task_id; }),
+      child_count: children.length,
+      kind: primary.kind,
+      kinds: kinds,
+      facts: facts,
+      title: primary.title,
+      subject: primary.subject,
+      sender: primary.sender,
+      value: primary.value,
+      values: allValues,
+      fact_count: children.reduce(function (n, c) { return n + (Number(c.fact_count) || 0); }, 0),
+      confidence: children.reduce(function (m, c) { return Math.max(m, Number(c.confidence || 0)); }, 0),
+      status: rollupGroupStatus(children),
+      muted: children.some(function (c) { return !!c.muted; }),
+      needs_verification: children.some(function (c) { return !!c.needs_verification; }),
+      priority_score: primary.priority_score,
+      priority_band: primary.priority_band,
+      priority_reasons: reasons,
+      source_type: primary.source_type,
+      primary_source: primary.primary_source,
+      source_trust: primary.source_trust,
+      evidence: primary.evidence
+    };
+  }
+
+  function emailGroups() {
+    var byKey = {};
+    var order = [];
+    state.taskQueue.forEach(function (task) {
+      if (!shouldShowTaskInReview(task)) return;
+      var key = emailGroupKey(task);
+      if (!byKey[key]) { byKey[key] = []; order.push(key); }
+      byKey[key].push(task);
+    });
+    // state.taskQueue arrives priority-sorted, so first-seen key order == priority order
+    return order.map(function (key) { return aggregateEmailGroup(byKey[key]); });
+  }
+
+  function groupsInBucket(group) {
+    return emailGroups().filter(function (g) { return taskInGroup(g, group); });
+  }
+
   function groupCount(group) {
-    var taskN = state.taskQueue.filter(function (task) {
-      return shouldShowTaskInReview(task) && taskInGroup(task, group);
-    }).length;
-    // pending calendar drafts count as unread (and therefore also 全部)
-    var calN = (group === 'all' || group === 'unread') ? state.queue.length : 0;
-    return taskN + calN;
+    // Chips now filter only the demoted email-review queue; pending deadline
+    // drafts are the separate primary surface and aren't counted here.
+    return groupsInBucket(group).length;
+  }
+
+  // The demoted email-fact review queue (amounts/actions), rendered inside the
+  // 更多 block. Capped — this is a secondary surface; bulk/CLI/ops handle the tail.
+  // Demoted email-review queue, shown one card at a time with ‹ › paging — same
+  // single-card pattern as the primary deadline card, so a long queue doesn't
+  // stack into a wall of cards.
+  function emailReviewCardHtml() {
+    var groups = groupsInBucket(state.taskGroup);
+    if (state.emailCursor >= groups.length) state.emailCursor = groups.length ? groups.length - 1 : 0;
+    if (state.emailCursor < 0) state.emailCursor = groups.length ? groups.length - 1 : 0;
+    var total = groups.length;
+    var nav = '<div class="dD-cardnav" id="emailNavState">' +
+      '<button class="dD-mini" data-act="email-prev"' + (total ? '' : ' disabled') + '>‹</button>' +
+      '<span class="meta">' + (total ? state.emailCursor + 1 : 0) + '/' + total + ' · ' +
+        escapeHtml(TASK_GROUP_LABEL[state.taskGroup] || '全部') + '</span>' +
+      '<button class="dD-mini" data-act="email-next"' + (total ? '' : ' disabled') + '>›</button></div>';
+    if (!total) {
+      return nav + '<div class="dD-empty compact">' +
+        escapeHtml((TASK_GROUP_LABEL[state.taskGroup] || '当前') + '里没有邮件复核项。') + '</div>';
+    }
+    return nav + taskReviewCard(groups[state.emailCursor], '');
+  }
+
+  function renderEmailCard() {
+    var slot = document.getElementById('emailReviewSlot');
+    if (slot) slot.innerHTML = emailReviewCardHtml();
+  }
+
+  function moveEmailCursor(offset) {
+    var total = groupsInBucket(state.taskGroup).length;
+    if (!total) { state.emailCursor = 0; renderEmailCard(); return; }
+    state.emailCursor = (state.emailCursor + offset + total) % total;
+    renderEmailCard();
   }
 
   function clampTaskCursor(items) {
-    var queue = items || filteredTaskQueue();
+    var queue = items || reviewItems();  // cursor indexes the grouped review queue (emails + calendar drafts)
     if (!queue.length) {
       state.taskCursor = 0;
       return;
@@ -892,10 +1026,7 @@
   }
 
   function taskEmptyStateMessage() {
-    var copy = state.taskGroup === 'unread'
-      ? '没有待处理的事项了。已读和已忽略的可以用上面的筛选切换查看。'
-      : (TASK_GROUP_LABEL[state.taskGroup] || '当前') + '里没有事项。';
-    return '<div class="dD-body">' + escapeHtml(copy) + '</div>';
+    return '<div class="dD-body">没有待加入日历的截止了。金额/动作的邮件复核在下方「更多」里。</div>';
   }
 
   function advancePastTask(taskId) {
@@ -1348,16 +1479,22 @@
       : '仅本地';
     var factText = '截止 ' + (facts.deadline || 0) + ' · 金额 ' + (facts.amount || 0) + ' · 动作 ' + (facts.action || 0);
     var pendingTotal = reviewItems().length;
+    var emailPending = groupsInBucket('unread').length;
     var advStyle = state.advOpen ? '' : 'display:none';
-    var advLabel = state.advOpen ? '收起详情 ▴' : '更多 · 今日检查/Gmail/批量操作 ▾';
+    var advLabel = state.advOpen ? '收起详情 ▴'
+      : '更多 · 邮件复核' + (emailPending ? '(' + emailPending + ')' : '') + '/今日检查/Gmail ▾';
     return '<div class="dD-embed daily" id="dailySummary">' +
-      // ---- compact first-run view: one summary line + filter + the single review card ----
-      '<div class="dD-daily-head">待处理 · <b>' + pendingTotal + '</b> 条</div>' +
-      taskFilterControls() +
+      // ---- primary surface = the agent's core intent: deadline → calendar ----
+      '<div class="dD-daily-head">截止 · <b>' + pendingTotal + '</b> 条待加入日历</div>' +
       '<div id="taskCardSlot">' + reviewCardHtml() + '</div>' +
       '<button class="dD-more-toggle" data-act="toggle-adv">' + advLabel + '</button>' +
       // ---- everything advanced is collapsed by default (kept in DOM for wiring/contract) ----
       '<div id="advBlock" class="dD-adv" style="' + advStyle + '">' +
+      // ---- demoted: email-fact review queue (amounts/actions), not part of the calendar flow ----
+      '<div class="dD-adv-head">邮件复核台 · 金额/动作（可选）</div>' +
+      '<div class="dD-taskline">这些是邮件里的金额/动作，处理只写本地状态，不进日历、不发邮件。</div>' +
+      taskFilterControls() +
+      '<div id="emailReviewSlot">' + emailReviewCardHtml() + '</div>' +
       '<div class="dD-sumrow"><div class="n">' + (email.stored_message_count || 0) + '</div><div><div class="lab">邮件证据</div><div class="sub">' + escapeHtml(factText) + '</div></div></div>' +
       '<div class="dD-sumrow"><div class="n' + ((tasks.queue_count || 0) ? ' u' : '') + '">' + (tasks.queue_count || 0) + '</div><div><div class="lab">待处理任务</div><div class="sub">总计 ' + (tasks.total || 0) + ' · 按邮件聚合</div></div></div>' +
       '<div class="dD-sumrow"><div class="n' + ((calendar.pending_count || 0) ? ' u' : '') + '">' + (calendar.pending_count || 0) + '</div><div><div class="lab">本地日历草稿</div><div class="sub">总计 ' + (calendar.total_drafts || 0) + ' · 待核对 ' + (calendar.uncertain_count || 0) + '</div></div></div>' +
@@ -1394,31 +1531,46 @@
   }
 
   function taskReviewCard(task, meta) {
-    var kind = TASK_KIND_LABEL[task.kind] || task.kind || '任务';
+    // One card per source email. `task.kinds` lists every fact kind the email
+    // produced; `task.facts` is the per-kind breakdown so the user sees the whole
+    // obligation (date + amount + action) at a glance and clears it in one click.
+    var kinds = Array.isArray(task.kinds) && task.kinds.length ? task.kinds : [task.kind];
+    var kindLabel = kinds.map(function (k) { return TASK_KIND_LABEL[k] || k; }).filter(Boolean).join('·') || '任务';
     var status = REVIEW_STATUS_LABEL[task.status] || task.status || 'new';
     var priority = task.priority_band ? (task.priority_band + ' · ' + (task.priority_score || 0)) : '';
     var reasons = Array.isArray(task.priority_reasons) ? task.priority_reasons.slice(0, 3).join(', ') : '';
-    var values = Array.isArray(task.values) && task.values.length ? task.values : (task.value ? [task.value] : []);
-    var valueHtml = values.slice(0, 4).map(function (value) {
-      return '<span title="' + escapeHtml(value) + '">' + escapeHtml(value) + '</span>';
+    var facts = Array.isArray(task.facts) && task.facts.length
+      ? task.facts
+      : [{ kind: task.kind, values: (Array.isArray(task.values) && task.values.length ? task.values : (task.value ? [task.value] : [])) }];
+    var factHtml = facts.map(function (fact) {
+      if (!fact.values || !fact.values.length) return '';
+      var label = TASK_KIND_LABEL[fact.kind] || fact.kind || '';
+      var vals = fact.values.slice(0, 4).map(function (value) {
+        return '<span title="' + escapeHtml(value) + '">' + escapeHtml(value) + '</span>';
+      }).join('');
+      if (fact.values.length > 4) vals += '<span>+' + (fact.values.length - 4) + '</span>';
+      return '<div class="dD-task-fact"><span class="fk">' + escapeHtml(label) + '</span>' +
+        '<span class="fv">' + vals + '</span></div>';
     }).join('');
-    if (values.length > 4) valueHtml += '<span>+' + (values.length - 4) + '</span>';
-    return '<div class="dD-body">这条邮件证据需要你处理。操作只更新本地任务状态。</div>' +
+    var ids = (Array.isArray(task.task_ids) && task.task_ids.length ? task.task_ids : [task.task_id]).join(',');
+    var doneLabel = task.child_count > 1 ? '完成整封 (' + task.child_count + ')' : '完成';
+    return '<div class="dD-body">这封邮件有 ' + (task.child_count || 1) + ' 项待处理。操作只更新本地任务状态。</div>' +
       '<div class="dD-embed task">' +
       '<div class="dD-task-kind">' + (meta ? escapeHtml(meta) + ' · ' : '') +
-      escapeHtml(kind) + ' · ' + escapeHtml(status) +
+      escapeHtml(kindLabel) + ' · ' + escapeHtml(status) +
       (priority ? ' · 优先 ' + escapeHtml(priority) : '') + '</div>' +
-      '<div class="etitle">' + escapeHtml(task.title || 'Review task') + '</div>' +
-      (valueHtml ? '<div class="dD-task-values">' + valueHtml + '</div>' : '') +
+      '<div class="etitle">' + escapeHtml(task.subject || task.title || 'Review task') + '</div>' +
+      (factHtml ? '<div class="dD-task-facts">' + factHtml + '</div>' : '') +
       '<div class="esrc">来源 · ' + escapeHtml(task.subject || task.primary_source || task.source_type || '本地证据') +
       ' · 置信 ' + Number(task.confidence || 0).toFixed(2) + '</div>' +
       (reasons ? '<div class="enote">排序原因：' + escapeHtml(reasons) + '</div>' : '') +
-      (task.needs_verification ? '<div class="enote">这条证据置信度较低，建议先核对原始邮件或门户。</div>' : '') +
+      (task.needs_verification ? '<div class="enote">这封里有置信度较低的项，建议先核对原始邮件或门户。</div>' : '') +
       (task.evidence ? '<div class="enote">' + escapeHtml(clip(task.evidence, 160)) + '</div>' : '') +
       '</div>' +
-      '<div class="dD-btns dD-task-actions" data-task-id="' + escapeHtml(task.task_id) + '">' +
+      '<div class="dD-btns dD-task-actions" data-task-id="' + escapeHtml(task.task_id) +
+        '" data-task-ids="' + escapeHtml(ids) + '">' +
       '<button class="dD-cbtn sec" data-act="task-evidence">查看证据</button>' +
-      '<button class="dD-cbtn prim" data-act="task-done">完成</button>' +
+      '<button class="dD-cbtn prim" data-act="task-done">' + escapeHtml(doneLabel) + '</button>' +
       '<button class="dD-cbtn warn" data-act="task-needs-verification">需核对</button>' +
       '<button class="dD-cbtn sec" data-act="task-reviewed">已审阅</button>' +
       '<button class="dD-cbtn sec" data-act="task-ignored">忽略</button></div>';
@@ -1549,12 +1701,11 @@
   // Unified review queue: pending calendar drafts + email review tasks, one card at a time.
   // Calendar drafts are inherently unread/pending, so they show under 全部 and 未读 only.
   function reviewItems() {
-    var items = [];
-    if (state.taskGroup === 'all' || state.taskGroup === 'unread') {
-      state.queue.forEach(function (ev) { items.push({ kind: 'calendar', ev: ev }); });
-    }
-    filteredTaskQueue().forEach(function (t) { items.push({ kind: 'task', task: t }); });
-    return items;
+    // Primary surface is the agent's original intent: deadline → calendar. Only
+    // pending calendar drafts cycle through the front card. The email-fact review
+    // queue (amounts/actions + done/needs_verification/reviewed) is demoted into
+    // the 更多 advanced block — kept for depth, out of the daily path.
+    return state.queue.map(function (ev) { return { kind: 'calendar', ev: ev }; });
   }
 
   function calendarReviewCard(ev) {
@@ -1579,8 +1730,7 @@
     var total = items.length;
     var nav = '<div class="dD-cardnav" id="taskNavState">' +
       '<button class="dD-mini" data-act="task-prev"' + (total ? '' : ' disabled') + '>‹</button>' +
-      '<span class="meta">' + (total ? state.taskCursor + 1 : 0) + '/' + total + ' · ' +
-        escapeHtml(TASK_GROUP_LABEL[state.taskGroup] || '全部') + '</span>' +
+      '<span class="meta">' + (total ? state.taskCursor + 1 : 0) + '/' + total + ' · 待加入日历</span>' +
       '<button class="dD-mini" data-act="task-next"' + (total ? '' : ' disabled') + '>›</button></div>';
     if (!total) return nav + taskEmptyStateMessage();
     var item = items[state.taskCursor];
@@ -1617,7 +1767,7 @@
   function handleTaskGroup(group) {
     if (!TASK_GROUP_LABEL[group] || state.busy) return;
     state.taskGroup = group;
-    state.taskCursor = 0;
+    state.emailCursor = 0;  // chips filter the email-review pager — restart at its first card
     updateSummary();  // re-renders #dailySummary (chips + card) in place — no scroll jump
   }
 
@@ -1654,7 +1804,7 @@
     if (daily) daily.outerHTML = dailyEmbed();
     var dailyTasks = reviewItems().length;
     document.getElementById('aiTopic').textContent =
-      '本地日历 · ' + (state.events.length + state.undated.length) + ' 条已确认 · ' + dailyTasks + ' 条待处理';
+      '本地日历 · ' + (state.events.length + state.undated.length) + ' 条已确认 · ' + dailyTasks + ' 条截止待确认';
   }
 
   function welcome() {
@@ -1662,8 +1812,8 @@
     appendDivider('今天 · ' + (today.getMonth() + 1) + '月' + today.getDate() + '日');
     var pending = reviewItems().length;
     botMessage(
-      '<div class="dD-body">早上好。本地证据里有 <b>' + pending +
-      '</b> 条待你处理，下面一条一条来。候选截止默认不进入日历，点「加入日历」后才会显示；外部写入永远先问你。</div>' +
+      '<div class="dD-body">早上好。有 <b>' + pending +
+      '</b> 条截止待加入日历，下面一条条确认。候选截止默认不进入日历，点「加入日历」后才会显示；外部写入永远先问你。金额/动作的邮件复核收在「更多」里。</div>' +
       dailyEmbed());
   }
 
@@ -1753,11 +1903,14 @@
       .finally(function () { state.busy = false; });
   }
 
-  function handleTaskReview(taskId, status, buttons) {
+  function handleTaskReview(taskIds, status, buttons) {
     if (state.busy) return;
+    var ids = (Array.isArray(taskIds) ? taskIds : [taskIds]).filter(Boolean);
+    if (!ids.length) return;
     state.busy = true;
     buttons.querySelectorAll('button').forEach(function (button) { button.disabled = true; });
-    fetch('/api/tasks/review?task_id=' + encodeURIComponent(taskId) +
+    var idParams = ids.map(function (id) { return 'task_id=' + encodeURIComponent(id); }).join('&');
+    fetch('/api/tasks/review?' + idParams +
       '&status=' + encodeURIComponent(status) +
       '&note=' + encodeURIComponent('reviewed from calendar assistant: ' + status), { method: 'POST' })
       .then(function (r) { return r.json(); })
@@ -1768,7 +1921,7 @@
         return refresh();
       })
       .then(function () {
-        advancePastTask(taskId);
+        advancePastTask(ids[0]);
         offerNextTaskSuggestion();
       })
       .catch(function (err) { showToast('任务状态更新失败：' + err); })
@@ -2087,6 +2240,14 @@
       moveTaskCursor(1);
       return;
     }
+    if (btn.dataset.act === 'email-prev') {
+      moveEmailCursor(-1);
+      return;
+    }
+    if (btn.dataset.act === 'email-next') {
+      moveEmailCursor(1);
+      return;
+    }
     if (btn.dataset.act === 'show-task') {
       offerNextTaskSuggestion({ scroll: true });
       return;
@@ -2111,7 +2272,9 @@
     var reviewStatus = TASK_ACTION_STATUS[btn.dataset.act];
     if (reviewStatus) {
       var taskWrap = btn.closest('.dD-btns');
-      if (taskWrap && taskWrap.dataset.taskId) handleTaskReview(taskWrap.dataset.taskId, reviewStatus, taskWrap);
+      var ids = ((taskWrap && (taskWrap.dataset.taskIds || taskWrap.dataset.taskId)) || '')
+        .split(',').filter(Boolean);
+      if (ids.length) handleTaskReview(ids, reviewStatus, taskWrap);
       return;
     }
     if (btn.dataset.act === 'task-evidence') {

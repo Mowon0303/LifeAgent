@@ -187,7 +187,7 @@ class AuthenticatedIntegrationTests(unittest.TestCase):
                 open_browser=False,
                 port=0,
             )
-            with patch("sentineldesk.cli.write_google_oauth_token", return_value=result) as writer:
+            with patch("sentineldesk.cli.commands_integrations.write_google_oauth_token", return_value=result) as writer:
                 output = io.StringIO()
                 with patch("sys.stdout", output):
                     code = main(
@@ -241,7 +241,7 @@ class AuthenticatedIntegrationTests(unittest.TestCase):
             db.upsert_calendar_draft(paths, event=event, created_at="2026-06-10T12:00:00Z")
 
             output = io.StringIO()
-            with patch("sentineldesk.cli.GoogleWorkspaceFactory", FakeGoogleWorkspaceFactory):
+            with patch("sentineldesk.cli.commands_calendar.GoogleWorkspaceFactory", FakeGoogleWorkspaceFactory):
                 with contextlib.redirect_stdout(output):
                     code = main(
                         [
@@ -341,7 +341,7 @@ class AuthenticatedIntegrationTests(unittest.TestCase):
             db.upsert_calendar_draft(paths, event=event, created_at="2026-06-10T12:00:00Z")
 
             output = io.StringIO()
-            with patch("sentineldesk.cli.AppleCalendarClientFactory", FakeAppleCalendarClientFactory):
+            with patch("sentineldesk.cli.commands_calendar.AppleCalendarClientFactory", FakeAppleCalendarClientFactory):
                 with contextlib.redirect_stdout(output):
                     code = main(
                         [

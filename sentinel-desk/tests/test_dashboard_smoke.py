@@ -182,6 +182,42 @@ class DashboardSmokeTests(unittest.TestCase):
         self.assertEqual(audit["action"], "task.review")
         self.assertEqual(audit["subject"], task_id)
 
+    def test_task_review_accepts_multiple_ids_in_one_call(self) -> None:
+        # One email yields a fact-task per kind; the dashboard groups them into a
+        # single card whose "完成整封" resolves every fact at once via one request
+        # carrying repeated task_id params.
+        ingest_messages(
+            self.paths,
+            [
+                EmailMessage(
+                    message_id="m-multi",
+                    thread_id="t-multi",
+                    sender="finance@example.com",
+                    subject="30th Notice: settle your balance",
+                    received_at="2026-06-10",
+                    body_text="You owe a balance of $31.05. Please update your payment details ASAP.",
+                )
+            ],
+            ingested_at="2026-06-10T12:00:00Z",
+        )
+
+        _, _, tasks = self.json_request("GET", "/api/tasks")
+        email_ids = [task["task_id"] for task in tasks if str(task["task_id"]).startswith("email:")]
+        self.assertGreaterEqual(len(email_ids), 2)  # at least amount + action from the same mail
+        targets = email_ids[:2]
+
+        review_status, _, reviewed = self.json_request(
+            "POST",
+            "/api/tasks/review?task_id=" + targets[0] + "&task_id=" + targets[1] + "&status=done",
+        )
+        self.assertEqual(review_status, 200)
+        self.assertEqual(reviewed["status"], "done")
+        self.assertEqual(reviewed["reviewed_count"], 2)
+        self.assertEqual(set(reviewed["task_ids"]), set(targets))
+
+        _, _, done = self.json_request("GET", "/api/tasks?status=done")
+        self.assertEqual({task["task_id"] for task in done}, set(targets))
+
     def test_calendar_sync_api_requires_confirmation_and_exports_ics(self) -> None:
         ingest_messages(
             self.paths,

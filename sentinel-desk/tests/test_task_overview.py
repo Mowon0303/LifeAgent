@@ -36,14 +36,13 @@ class TaskOverviewAnswerTests(unittest.TestCase):
         answer = answer_question("最近有什么要处理", messages=messages)
         self.assertEqual(answer.intent, Intent.TASK_OVERVIEW)
         self.assertFalse(answer.uncertain)
-        self.assertIn("2", answer.answer)  # short headline reports the count
-        # the per-deadline detail lives in the structured cards (subject, date,
-        # source), and the past deadline is excluded
+        self.assertIn("2", answer.answer)  # short headline still reports the full count
+        # only the nearest upcoming deadline is surfaced as evidence (one card),
+        # not a wall of every upcoming date; the past deadline is excluded
         cards = answer.metadata.get("cards")
-        self.assertTrue(cards)
-        self.assertEqual({c["date"] for c in cards}, {"2026-07-01", "2026-08-15"})
-        self.assertNotIn("2026-05-01", {c["date"] for c in cards})
-        self.assertTrue(all(c["title"] and c["source_id"] for c in cards))
+        self.assertEqual(len(cards), 1)
+        self.assertEqual(cards[0]["date"], "2026-07-01")  # soonest, not the later 08-15
+        self.assertTrue(cards[0]["title"] and cards[0]["source_id"])
 
     def test_overview_handles_no_evidence(self) -> None:
         answer = answer_question("what's on my plate", messages=[])

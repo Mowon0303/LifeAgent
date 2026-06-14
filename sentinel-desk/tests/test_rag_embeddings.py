@@ -127,6 +127,38 @@ class RagGroundedChatTests(unittest.TestCase):
             self.assertTrue(all(card["kind"] == "email" and card["source_id"] for card in cards))
             self.assertEqual(len(cards), len({card["source_id"] for card in cards}))  # deduped
 
+    def test_rag_answer_grounds_in_one_email_and_does_not_braid_dates(self) -> None:
+        from sentineldesk.agent.graph import answer_question
+        from sentineldesk.agent.tools import default_tool_registry
+
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            db.init_db(paths)
+            db.upsert_email_message(
+                paths,
+                message=_email("m-renew", "Tripalink renewal lowest rate offer",
+                               "Your Tripalink renewal lowest rate offer expires 06/15/2026. Renew to lock the price."),
+                facts=[], ingested_at="2026-06-01T00:00:00Z",
+            )
+            db.upsert_email_message(
+                paths,
+                message=_email("m-comp", "Competition launch announcement",
+                               "Competition entry deadline is 08/25/2026. Submit your work before then."),
+                facts=[], ingested_at="2026-06-01T00:00:00Z",
+            )
+            index_emails(paths, embedder=HashEmbedder())
+            registry = default_tool_registry(paths)
+            answer = answer_question(
+                "tell me about the Tripalink renewal lowest rate offer", messages=[], registry=registry,
+            )
+            self.assertTrue(answer.metadata.get("rag"))
+            # ③ synthesis evidence is scoped to a single (primary) email
+            self.assertEqual(len({c.source_id for c in answer.citations}), 1)
+            self.assertIn("m-renew", answer.metadata.get("primary_source", ""))
+            # ② the grounded base carries the primary email's date, never the other's
+            self.assertIn("06/15/2026", answer.answer)
+            self.assertNotIn("08/25/2026", answer.answer)
+
     def test_greeting_still_gets_capability_reply_not_rag(self) -> None:
         from sentineldesk.agent.graph import answer_question
         from sentineldesk.agent.schemas import Intent

@@ -161,6 +161,10 @@ _DATE_ANCHOR_FORMATS = (
 )
 CHINESE_DATE_RE = re.compile(r"(?:\d{4}\s*年)?\s*(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]")
 CHINESE_AMOUNT_RE = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(?:美元|美金|元|块|rmb|usd)", re.IGNORECASE)
+# A money amount that carries an explicit currency marker — unlike AMOUNT_RE this
+# does NOT match bare integers, so the free-mode invent guard can flag a fabricated
+# "$9,999" without tripping on innocent counts ("2 emails") or years ("2026").
+CURRENCY_AMOUNT_RE = re.compile(r"[$€£¥￥]\s*(\d[\d,]*(?:\.\d{1,2})?)")
 
 
 def _amount_key(raw: str) -> str | None:
@@ -200,6 +204,33 @@ def _anchor_map(text: str) -> dict[str, str]:
         if key:
             found.setdefault(key, match.group(0))
     return found
+
+
+def _strong_anchor_map(text: str) -> dict[str, str]:
+    """Dates + explicit-currency amounts only. These are the facts a free rewrite
+    must not invent; bare integers (years, "2 emails") are deliberately excluded so
+    natural phrasing isn't falsely rejected."""
+    found: dict[str, str] = {}
+    for match in DATE_RE.finditer(text):
+        found.setdefault(_date_key(match.group(0)), match.group(0))
+    for match in CHINESE_DATE_RE.finditer(text):
+        found.setdefault("date:%02d-%02d" % (int(match.group(1)), int(match.group(2))), match.group(0))
+    for match in CURRENCY_AMOUNT_RE.finditer(text):
+        key = _amount_key(match.group(1))
+        if key:
+            found.setdefault(key, match.group(0))
+    for match in CHINESE_AMOUNT_RE.finditer(text):
+        key = _amount_key(match.group(1))
+        if key:
+            found.setdefault(key, match.group(0))
+    return found
+
+
+def grounded_values(text: str) -> list[str]:
+    """Raw date / currency-amount strings present in text — used to seed a RAG base
+    answer with its source email's real facts so a free rewrite can use them (and
+    only them)."""
+    return list(_strong_anchor_map(text).values())
 
 
 def refine_answer(
@@ -264,13 +295,23 @@ def refine_answer(
         return answer, record("fallback_length", result, detail=f"chars={len(rewritten)}")
 
     if not free:
-        # Fail-loud guardrails (off in free mode): the rewrite may not drop or
-        # invent a date/amount value.
+        # Fail-loud guardrails: the rewrite may not drop or invent a date/amount.
         rewrite_facts = _anchor_map(rewritten)
         missing = [original_facts[key] for key in original_facts if key not in rewrite_facts]
         if missing:
             return answer, record("fallback_anchor_check", result, detail="missing=" + "; ".join(missing[:5]))
         introduced = [rewrite_facts[key] for key in rewrite_facts if key not in original_facts]
+        if introduced:
+            return answer, record("fallback_new_facts", result, detail="introduced=" + "; ".join(introduced[:5]))
+    else:
+        # Free mode may rephrase or drop anchors, but must never INVENT a date or a
+        # currency amount that isn't in the answer or its (source-scoped) evidence —
+        # this is what stops a RAG answer from borrowing one email's date for another.
+        allowed = set(_strong_anchor_map(answer.answer))
+        for citation in answer.citations:
+            allowed |= set(_strong_anchor_map(citation.evidence))
+        rewrite_strong = _strong_anchor_map(rewritten)
+        introduced = [rewrite_strong[key] for key in rewrite_strong if key not in allowed]
         if introduced:
             return answer, record("fallback_new_facts", result, detail="introduced=" + "; ".join(introduced[:5]))
 

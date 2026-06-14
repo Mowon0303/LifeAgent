@@ -136,6 +136,30 @@ class RefineAnswerTests(unittest.TestCase):
         self.assertEqual(answer.answer, "有几个互相冲突的截止日期，建议你逐一核对。")
         self.assertTrue(answer.uncertain)  # still flagged uncertain, just phrased naturally
 
+    def test_free_mode_blocks_an_invented_date(self) -> None:
+        # The core "串台" regression: free mode may rephrase, but a date that is in
+        # neither the base answer nor its evidence (e.g. borrowed from another
+        # email) must be rejected back to the grounded answer.
+        free = ModelProvider(provider="ollama", model="qwen2.5:7b", free_refine=True)
+        client = FakeChatClient("提醒你：这个优惠的截止其实是 08/25/2026，请尽快处理。")
+        answer, record = refine_answer(
+            verified_answer(), question="最近截止？", provider=free, client=client
+        )
+        self.assertEqual(record.status, "fallback_new_facts")
+        self.assertIn("08/25/2026", record.detail)
+        self.assertEqual(answer.answer, "Verified deadline: 07/01/2026")
+
+    def test_free_mode_allows_bare_counts_and_grounded_dates(self) -> None:
+        # A natural rewrite that keeps the grounded date and mentions a plain count
+        # ("3 封") must NOT be rejected — counts/years aren't currency anchors.
+        free = ModelProvider(provider="ollama", model="qwen2.5:7b", free_refine=True)
+        client = FakeChatClient("你的截止 07/01/2026 快到了，我一共找到 3 封相关邮件，记得缴 $1,850.00。")
+        answer, record = refine_answer(
+            verified_answer(), question="最近截止？", provider=free, client=client
+        )
+        self.assertEqual(record.status, "ok_free")
+        self.assertIn("3 封", answer.answer)
+
     def test_confirmation_boundaries_are_never_sent_to_the_model(self) -> None:
         client = FakeChatClient("should never be used")
         boundary = AgentAnswer(
