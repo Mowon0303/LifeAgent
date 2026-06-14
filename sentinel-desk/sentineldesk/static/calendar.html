@@ -401,7 +401,10 @@
   };
   function taskInGroup(task, group) {
     var statuses = TASK_GROUP_STATUSES[group];
-    if (!statuses) return true;
+    if (!statuses) return true;  // 全部: show everything, including auto-muted senders
+    // Items from senders the user keeps ignoring are auto-muted — keep them out
+    // of the 未读 review flow (they stay visible under 全部).
+    if (group === 'unread' && task.muted) return false;
     return statuses.indexOf(String(task.status || 'new')) >= 0;
   }
   var TRUST_LABEL = {

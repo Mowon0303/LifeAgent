@@ -8,6 +8,7 @@ from typing import Any
 class Intent(str, Enum):
     LATEST_DEADLINE = "latest_deadline"
     LATEST_AMOUNT = "latest_amount"
+    TASK_OVERVIEW = "task_overview"
     ALERT_EXPLANATION = "alert_explanation"
     STATUS_MEANING = "status_meaning"
     NEXT_STEP_RECOMMENDATION = "next_step_recommendation"

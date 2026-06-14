@@ -23,6 +23,14 @@ def classify_intent(question: str) -> Intent:
         return Intent.ALERT_EXPLANATION
     if _has_any(text, ["page change", "页面变化", "网页变化", "changed"]):
         return Intent.PAGE_CHANGE
+    # Checked last (after the specific intents) so "最近有什么截止/账单" still route
+    # to deadline/amount; only a broad "what's on my plate" lands here.
+    if _has_any(text, [
+        "重要的事", "要处理", "待办", "要做", "有什么事", "有什么要", "最近有什么", "近期安排",
+        "on my plate", "to handle", "to-do", "todo", "to do", "what should i do this",
+        "what do i have", "what's due", "overview", "summary",
+    ]):
+        return Intent.TASK_OVERVIEW
     return Intent.GENERAL
 
 

@@ -14,6 +14,11 @@ from .extract import utc_now
 
 
 TASK_STATUSES = {"new", "reviewed", "ignored", "needs_verification", "done"}
+
+# After a sender's mail has been ignored this many times, new items from it are
+# auto-muted (sunk to the bottom) — the user's own ignore actions become the
+# filter, instead of a hand-maintained block list.
+MUTE_IGNORE_THRESHOLD = 3
 TASK_KINDS = {"deadline", "amount", "action"}
 TASK_SORTS = {"priority", "due_date", "recent"}
 TASK_VIEWS = {"all", "needs_verification", "payments", "deadlines_soon", "recently_changed"}
@@ -144,6 +149,17 @@ def list_tasks(
     tasks = [task for task in tasks if not _deadline_is_past(task, today_key)]
     for task in tasks:
         _apply_priority(task)
+    # Learn from the reviewer: senders whose mail has been ignored repeatedly get
+    # their new items muted (sunk to "low"), so the user stops re-triaging the
+    # same noise without ever writing a rule.
+    muted_senders = _muted_senders(tasks)
+    for task in tasks:
+        is_muted = task.get("status") == "new" and _sender_key(str(task.get("sender") or "")) in muted_senders
+        task["muted"] = is_muted
+        if is_muted:
+            task["priority_band"] = "low"
+            if "muted_sender" not in task.get("priority_reasons", []):
+                task["priority_reasons"] = [*task.get("priority_reasons", []), "muted_sender"]
     tasks = _apply_view(tasks, view=view)
     tasks.sort(key=lambda task: _task_sort_key(task, sort=sort))
     if status:
@@ -1009,6 +1025,23 @@ def _deadline_is_past(task: dict[str, Any], today_key: str) -> bool:
         return False
     due_key = _task_due_key(task)
     return bool(due_key) and due_key < today_key
+
+
+def _sender_key(sender: str) -> str:
+    """Normalize a 'Name <addr@host>' sender down to its lowercased address."""
+    match = re.search(r"<([^>]+)>", sender)
+    address = (match.group(1) if match else sender).strip().lower()
+    return address if "@" in address else ""
+
+
+def _muted_senders(tasks: list[dict[str, Any]]) -> set[str]:
+    counts: Counter[str] = Counter()
+    for task in tasks:
+        if task.get("status") == "ignored":
+            key = _sender_key(str(task.get("sender") or ""))
+            if key:
+                counts[key] += 1
+    return {key for key, count in counts.items() if count >= MUTE_IGNORE_THRESHOLD}
 
 
 def _timestamp_value(value: str) -> float:

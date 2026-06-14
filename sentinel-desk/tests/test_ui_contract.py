@@ -60,6 +60,7 @@ TASK_FIELDS = {
     "priority_score",
     "priority_band",
     "priority_reasons",
+    "muted",
 }
 ASK_FIELDS = {
     "intent",

@@ -34,7 +34,8 @@
       "deadline",
       "dated_deadline",
       "payment_context"
-    ]
+    ],
+    "muted": false
   },
   {
     "task_id": "email:9db795229ff5cd5a",
@@ -74,7 +75,8 @@
       "low_trust_or_missing_source",
       "low_confidence",
       "payment_context"
-    ]
+    ],
+    "muted": false
   },
   {
     "task_id": "email:fcd1d57aedd7b64e",
@@ -114,7 +116,8 @@
       "low_trust_or_missing_source",
       "low_confidence",
       "action_context"
-    ]
+    ],
+    "muted": false
   },
   {
     "task_id": "calendar:f87f8e455e3b564e",
@@ -150,7 +153,8 @@
       "critical_severity",
       "deadline",
       "dated_deadline"
-    ]
+    ],
+    "muted": false
   },
   {
     "task_id": "calendar:c2eaaa22af3f4fdb",
@@ -186,7 +190,8 @@
       "critical_severity",
       "deadline",
       "dated_deadline"
-    ]
+    ],
+    "muted": false
   },
   {
     "task_id": "email:4950200c2b74bb2e",
@@ -226,7 +231,8 @@
       "medium_confidence",
       "large_amount",
       "payment_context"
-    ]
+    ],
+    "muted": false
   },
   {
     "task_id": "email:02a3d0e5955acb41",
@@ -267,6 +273,7 @@
       "medium_confidence",
       "large_amount",
       "payment_context"
-    ]
+    ],
+    "muted": false
   }
 ]

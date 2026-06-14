@@ -154,7 +154,7 @@ def _merge_tools(planned: list[str], actual: list[str]) -> list[str]:
 
 
 def _planned_tools_for_intent(intent: str) -> list[str]:
-    if intent in {"latest_deadline", "latest_amount"}:
+    if intent in {"latest_deadline", "latest_amount", "task_overview"}:
         return ["search_latest_email"]
     if intent == "calendar_action":
         return ["draft_calendar_event"]

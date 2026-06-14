@@ -173,8 +173,12 @@ class SafetyConnectorTests(unittest.TestCase):
         dated = EmailFact(kind="deadline", value="07/04/2026", source_id="email:m1",
                           source_type="email", trust_label="email_evidence", evidence="due 07/04/2026",
                           confidence=0.9, received_at="2026-06-20T00:00:00Z", metadata={"subject": "Pay rent"})
-        relative = EmailFact(kind="deadline", value="within 30 days", source_id="email:m2",
-                             source_type="email", trust_label="email_evidence", evidence="act within 30 days",
+        # Anchored to an external event (the program end date), not the email, so
+        # it has no resolvable date and must never become a calendar event. (A
+        # from-now phrase like "within 30 days" now resolves at the draft layer —
+        # covered in tests/test_relative_deadline.py.)
+        relative = EmailFact(kind="deadline", value="within 30 days of the program end date", source_id="email:m2",
+                             source_type="email", trust_label="email_evidence", evidence="apply within 30 days of the program end date",
                              confidence=0.9, received_at="2026-06-20T00:00:00Z", metadata={"subject": "Renew plan"})
 
         # generation: only the dated deadline becomes a calendar draft
@@ -185,7 +189,7 @@ class SafetyConnectorTests(unittest.TestCase):
         # display guard: a dateless draft that is already stored is dropped from the board
         rows = [
             {"event_id": "e1", "title": "Deadline: Pay rent", "date_text": "07/04/2026", "confidence": 0.9, "source_ids": ["email:m1"]},
-            {"event_id": "e2", "title": "Deadline: Renew plan", "date_text": "within 30 days", "confidence": 0.9, "source_ids": ["email:m2"]},
+            {"event_id": "e2", "title": "Deadline: Renew plan", "date_text": "within 30 days of the program end date", "confidence": 0.9, "source_ids": ["email:m2"]},
         ]
         items = build_calendar_items(rows, [])
         self.assertEqual([item["event_id"] for item in items], ["e1"])

@@ -99,6 +99,10 @@ def answer_question(
             tool_calls=tuple(tool_calls),
         )
 
+    if intent == Intent.TASK_OVERVIEW:
+        active_registry.assert_can_call("search_latest_email")
+        return _task_overview_answer(messages or [])
+
     if intent == Intent.CALENDAR_ACTION:
         active_registry.assert_can_call("draft_calendar_event")
         return AgentAnswer(
@@ -172,6 +176,70 @@ def answer_question(
         return _answer_policy_question(active_registry, question)
 
     return _general_answer(question)
+
+
+def _task_overview_answer(messages: list[EmailMessage]) -> AgentAnswer:
+    """Answer "what's on my plate" with a short list of upcoming deadlines. Facts
+    come through extract_email_facts, so promotional noise is already gated;
+    amounts are summarized as a count (ask "how much do I owe" for detail) rather
+    than listed, since a raw amount is often a receipt, not an obligation."""
+    from sentineldesk.calendar.view import parse_deadline_date
+    from sentineldesk.extract import utc_now
+
+    today = utc_now()[:10]
+    upcoming: list[tuple[str, object]] = []
+    amount_count = 0
+    for message in messages:
+        for fact in extract_email_facts(message):
+            if fact.kind == "deadline":
+                iso = parse_deadline_date(fact.value)
+                if iso and iso >= today:
+                    upcoming.append((iso, fact))
+            elif fact.kind == "amount":
+                amount_count += 1
+
+    deduped: list[tuple[str, object]] = []
+    seen_dates: set[str] = set()
+    for iso, fact in sorted(upcoming, key=lambda item: item[0]):
+        if iso in seen_dates:
+            continue
+        seen_dates.add(iso)
+        deduped.append((iso, fact))
+
+    if not deduped and not amount_count:
+        return AgentAnswer(
+            intent=Intent.TASK_OVERVIEW,
+            answer="I don't see any upcoming deadlines in your local evidence right now.",
+            confidence="medium",
+            tool_calls=("search_latest_email",),
+        )
+
+    lines = [f"- {iso}: {fact.metadata.get('subject') or fact.value}" for iso, fact in deduped[:5]]
+    answer = "Upcoming on your plate:\n" + "\n".join(lines) if lines else "Nothing dated is upcoming."
+    extras: list[str] = []
+    if len(deduped) > 5:
+        extras.append(f"+{len(deduped) - 5} more deadlines")
+    if amount_count:
+        extras.append(f"{amount_count} amount(s) on file — ask \"how much do I owe\" for detail")
+    if extras:
+        answer += "\n(" + "; ".join(extras) + ")"
+    citations = tuple(
+        Citation(
+            source_id=fact.source_id,
+            source_type=fact.source_type,
+            evidence=fact.evidence,
+            captured_at=fact.received_at,
+        )
+        for iso, fact in deduped[:3]
+    )
+    return AgentAnswer(
+        intent=Intent.TASK_OVERVIEW,
+        answer=answer,
+        confidence="medium",
+        citations=citations,
+        tool_calls=("search_latest_email",),
+        metadata={"deadline_count": len(deduped), "amount_count": amount_count},
+    )
 
 
 def _latest_global_answer(

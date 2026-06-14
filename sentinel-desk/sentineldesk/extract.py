@@ -4,7 +4,7 @@ import hashlib
 import html
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from html.parser import HTMLParser
 from typing import Any
 
@@ -56,6 +56,91 @@ RELATIVE_DEADLINE_NEGATIVE_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+
+# "within N days OF/before <event>" is anchored to something other than the
+# email, so we must not resolve it against the receipt date.
+RELATIVE_EXTERNAL_ANCHOR_RE = re.compile(
+    r"within\s+\d{1,3}\s+(?:business\s+)?days\s+(?:of|from|before|after|prior to|ahead of)\b",
+    re.IGNORECASE,
+)
+_WEEKDAY_INDEX = {
+    "monday": 0, "tuesday": 1, "wednesday": 2, "thursday": 3,
+    "friday": 4, "saturday": 5, "sunday": 6,
+}
+
+
+def resolve_relative_deadline(phrase: str, received_at: str, *, context: str = "") -> str | None:
+    """Turn a *from-now* relative deadline ("respond within 10 days", "by the
+    end of the month", "next Friday") into an absolute ISO date anchored to when
+    the email arrived.
+
+    Returns None — leaving it as a date-less review task — for anything anchored
+    to an external event ("within 30 days of your program end date") or
+    otherwise ambiguous, so we never invent a date from the wrong reference
+    point. The resulting date is an estimate; callers should keep it
+    low-confidence and confirm before trusting it.
+    """
+    base = _reference_date(received_at)
+    if base is None:
+        return None
+    text = normalize_text(phrase).lower()
+
+    match = re.search(r"\bwithin\s+(\d{1,3})\s+(business\s+)?days\b", text)
+    if match:
+        if RELATIVE_EXTERNAL_ANCHOR_RE.search(normalize_text(context)):
+            return None
+        days = int(match.group(1))
+        target = _add_business_days(base, days) if match.group(2) else base + timedelta(days=days)
+        return target.isoformat()
+
+    if "end of the month" in text:
+        return _end_of_month(base).isoformat()
+
+    weekday = re.search(r"\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b", text)
+    if weekday:
+        return _next_weekday(base, _WEEKDAY_INDEX[weekday.group(1)]).isoformat()
+
+    return None
+
+
+def _reference_date(received_at: str) -> date | None:
+    value = str(received_at or "").strip()
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
+    except ValueError:
+        pass
+    try:
+        from email.utils import parsedate_to_datetime
+
+        parsed = parsedate_to_datetime(value)
+        return parsed.date() if parsed is not None else None
+    except (TypeError, ValueError, IndexError):
+        return None
+
+
+def _add_business_days(base: date, days: int) -> date:
+    current = base
+    added = 0
+    while added < days:
+        current = current + timedelta(days=1)
+        if current.weekday() < 5:  # Monday-Friday
+            added += 1
+    return current
+
+
+def _end_of_month(base: date) -> date:
+    import calendar as _calendar
+
+    last_day = _calendar.monthrange(base.year, base.month)[1]
+    return base.replace(day=last_day)
+
+
+def _next_weekday(base: date, weekday_index: int) -> date:
+    ahead = (weekday_index - base.weekday()) % 7
+    ahead = ahead or 7  # "next Friday" is the upcoming one, never today
+    return base + timedelta(days=ahead)
 
 STATUS_PATTERNS = [
     ("action_required", r"\b(action required|request for evidence|rfe|missing document|needs your attention|respond by|payment due|rent due|(?<!no )balance due|past due|notice required|notice to vacate required|renewal required)\b"),
