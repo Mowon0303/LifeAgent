@@ -21,6 +21,7 @@ class ModelProvider:
     # natural report grounded in the evidence. Opt-in, for experimentation —
     # tighten back up before relying on it.
     free_refine: bool = False
+    embed_model: str = "nomic-embed-text"
     langchain_available: bool = False
     langgraph_available: bool = False
 
@@ -49,6 +50,7 @@ def load_model_provider(paths: Paths) -> ModelProvider:
         structured_output=bool(model_config.get("structured_output", True)),
         free_refine=bool(model_config.get("free_refine"))
         or str(model_config.get("refine") or "").lower() == "free",
+        embed_model=str(model_config.get("embed_model") or "nomic-embed-text"),
         langchain_available=importlib.util.find_spec("langchain_core") is not None,
         langgraph_available=importlib.util.find_spec("langgraph") is not None,
     )

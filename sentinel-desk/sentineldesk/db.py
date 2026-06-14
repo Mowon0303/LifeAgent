@@ -156,6 +156,7 @@ CREATE TABLE IF NOT EXISTS rag_chunks (
     warnings_json TEXT NOT NULL,
     token_count INTEGER NOT NULL,
     indexed_at TEXT NOT NULL,
+    embedding_json TEXT NOT NULL DEFAULT '',
     FOREIGN KEY(source_id) REFERENCES rag_documents(source_id) ON DELETE CASCADE
 );
 
@@ -229,6 +230,7 @@ def init_db(paths: Paths) -> None:
         conn.executescript(SCHEMA)
         _ensure_column(conn, "email_messages", "labels_json", "TEXT NOT NULL DEFAULT '[]'")
         _ensure_column(conn, "email_messages", "list_unsubscribe", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "rag_chunks", "embedding_json", "TEXT NOT NULL DEFAULT ''")
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:
@@ -951,10 +953,11 @@ def upsert_rag_document(
             )
             document_id = int(cursor.lastrowid)
         for chunk in chunks:
+            embedding = chunk.get("embedding")
             conn.execute(
                 """
-                INSERT INTO rag_chunks(source_id, chunk_id, text, warnings_json, token_count, indexed_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO rag_chunks(source_id, chunk_id, text, warnings_json, token_count, indexed_at, embedding_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     source_id,
@@ -963,6 +966,7 @@ def upsert_rag_document(
                     _json(list(chunk.get("warnings", []))),
                     int(chunk.get("token_count", 0)),
                     indexed_at,
+                    _json(list(embedding)) if embedding else "",
                 ),
             )
         return document_id

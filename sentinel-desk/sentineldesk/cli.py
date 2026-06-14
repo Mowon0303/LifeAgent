@@ -8,7 +8,8 @@ from pathlib import Path
 from . import __version__, db
 from .agent.model import load_model_provider
 from .agent.providers import adapter_status_dict
-from .agent.rag_index import index_file, search_index
+from .agent.embeddings import embedder_for
+from .agent.rag_index import hybrid_search, index_emails, index_file, search_index, semantic_search
 from .agent.tools import default_tool_registry
 from .agent.workflow import answer_with_workflow
 from .acceptance import run_first_run_acceptance
@@ -533,8 +534,25 @@ def cmd_rag_index(args: argparse.Namespace) -> int:
 def cmd_rag_search(args: argparse.Namespace) -> int:
     paths = paths_from_args(args)
     db.init_db(paths)
-    results = search_index(paths, args.query, limit=args.limit)
+    mode = getattr(args, "mode", "keyword")
+    if mode in {"semantic", "hybrid"}:
+        embedder = embedder_for(load_model_provider(paths))
+        if mode == "semantic":
+            results = [document for document, _ in semantic_search(paths, args.query, embedder, limit=args.limit)]
+        else:
+            results = hybrid_search(paths, args.query, embedder, limit=args.limit)
+    else:
+        results = search_index(paths, args.query, limit=args.limit)
     print_json([result.__dict__ for result in results])
+    return 0
+
+
+def cmd_rag_embed_emails(args: argparse.Namespace) -> int:
+    paths = paths_from_args(args)
+    ensure_dirs(paths)
+    embedder = embedder_for(load_model_provider(paths))
+    count = index_emails(paths, embedder=embedder, limit=args.limit)
+    print_json({"emails_indexed": count, "embedder": embedder.name})
     return 0
 
 
@@ -1119,7 +1137,12 @@ def build_parser() -> argparse.ArgumentParser:
     rag_search = rag_sub.add_parser("search", help="Search the persistent RAG store")
     rag_search.add_argument("query")
     rag_search.add_argument("--limit", type=int, default=5)
+    rag_search.add_argument("--mode", choices=["keyword", "semantic", "hybrid"], default="keyword",
+                            help="keyword (default), semantic (embeddings), or hybrid (both, rank-fused)")
     rag_search.set_defaults(func=cmd_rag_search)
+    rag_embed = rag_sub.add_parser("embed-emails", help="Chunk + embed all stored emails into the RAG store")
+    rag_embed.add_argument("--limit", type=int, default=500)
+    rag_embed.set_defaults(func=cmd_rag_embed_emails)
     rag_docs = rag_sub.add_parser("docs", help="List indexed RAG documents")
     rag_docs.add_argument("--limit", type=int, default=50)
     rag_docs.set_defaults(func=cmd_rag_docs)
