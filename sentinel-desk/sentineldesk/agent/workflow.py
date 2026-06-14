@@ -8,10 +8,11 @@ from sentineldesk.config import Paths
 from sentineldesk.email.models import EmailMessage
 
 from .graph import answer_question
-from .llm import ChatClient, refine_answer
+from .llm import ChatClient, chat_client_for, refine_answer
+from .memory import build_memory
 from .model import ModelProvider
-from .router import classify_intent
-from .schemas import AgentAnswer
+from .router import classify_intent, is_greeting, llm_route_label, _LLM_LABEL_INTENT, _continue_intent
+from .schemas import AgentAnswer, Intent
 from .tools import ToolRegistry
 
 
@@ -38,11 +39,17 @@ def answer_with_workflow(
     history: list[dict[str, Any]] | None = None,
 ) -> AgentAnswer:
     runtime = runtime_for(provider)
+    resolved_client = chat_client if chat_client is not None else chat_client_for(provider)
+    # Budgeted conversation memory: recent turns verbatim + a compacted gist of
+    # older ones. Reference only — facts are re-derived each turn and stay guarded.
+    memory_block = build_memory(history).as_prompt_block()
     initial_state = {
         "question": question,
         "messages": messages or [],
         "registry": registry,
         "previous_intent": _previous_intent(history),
+        "chat_client": resolved_client,  # the route stage uses it for LLM intent fallback
+        "memory_block": memory_block,
     }
     answer: AgentAnswer | None = None
     if runtime.engine == "langgraph":
@@ -55,7 +62,10 @@ def answer_with_workflow(
     if answer is None:
         state = _run_rule_workflow(initial_state)
         answer = _annotate_answer(state["answer"], runtime=runtime, provider=provider, state=state)
-    return _refine_stage(answer, question=question, provider=provider, paths=paths, chat_client=chat_client)
+    return _refine_stage(
+        answer, question=question, provider=provider, paths=paths,
+        chat_client=chat_client, context=memory_block,
+    )
 
 
 def _refine_stage(
@@ -65,8 +75,11 @@ def _refine_stage(
     provider: ModelProvider,
     paths: Paths | None,
     chat_client: ChatClient | None,
+    context: str = "",
 ) -> AgentAnswer:
-    refined, call_record = refine_answer(answer, question=question, provider=provider, client=chat_client)
+    refined, call_record = refine_answer(
+        answer, question=question, provider=provider, client=chat_client, context=context
+    )
     if call_record is None:
         return refined
     refined.metadata["model_call"] = call_record.to_dict()
@@ -130,11 +143,36 @@ def _previous_intent(history: list[dict[str, Any]] | None) -> str | None:
 
 
 def _route_stage(state: dict[str, Any]) -> dict[str, Any]:
-    intent = classify_intent(
-        str(state.get("question") or ""), previous_intent=state.get("previous_intent")
-    )
+    question = str(state.get("question") or "")
+    previous_intent = state.get("previous_intent")
+    intent = classify_intent(question, previous_intent=previous_intent)
+    general_mode = None
+    routed_by = "keyword"
+    # Keyword pass is the fast deterministic default. Only when it gives up (GENERAL,
+    # and not a greeting) do we ask the model — which generalizes to any phrasing.
+    if intent == Intent.GENERAL and not is_greeting(question):
+        label = llm_route_label(
+            question, client=state.get("chat_client"), previous_intent=previous_intent,
+            context=str(state.get("memory_block") or ""),
+        )
+        if label in _LLM_LABEL_INTENT:
+            intent = _LLM_LABEL_INTENT[label]
+            routed_by = "llm"
+        elif label == "search":
+            general_mode = "search"  # a real email-content question -> RAG
+            routed_by = "llm"
+        else:
+            # The model couldn't place it (or no model). If we were just talking about
+            # the user's tasks, a short unplaceable follow-up like "比如呢"/"其他事都是什么"
+            # means "go on / which ones" — continue the overview rather than dump a
+            # generic blurb. (No honest-menu fallback: a non-answer reads as a bug.)
+            continued = _continue_intent(previous_intent or "")
+            if continued is not None:
+                intent = continued
+                routed_by = "continue"
     state["intent"] = intent.value
-    _append_trace(state, "route", {"intent": intent.value})
+    state["general_mode"] = general_mode
+    _append_trace(state, "route", {"intent": intent.value, "routed_by": routed_by, "general_mode": general_mode})
     return state
 
 
@@ -146,11 +184,14 @@ def _tool_stage(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def _finalize_stage(state: dict[str, Any]) -> dict[str, Any]:
+    intent_value = state.get("intent")
     answer = answer_question(
         str(state.get("question") or ""),
         messages=list(state.get("messages") or []),
         registry=state.get("registry"),
         previous_intent=state.get("previous_intent"),
+        intent_override=Intent(intent_value) if intent_value else None,
+        general_mode=state.get("general_mode"),
     )
     state["answer"] = answer
     _append_trace(state, "finalize", {"confidence": answer.confidence, "uncertain": answer.uncertain})

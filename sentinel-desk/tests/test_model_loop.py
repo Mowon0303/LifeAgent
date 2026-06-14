@@ -251,6 +251,77 @@ class WorkflowModelLoopTests(unittest.TestCase):
         self.assertNotIn("model_call", answer.metadata)
         self.assertEqual(db.list_model_calls(self.paths), [])
 
+    def test_llm_routes_a_phrasing_the_keywords_miss(self) -> None:
+        # The keyword router can't place this, so the model routes it to overview.
+        from sentineldesk.agent.schemas import Intent
+        client = FakeChatClient("overview")
+        answer = answer_with_workflow(
+            "把我手头的事儿都摊开看看呗", provider=OLLAMA_PROVIDER,
+            messages=self.messages, paths=self.paths, chat_client=client,
+        )
+        self.assertEqual(answer.intent, Intent.TASK_OVERVIEW)
+
+    def test_llm_unclear_without_context_falls_through_to_capability_not_a_menu(self) -> None:
+        # The honest-menu fallback was removed. An unplaceable query with no prior
+        # context gets the friendly capability guide, never a refusal/clarify menu.
+        from sentineldesk.agent.schemas import Intent
+        client = FakeChatClient("unclear")
+        answer = answer_with_workflow(
+            "asdfgh qwerty zzz", provider=OLLAMA_PROVIDER,
+            messages=[], paths=self.paths, chat_client=client,
+        )
+        self.assertEqual(answer.intent, Intent.GENERAL)
+        self.assertFalse(answer.uncertain)
+        self.assertNotIn("不太确定", answer.answer)
+
+    def test_unplaceable_followup_after_a_task_turn_continues_the_overview(self) -> None:
+        # "比如呢" after an overview: the model can't label it, but we were just
+        # listing tasks, so continue the overview instead of refusing — 反应过来.
+        from sentineldesk.agent.schemas import Intent
+        client = FakeChatClient("unclear")
+        answer = answer_with_workflow(
+            "比如呢", provider=OLLAMA_PROVIDER,
+            messages=self.messages, paths=self.paths, chat_client=client,
+            history=[{"intent": "task_overview"}],
+        )
+        self.assertEqual(answer.intent, Intent.TASK_OVERVIEW)
+
+
+    def test_conversation_memory_reaches_the_model_prompt(self) -> None:
+        # A prior turn's question/answer must show up in the prompt the model sees,
+        # so it can write a follow-up-aware, natural reply.
+        client = FakeChatClient("Verified deadline: 07/01/2026")
+        history = [
+            {"question": "上一条问题ABC", "intent": "latest_deadline",
+             "answer": "Verified deadline: 07/01/2026"},
+        ]
+        answer_with_workflow(
+            "What is my latest deadline?", provider=OLLAMA_PROVIDER,
+            messages=self.messages, paths=self.paths, chat_client=client, history=history,
+        )
+        joined = "\n".join(call["user"] for call in client.calls)
+        self.assertIn("<对话上下文>", joined)
+        self.assertIn("上一条问题ABC", joined)
+
+    def test_no_history_means_no_conversation_block(self) -> None:
+        client = FakeChatClient("Verified deadline: 07/01/2026")
+        answer_with_workflow(
+            "What is my latest deadline?", provider=OLLAMA_PROVIDER,
+            messages=self.messages, paths=self.paths, chat_client=client, history=[],
+        )
+        joined = "\n".join(call["user"] for call in client.calls)
+        self.assertNotIn("<对话上下文>", joined)
+
+
+class LlmRouteLabelTests(unittest.TestCase):
+    def test_parses_label_and_falls_back_to_none(self) -> None:
+        from sentineldesk.agent.router import llm_route_label
+        self.assertEqual(llm_route_label("x", client=FakeChatClient("overview")), "overview")
+        self.assertEqual(llm_route_label("x", client=FakeChatClient("this is a SEARCH.")), "search")
+        self.assertEqual(llm_route_label("x", client=FakeChatClient("next step")), "next_step")
+        self.assertIsNone(llm_route_label("x", client=None))           # no model -> deterministic path
+        self.assertIsNone(llm_route_label("x", client=FakeChatClient("nonsense")))
+
 
 if __name__ == "__main__":
     unittest.main()

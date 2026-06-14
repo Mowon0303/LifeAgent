@@ -26,9 +26,13 @@ def answer_question(
     messages: list[EmailMessage] | None = None,
     registry: ToolRegistry | None = None,
     previous_intent: str | None = None,
+    intent_override: Intent | None = None,
+    general_mode: str | None = None,
 ) -> AgentAnswer:
     active_registry = registry or default_tool_registry()
-    intent = classify_intent(question, previous_intent=previous_intent)
+    # intent_override carries the workflow's LLM-resolved intent; without it we
+    # use the deterministic keyword router (the path direct/test callers take).
+    intent = intent_override or classify_intent(question, previous_intent=previous_intent)
 
     if intent in {Intent.LATEST_DEADLINE, Intent.LATEST_AMOUNT}:
         active_registry.assert_can_call("search_latest_email")
@@ -187,4 +191,4 @@ def answer_question(
     if intent == Intent.POLICY_QUESTION:
         return _answer_policy_question(active_registry, question)
 
-    return _general_answer(question, active_registry)
+    return _general_answer(question, active_registry, general_mode=general_mode)

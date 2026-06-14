@@ -1,13 +1,32 @@
 from __future__ import annotations
 
 import re
+import urllib.error
+from typing import Any
 
 from .schemas import Intent
+
+
+GREETING_TERMS = (
+    "你好", "您好", "哈喽", "嗨", "在吗", "在么", "你是谁", "hi", "hello", "hey", "谢谢", "thank",
+)
+
+
+def is_greeting(question: str) -> bool:
+    text = question.strip().lower()
+    return any(term in text for term in GREETING_TERMS)
 
 
 FOLLOWUP_TERMS = (
     "其他的呢", "其他呢", "其它的呢", "其它呢", "别的呢", "还有呢", "还有吗", "还有别的",
     "更多", "继续", "接着", "more", "what else", "anything else", "the rest", "go on",
+)
+
+# An explicit "list them all" — the user wants the full set, not the single most
+# relevant item the overview surfaces by default.
+LIST_ALL_TERMS = (
+    "全部列出", "全都列出", "都列出", "列出全部", "列出来", "全列出", "全部显示", "都显示",
+    "全部都", "list all", "show all", "list them all", "show them all", "list everything",
 )
 
 
@@ -18,6 +37,12 @@ def is_followup(question: str) -> bool:
     return len(text) <= 16 and any(term in text for term in FOLLOWUP_TERMS)
 
 
+def is_list_all(question: str) -> bool:
+    """A short 'list them all' request — expands the overview to every item."""
+    text = question.strip().lower()
+    return len(text) <= 20 and any(term in text for term in LIST_ALL_TERMS)
+
+
 def _continue_intent(previous_intent: str) -> Intent | None:
     if previous_intent in {"latest_deadline", "latest_amount", "task_overview"}:
         return Intent.TASK_OVERVIEW
@@ -25,7 +50,7 @@ def _continue_intent(previous_intent: str) -> Intent | None:
 
 
 def classify_intent(question: str, *, previous_intent: str | None = None) -> Intent:
-    if previous_intent and is_followup(question):
+    if previous_intent and (is_followup(question) or is_list_all(question)):
         followed = _continue_intent(previous_intent)
         if followed is not None:
             return followed
@@ -54,8 +79,66 @@ def classify_intent(question: str, *, previous_intent: str | None = None) -> Int
         "what do i have", "what's due", "overview", "summary",
     ]):
         return Intent.TASK_OVERVIEW
+    # a standalone "list them all" defaults to the upcoming-deadline overview
+    if is_list_all(question):
+        return Intent.TASK_OVERVIEW
     return Intent.GENERAL
 
 
 def _has_any(text: str, terms: list[str]) -> bool:
     return any(re.search(re.escape(term), text) for term in terms)
+
+
+# ---- LLM intent fallback: only consulted when the keyword pass yields GENERAL ----
+# The keyword router stays the fast, deterministic, zero-dependency default; the
+# model generalizes to phrasings/languages/synonyms the keyword lists never cover.
+_LLM_LABEL_INTENT = {
+    "deadline": Intent.LATEST_DEADLINE,
+    "amount": Intent.LATEST_AMOUNT,
+    "overview": Intent.TASK_OVERVIEW,
+    "calendar": Intent.CALENDAR_ACTION,
+    "next_step": Intent.NEXT_STEP_RECOMMENDATION,
+    "status": Intent.STATUS_MEANING,
+    "policy": Intent.POLICY_QUESTION,
+}
+# checked in order; "search" => RAG over mail, "unclear" => honest clarify menu
+_LLM_LABELS = (*_LLM_LABEL_INTENT.keys(), "search", "unclear")
+_LLM_ROUTE_SYSTEM = (
+    "You route a personal email/calendar assistant. Output EXACTLY one label, nothing else:\n"
+    "deadline = asking about due dates / the nearest deadline\n"
+    "amount = how much is owed, a bill, a payment amount\n"
+    "overview = what's on my plate / list what needs handling / list all upcoming\n"
+    "calendar = add something to the calendar or set a reminder\n"
+    "next_step = what should I do next\n"
+    "status = what a status or label means\n"
+    "policy = what a rule or term means\n"
+    "search = looking for the content of a specific email\n"
+    "unclear = a greeting, small talk, or it fits none of the above\n"
+    "Output only the single label."
+)
+
+
+def llm_route_label(
+    question: str, *, client: Any, previous_intent: str | None = None, context: str = ""
+) -> str | None:
+    """Ask the model for one routing label. Returns None when no model is available
+    or the call fails, so the caller falls back to the deterministic GENERAL path.
+
+    ``context`` is the rendered conversation memory — it lets the model place a
+    follow-up like "比如呢" against what was just discussed instead of guessing."""
+    if client is None:
+        return None
+    user = question.strip()
+    if previous_intent:
+        user = "Previous turn intent: " + previous_intent + "\nUser message: " + user
+    if context:
+        user = context + "\n\n" + user
+    try:
+        result = client.chat(system=_LLM_ROUTE_SYSTEM, user=user)
+    except (urllib.error.URLError, OSError, ValueError, KeyError, AttributeError):
+        return None
+    text = str(getattr(result, "text", "") or "").strip().lower().replace(" ", "_").replace("-", "_")
+    for label in _LLM_LABELS:
+        if label in text:
+            return label
+    return None

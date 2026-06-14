@@ -3,32 +3,35 @@
 from __future__ import annotations
 
 from ..llm import grounded_values
+from ..router import is_greeting
 from ..schemas import AgentAnswer, Citation, Intent
 from ..tools import ToolRegistry
 
 
-def _general_answer(question: str, registry: ToolRegistry | None = None) -> AgentAnswer:
-    """Greetings get the friendly capability reply; any other open-ended question
-    is answered from the email RAG store — the deterministic summary lists what
-    was retrieved, and the model (in free mode) synthesizes a grounded reply from
-    the same chunks as evidence."""
-    text = question.strip().lower()
-    greeting = any(term in text for term in (
-        "你好", "您好", "哈喽", "嗨", "在吗", "在么", "你是谁", "hi", "hello", "hey", "谢谢", "thank",
-    ))
+def _general_answer(
+    question: str, registry: ToolRegistry | None = None, *, general_mode: str | None = None
+) -> AgentAnswer:
+    """Greetings get the friendly capability reply. An email-content question goes
+    to the RAG store. Anything else falls back to the capability guide that lists
+    what the agent can do — never a refusal/clarify menu, which on a follow-up reads
+    as a bug. (general_mode 'search' is an informational hint from the router.)"""
+    greeting = is_greeting(question)
     if not greeting and registry is not None:
         rag = _rag_general_answer(question, registry)
         if rag is not None:
             return rag
-    prefix = "你好 👋 " if greeting else ""
+    return _capability_reply(greeting)
+
+
+def _capability_reply(greeting: bool) -> AgentAnswer:
     return AgentAnswer(
         intent=Intent.GENERAL,
         answer=(
-            prefix
+            ("你好 👋 " if greeting else "")
             + "我是 LifeAgent 本地日程助手，只读你本地的邮件证据、不外发。"
-            + "可以帮你查最近的截止日期/待办、待缴金额和账单、解释某个状态或提醒为什么触发、"
-            + "给下一步建议，或把某条加入日历（确认后才写）。"
-            + "试着问我「最近有什么截止？」或「这个月要交多少钱？」。"
+            "可以帮你查最近的截止日期/待办、待缴金额和账单、解释某个状态或提醒为什么触发、"
+            "给下一步建议，或把某条加入日历（确认后才写）。"
+            "试着问我「最近有什么截止？」或「这个月要交多少钱？」。"
         ),
         confidence="medium",
         tool_calls=(),
