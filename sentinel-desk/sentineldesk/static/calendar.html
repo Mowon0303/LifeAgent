@@ -303,6 +303,10 @@
   .dD-toast .undo { background:transparent; border:0; color:#FFCB91; font-weight:700; font-size:13px; cursor:pointer; font-family:inherit; white-space:nowrap; padding:0; }
   .dD-toast .undo:hover { text-decoration:underline; }
   .dD-toast .x { background:transparent; border:0; color:#9A8E7B; font-size:17px; cursor:pointer; line-height:1; padding:0; }
+  .dD-toast .ok { background:#B14228; border:0; color:#FFF3E8; font-weight:700; font-size:12.5px; cursor:pointer; font-family:inherit; white-space:nowrap; padding:5px 11px; border-radius:7px; }
+  .dD-toast .ok:hover { background:#9A3A22; }
+  .dD-toast .cancel { background:transparent; border:0; color:#C9BCA8; font-size:12.5px; cursor:pointer; font-family:inherit; white-space:nowrap; padding:5px 4px; }
+  .dD-toast .cancel:hover { color:#F3EEE3; }
   @keyframes toastIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
 </style>
 </head>
@@ -503,8 +507,7 @@
   var TASK_BULK_ACTION_STATUS = {
     'task-bulk-done': 'done',
     'task-bulk-reviewed': 'reviewed',
-    'task-bulk-ignored': 'ignored',
-    'task-bulk-needs-verification': 'needs_verification'
+    'task-bulk-ignored': 'ignored'
   };
   var WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']; // Mon-first
   var MONTH_CN = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
@@ -1390,6 +1393,25 @@
     toastTimer = setTimeout(dismissToast, opts.duration || 8000);
   }
 
+  // In-app confirmation (replaces native window.confirm so the page never freezes
+  // behind a system dialog). Resolves by calling onConfirm; no auto-dismiss.
+  function showConfirm(message, onConfirm) {
+    var wrap = document.getElementById('dDToastWrap');
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.className = 'dD-toast-wrap';
+      wrap.id = 'dDToastWrap';
+      document.body.appendChild(wrap);
+    }
+    if (toastTimer) { clearTimeout(toastTimer); toastTimer = null; }
+    wrap.innerHTML = '<div class="dD-toast confirm"><span class="msg">' + escapeHtml(message) + '</span>' +
+      '<button class="cancel" data-toast-cancel>取消</button>' +
+      '<button class="ok" data-toast-ok>确认</button></div>';
+    var card = wrap.querySelector('.dD-toast');
+    card.querySelector('[data-toast-ok]').addEventListener('click', function () { dismissToast(); onConfirm(); });
+    card.querySelector('[data-toast-cancel]').addEventListener('click', dismissToast);
+  }
+
   // Undo the most recent local task review (done/needs_verification/reviewed/ignored).
   // The action is already persisted in 查看历史; this just reverses the latest one.
   function undoLatestReview() {
@@ -1509,8 +1531,7 @@
       '<div class="dD-bulkbar" id="taskBulkActions">' +
       '<button class="dD-cbtn prim" data-act="task-bulk-done"' + bulkDisabled + '>批量完成</button>' +
       '<button class="dD-cbtn sec" data-act="task-bulk-reviewed"' + bulkDisabled + '>批量已阅</button>' +
-      '<button class="dD-cbtn sec" data-act="task-bulk-ignored"' + bulkDisabled + '>批量忽略</button>' +
-      '<button class="dD-cbtn warn" data-act="task-bulk-needs-verification"' + bulkDisabled + '>批量核对</button></div>' +
+      '<button class="dD-cbtn sec" data-act="task-bulk-ignored"' + bulkDisabled + '>批量忽略</button></div>' +
       '<div class="dD-btns"><button class="dD-cbtn sec" data-act="daily-run">刷新今日检查</button>' +
       '<button class="dD-cbtn warn" data-act="gmail-sync">同步 Gmail（外部只读）</button>' +
       '<button class="dD-cbtn sec" data-act="show-task">打开当前任务</button>' +
@@ -1936,43 +1957,40 @@
       return;
     }
     var label = REVIEW_STATUS_LABEL[status] || status;
-    var scope = (TASK_VIEW_LABEL[state.taskView] || state.taskView) + ' / ' +
-      (TASK_KIND_FILTER_LABEL[state.taskFilterKind] || state.taskFilterKind) + ' / ' +
-      (TASK_STATUS_FILTER_LABEL[state.taskFilterStatus] || state.taskFilterStatus);
-    var ok = window.confirm('将当前筛选下 ' + queue.length + ' 条任务批量标记为“' + label + '”？\n筛选：' + scope + '\n这个操作只写本地 review 状态和 audit。');
-    if (!ok) return;
-    state.busy = true;
-    var wrap = button.closest('#taskBulkActions');
-    if (wrap) wrap.querySelectorAll('button').forEach(function (btn) { btn.disabled = true; });
-    var confirmationId = 'ui-task-bulk-' + Date.now();
-    fetch('/api/tasks/review/bulk', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        task_ids: queue.map(function (task) { return task.task_id; }),
-        status: status,
-        note: 'bulk reviewed from calendar assistant: ' + status,
-        confirm: true,
-        confirmation_id: confirmationId,
-        filter: { view: state.taskView, kind: state.taskFilterKind, status: state.taskFilterStatus, sort: state.taskSort }
+    showConfirm('将当前筛选下 ' + queue.length + ' 条任务批量标记为「' + label + '」？只写本地状态，不发邮件。', function () {
+      state.busy = true;
+      var wrap = button.closest('#taskBulkActions');
+      if (wrap) wrap.querySelectorAll('button').forEach(function (btn) { btn.disabled = true; });
+      var confirmationId = 'ui-task-bulk-' + Date.now();
+      fetch('/api/tasks/review/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          task_ids: queue.map(function (task) { return task.task_id; }),
+          status: status,
+          note: 'bulk reviewed from calendar assistant: ' + status,
+          confirm: true,
+          confirmation_id: confirmationId,
+          filter: { view: state.taskView, kind: state.taskFilterKind, status: state.taskFilterStatus, sort: state.taskSort }
+        })
       })
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (result) {
-        if (result.error) throw new Error(result.error);
-        if (!result.allowed) {
-          showToast('批量操作被确认门拦下了：' + (result.reason || '未知原因'));
-          return null;
-        }
-        showToast('已批量标记 ' + (result.reviewed_count || 0) + ' 条为「' + label + '」', { onUndo: undoLatestReview });
-        state.taskCursor = 0;
-        return refresh().then(offerNextTaskSuggestion);
-      })
-      .catch(function (err) { showToast('批量任务状态更新失败：' + err); })
-      .finally(function () {
-        state.busy = false;
-        if (wrap) wrap.querySelectorAll('button').forEach(function (btn) { btn.disabled = false; });
-      });
+        .then(function (r) { return r.json(); })
+        .then(function (result) {
+          if (result.error) throw new Error(result.error);
+          if (!result.allowed) {
+            showToast('批量操作被确认门拦下了：' + (result.reason || '未知原因'));
+            return null;
+          }
+          showToast('已批量标记 ' + (result.reviewed_count || 0) + ' 条为「' + label + '」', { onUndo: undoLatestReview });
+          state.taskCursor = 0;
+          return refresh().then(offerNextTaskSuggestion);
+        })
+        .catch(function (err) { showToast('批量任务状态更新失败：' + err); })
+        .finally(function () {
+          state.busy = false;
+          if (wrap) wrap.querySelectorAll('button').forEach(function (btn) { btn.disabled = false; });
+        });
+    });
   }
 
   function handleTaskEvidence(taskId, button) {
@@ -2028,42 +2046,42 @@
 
   function handleTaskUndo(auditId, button) {
     if (state.busy) return;
-    var ok = window.confirm('撤销这条本地任务 review 操作？\n这只恢复本地 review 状态并写入新的 audit，不会发送邮件或写外部日历。');
-    if (!ok) return;
-    state.busy = true;
-    button.disabled = true;
-    var confirmationId = 'ui-task-undo-' + auditId + '-' + Date.now();
-    fetch('/api/tasks/review/undo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ audit_id: Number(auditId), confirm: true, confirmation_id: confirmationId })
-    })
-      .then(function (r) { return r.json(); })
-      .then(function (result) {
-        if (result.error) throw new Error(result.error);
-        if (!result.allowed) {
-          botMessage('<div class="dD-body uncertain">撤销被确认门拦下了：' +
-            escapeHtml(result.reason || '未知原因') + '</div>');
-          return null;
-        }
-        botMessage('<div class="dD-body">已恢复 <b>' + escapeHtml(result.restored_count || 0) +
-          '</b> 条任务的本地 review 状态。确认 ID <code>' + escapeHtml(confirmationId) +
-          '</code> 已记录；没有外部副作用。</div>');
-        state.taskCursor = 0;
-        return refresh();
+    showConfirm('撤销这条本地 review 操作？只恢复本地状态、写一条 audit，不发邮件、不写外部日历。', function () {
+      state.busy = true;
+      button.disabled = true;
+      var confirmationId = 'ui-task-undo-' + auditId + '-' + Date.now();
+      fetch('/api/tasks/review/undo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audit_id: Number(auditId), confirm: true, confirmation_id: confirmationId })
       })
-      .then(function () {
-        return fetch('/api/tasks/review/history?limit=8');
-      })
-      .then(function (r) { return r ? r.json() : null; })
-      .then(function (payload) {
-        if (payload) botMessage(taskHistoryEmbed(payload), { ghost: true });
-      })
-      .catch(function (err) { botMessage('<div class="dD-body uncertain">撤销失败：' + escapeHtml(err) + '</div>'); })
-      .finally(function () {
-        state.busy = false;
-        button.disabled = false;
-      });
+        .then(function (r) { return r.json(); })
+        .then(function (result) {
+          if (result.error) throw new Error(result.error);
+          if (!result.allowed) {
+            botMessage('<div class="dD-body uncertain">撤销被确认门拦下了：' +
+              escapeHtml(result.reason || '未知原因') + '</div>');
+            return null;
+          }
+          botMessage('<div class="dD-body">已恢复 <b>' + escapeHtml(result.restored_count || 0) +
+            '</b> 条任务的本地 review 状态。确认 ID <code>' + escapeHtml(confirmationId) +
+            '</code> 已记录；没有外部副作用。</div>');
+          state.taskCursor = 0;
+          return refresh();
+        })
+        .then(function () {
+          return fetch('/api/tasks/review/history?limit=8');
+        })
+        .then(function (r) { return r ? r.json() : null; })
+        .then(function (payload) {
+          if (payload) botMessage(taskHistoryEmbed(payload), { ghost: true });
+        })
+        .catch(function (err) { botMessage('<div class="dD-body uncertain">撤销失败：' + escapeHtml(err) + '</div>'); })
+        .finally(function () {
+          state.busy = false;
+          button.disabled = false;
+        });
+    });
   }
 
   function answerCardsHtml(cards) {

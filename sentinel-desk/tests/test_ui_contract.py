@@ -932,7 +932,6 @@ class CalendarPageTests(UiContractBase):
             'data-act="task-bulk-done"',
             'data-act="task-bulk-reviewed"',
             'data-act="task-bulk-ignored"',
-            'data-act="task-bulk-needs-verification"',
             'data-act="task-evidence"',
             'data-act="calendar-evidence"',
             "function openCalendarEvidence",
