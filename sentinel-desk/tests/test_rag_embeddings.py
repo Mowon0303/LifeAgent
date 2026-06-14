@@ -87,5 +87,41 @@ class RagEmailEmbeddingTests(unittest.TestCase):
             self.assertEqual(semantic_search(paths, "rent payment", HashEmbedder(), limit=2), [])
 
 
+class RagGroundedChatTests(unittest.TestCase):
+    def test_open_ended_question_answers_from_email_rag(self) -> None:
+        from sentineldesk.agent.graph import answer_question
+        from sentineldesk.agent.schemas import Intent
+        from sentineldesk.agent.tools import default_tool_registry
+
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            _seed(paths)
+            index_emails(paths, embedder=HashEmbedder())  # local home -> hash embedder in the tool too
+            registry = default_tool_registry(paths)
+            answer = answer_question(
+                "tell me about my OPT employment authorization filing",
+                messages=[], registry=registry,
+            )
+            self.assertEqual(answer.intent, Intent.GENERAL)
+            self.assertTrue(answer.metadata.get("rag"))
+            self.assertTrue(answer.citations)
+            self.assertIn("OPT", " ".join(c.evidence for c in answer.citations))
+
+    def test_greeting_still_gets_capability_reply_not_rag(self) -> None:
+        from sentineldesk.agent.graph import answer_question
+        from sentineldesk.agent.schemas import Intent
+        from sentineldesk.agent.tools import default_tool_registry
+
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            _seed(paths)
+            index_emails(paths, embedder=HashEmbedder())
+            registry = default_tool_registry(paths)
+            answer = answer_question("你好", messages=[], registry=registry)
+            self.assertEqual(answer.intent, Intent.GENERAL)
+            self.assertFalse(answer.metadata.get("rag"))
+            self.assertIn("LifeAgent", answer.answer)
+
+
 if __name__ == "__main__":
     unittest.main()

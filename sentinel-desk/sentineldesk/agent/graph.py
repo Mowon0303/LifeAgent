@@ -176,7 +176,7 @@ def answer_question(
     if intent == Intent.POLICY_QUESTION:
         return _answer_policy_question(active_registry, question)
 
-    return _general_answer(question)
+    return _general_answer(question, active_registry)
 
 
 def _task_overview_answer(messages: list[EmailMessage]) -> AgentAnswer:
@@ -324,13 +324,19 @@ def _most_recent_fact(matches: list):
     return sorted(matches, key=lambda fact: (fact.received_at, fact.confidence), reverse=True)[0]
 
 
-def _general_answer(question: str) -> AgentAnswer:
-    """Greetings and anything off-topic should get a friendly, helpful reply that
-    explains what the assistant can do — not a cryptic "needs retrieval" refusal."""
+def _general_answer(question: str, registry: ToolRegistry | None = None) -> AgentAnswer:
+    """Greetings get the friendly capability reply; any other open-ended question
+    is answered from the email RAG store — the deterministic summary lists what
+    was retrieved, and the model (in free mode) synthesizes a grounded reply from
+    the same chunks as evidence."""
     text = question.strip().lower()
     greeting = any(term in text for term in (
         "你好", "您好", "哈喽", "嗨", "在吗", "在么", "你是谁", "hi", "hello", "hey", "谢谢", "thank",
     ))
+    if not greeting and registry is not None:
+        rag = _rag_general_answer(question, registry)
+        if rag is not None:
+            return rag
     prefix = "你好 👋 " if greeting else ""
     return AgentAnswer(
         intent=Intent.GENERAL,
@@ -343,6 +349,47 @@ def _general_answer(question: str) -> AgentAnswer:
         ),
         confidence="medium",
         tool_calls=(),
+    )
+
+
+def _rag_general_answer(question: str, registry: ToolRegistry) -> AgentAnswer | None:
+    """Retrieve relevant email chunks for an open-ended question and hand them to
+    the answer as citations. Returns None (fall back to the capability reply)
+    when the RAG tool is unavailable or nothing relevant is found."""
+    try:
+        spec = registry.assert_can_call("search_email_rag")
+    except (KeyError, PermissionError):
+        return None
+    if spec.handler is None:
+        return None
+    try:
+        result = registry.call("search_email_rag", query=question, limit=4)
+    except Exception:
+        return None
+    documents = list(result.get("documents") or []) if isinstance(result, dict) else []
+    if not documents:
+        return None
+    citations = tuple(
+        Citation(
+            source_id=str(document.get("source_id") or ""),
+            source_type=str(document.get("source_type") or "email"),
+            evidence=str(document.get("text") or ""),
+            captured_at="",
+        )
+        for document in documents
+    )
+    subjects = [str(document.get("title") or "").strip() for document in documents]
+    subjects = [subject for subject in subjects if subject][:3]
+    summary = "我在你的邮件里找到相关内容" + (
+        "：" + "；".join(subjects) + "。" if subjects else "。"
+    ) + "（确认细节请看来源邮件。）"
+    return AgentAnswer(
+        intent=Intent.GENERAL,
+        answer=summary,
+        confidence="medium",
+        citations=citations,
+        tool_calls=("search_email_rag",),
+        metadata={"rag": True, "retrieved": len(documents)},
     )
 
 

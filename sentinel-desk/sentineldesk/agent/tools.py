@@ -91,6 +91,16 @@ def default_tool_registry(paths: Paths | None = None) -> ToolRegistry:
     )
     registry.register(
         ToolSpec(
+            name="search_email_rag",
+            description="Semantically search the user's email (hybrid embedding + keyword) for context.",
+            capability="email_read",
+            side_effect="none",
+            requires_confirmation=False,
+            handler=_search_email_rag(paths) if paths is not None else None,
+        )
+    )
+    registry.register(
+        ToolSpec(
             name="capture_latest_portal",
             description="Capture latest portal state through a configured target.",
             capability="portal_read",
@@ -151,6 +161,33 @@ def _read_latest_evidence(paths: Paths) -> Callable[..., dict[str, Any]]:
         return {
             "runs": runs,
             "run_count": len(runs),
+        }
+
+    return handler
+
+
+def _search_email_rag(paths: Paths) -> Callable[..., dict[str, Any]]:
+    def handler(query: str, limit: int = 4) -> dict[str, Any]:
+        from sentineldesk.agent.embeddings import embedder_for
+        from sentineldesk.agent.model import load_model_provider
+        from sentineldesk.agent.rag_index import hybrid_search
+
+        db.init_db(paths)
+        embedder = embedder_for(load_model_provider(paths))
+        results = hybrid_search(paths, query, embedder, limit=limit)
+        return {
+            "documents": [
+                {
+                    "source_id": str(document.metadata.get("document_source_id") or document.source_id),
+                    "source_type": document.source_type,
+                    "trust_label": document.trust_label,
+                    "text": document.text,
+                    "title": str(document.metadata.get("title") or ""),
+                    "metadata": dict(document.metadata),
+                }
+                for document in results
+            ],
+            "document_count": len(results),
         }
 
     return handler
