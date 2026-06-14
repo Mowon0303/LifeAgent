@@ -1526,11 +1526,7 @@
       '<div class="dD-sumrow"><div class="n' + ((calendar.pending_count || 0) ? ' u' : '') + '">' + (calendar.pending_count || 0) + '</div><div><div class="lab">本地日历草稿</div><div class="sub">总计 ' + (calendar.total_drafts || 0) + ' · 待核对 ' + (calendar.uncertain_count || 0) + '</div></div></div>' +
       '<div class="dD-sumrow"><div class="n">' + (safety.external_writes_performed ? '!' : '0') + '</div><div><div class="lab">外部写入</div><div class="sub">' + escapeHtml(connectorText) + ' · Gmail 只读</div></div></div>' +
       '<div class="dD-taskline" id="taskReviewQueue">任务操作只写本地 review 状态和 audit，不会发送邮件或写外部日历。</div>' +
-      gmailReadinessPanel() +
-      gmailSyncDiagnosticsPanel() +
       '<div class="dD-taskline" id="gmailSyncBoundary">Gmail 同步会触发外部只读 Gmail API 请求，只写本地 SQLite/audit，不发送邮件或写外部日历。</div>' +
-      taskSessionPanel() +
-      reviewReceiptPanel() +
       summaryEmbed() +
       '<div class="dD-bulkbar" id="taskBulkActions">' +
       '<button class="dD-cbtn prim" data-act="task-bulk-done"' + bulkDisabled + '>批量完成</button>' +
@@ -1870,8 +1866,17 @@
           var summary = result.daily_summary || state.daily || {};
           if (result.error) {
             var failure = (result.diagnostics || {}).latest_failure || {};
-            botMessage('<div class="dD-body uncertain">Gmail 同步失败：' +
-              escapeHtml(failure.category || result.error) + '。诊断面板已更新，未发生外部写入。</div>');
+            var readiness = (state.daily || {}).gmail_readiness || {};
+            var command = (readiness.next_action || {}).command || '';
+            var needsOauth = readiness.oauth_ready === false ||
+              /credential|oauth|not configured|not available/i.test(String(result.error));
+            botMessage('<div class="dD-body uncertain">Gmail 同步未完成：' +
+              (needsOauth
+                ? '还没配置 Google OAuth 凭证（读已存的本地邮件不需要它，只有重新同步才需要）。设置好下面这个环境变量再重启服务即可：'
+                : escapeHtml(failure.category || result.error) + '。') +
+              '未发生外部写入。' +
+              (needsOauth && command ? '<div class="dD-command">' + escapeHtml(command) + '</div>' : '') +
+              '</div>');
             return;
           }
           botMessage('<div class="dD-body">Gmail 只读同步完成：本地邮件 <b>' +
