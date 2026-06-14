@@ -246,6 +246,9 @@ def init_db(paths: Paths) -> None:
         _ensure_column(conn, "email_messages", "labels_json", "TEXT NOT NULL DEFAULT '[]'")
         _ensure_column(conn, "email_messages", "list_unsubscribe", "TEXT NOT NULL DEFAULT ''")
         _ensure_column(conn, "rag_chunks", "embedding_json", "TEXT NOT NULL DEFAULT ''")
+        # Timed user-created events (deadlines are date-only; these stay empty for them).
+        _ensure_column(conn, "calendar_drafts", "start_time", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "calendar_drafts", "end_time", "TEXT NOT NULL DEFAULT ''")
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:

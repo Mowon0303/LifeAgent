@@ -25,6 +25,15 @@
   .dD-nav button { width:38px; height:38px; border-radius:11px; border:1px solid #E0D6C4; background:#FBF8F1; color:#5C5446;
     font-size:17px; cursor:pointer; }
   .dD-nav button:hover { background:#EDE5D6; }
+  .dD-newev { height:38px; padding:0 16px; border-radius:11px; border:0; background:#2A6FDB; color:#fff; font-size:13.5px;
+    font-weight:700; cursor:pointer; font-family:inherit; box-shadow:0 2px 6px rgba(42,111,219,.25); }
+  .dD-newev:hover { background:#2461c2; }
+  .tg-ev { position:absolute; left:4px; right:6px; border-radius:7px; padding:3px 7px; font-size:11px; font-weight:600;
+    overflow:hidden; cursor:pointer; box-shadow:0 1px 3px rgba(40,30,15,.14); line-height:1.25; z-index:3; }
+  .tg-ev:hover { filter:brightness(.97); }
+  .ev-time { display:flex; align-items:center; gap:8px; }
+  .ev-time input { flex:1; }
+  .ev-hint { font-size:11.5px; color:#9A8E7B; }
   .dD-seg { display:flex; background:#EBE2D2; border-radius:13px; padding:4px; gap:3px; }
   .dD-seg button { border:0; background:transparent; color:#8A7F6D; padding:9px 18px; border-radius:9px;
     font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; }
@@ -98,15 +107,37 @@
   .dD-empty { color:#A2937B; font-size:13px; padding:26px 4px; }
 
   /* ---- Discord-style agent panel ---- */
-  .dD-ai { width:438px; flex:none; background:#F1ECE1; border-left:1px solid #E0D6C4; display:flex; flex-direction:column; }
+  .dD-ai { width:438px; flex:none; background:#F1ECE1; border-left:1px solid #E0D6C4; display:flex; flex-direction:column; position:relative; }
   .dD-chh { height:56px; flex:none; display:flex; align-items:center; gap:9px; padding:0 16px;
     border-bottom:1px solid #E4DBC9; box-shadow:0 1px 0 rgba(80,60,20,.03); }
-  .dD-chh .hash { font-size:22px; color:#B3A893; font-weight:500; }
-  .dD-chh .cn { font-size:15.5px; font-weight:700; color:#2B2622; }
-  .dD-chh .sep { width:1px; height:20px; background:#E0D6C4; margin:0 4px; }
-  .dD-chh .topic { font-size:12px; color:#9A8E7B; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .dD-chh .icons { margin-left:auto; display:flex; gap:14px; color:#A89A86; }
-  .dD-chh .icons i { width:18px; height:18px; display:block; opacity:.8; }
+  .dD-chh .hash { font-size:22px; color:#B3A893; font-weight:500; flex:none; }
+  .dD-chh .cn { font-size:15px; font-weight:700; color:#2B2622; white-space:nowrap; flex:none; }
+  .dD-chh .sep { width:1px; height:20px; background:#E0D6C4; margin:0 4px; flex:none; }
+  .dD-chh .topic { font-size:12px; color:#9A8E7B; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1 1 auto; min-width:0; }
+  .dD-chh .icons { margin-left:auto; display:flex; gap:14px; color:#A89A86; flex:none; }
+  .dD-chh .icons i { width:18px; height:18px; display:block; opacity:.8; cursor:pointer; position:relative; }
+  .dD-chh .icons i:hover { opacity:1; }
+  .dD-chh .icons .badge { position:absolute; top:-5px; right:-6px; min-width:9px; height:14px; line-height:14px; padding:0 3px;
+    background:#B14228; color:#fff; font-size:9px; font-weight:700; border-radius:7px; text-align:center; display:none; }
+  .dD-chh .icons .badge.on { display:block; }
+  .dD-hdrpanel { position:absolute; top:52px; right:12px; width:308px; max-height:62vh; overflow:auto; background:#FFFDF8;
+    border:1px solid #E0D6C4; border-radius:12px; box-shadow:0 12px 32px rgba(40,30,15,.18); z-index:55; padding:12px 13px; display:none; }
+  .dD-hdrpanel.on { display:block; }
+  .dD-hdrpanel h5 { margin:0 0 6px; font-size:11px; font-weight:700; color:#8A6D3B; text-transform:uppercase; letter-spacing:.05em; }
+  .dD-hdrpanel .nrow { display:flex; gap:9px; align-items:flex-start; padding:8px 0; border-top:1px solid #F0E8D8; }
+  .dD-hdrpanel .nrow:first-of-type { border-top:none; }
+  .dD-hdrpanel .nrow.tap { cursor:pointer; }
+  .dD-hdrpanel .nrow.tap:hover { background:#FBF6EC; }
+  .dD-hdrpanel .nrow .nn { font-family:'IBM Plex Mono',monospace; font-weight:700; color:#B14228; font-size:14px; min-width:22px; }
+  .dD-hdrpanel .nrow .nt { font-size:12.5px; color:#2B2622; line-height:1.4; }
+  .dD-hdrpanel .empty { font-size:12.5px; color:#9A8E7B; padding:4px 0; }
+  .dD-hdrsearch input { width:100%; box-sizing:border-box; border:1px solid #E0D6C4; border-radius:8px; padding:8px 10px; font-family:inherit; font-size:13px; background:#fff; color:#2B2622; }
+  .dD-hdrsearch input:focus { outline:none; border-color:#B49A6A; }
+  .dD-hdrsearch .res { margin-top:6px; }
+  .dD-hdrsearch .ri { padding:8px 0; border-top:1px solid #F0E8D8; cursor:pointer; }
+  .dD-hdrsearch .ri:hover { background:#FBF6EC; }
+  .dD-hdrsearch .ri .rt { font-size:12.5px; font-weight:600; color:#2B2622; line-height:1.35; }
+  .dD-hdrsearch .ri .rs { font-size:11.5px; color:#9A8E7B; line-height:1.35; margin-top:2px; }
 
   .dD-feed { flex:1; overflow-y:auto; padding:14px 0 8px; display:flex; flex-direction:column; }
   .dD-div { display:flex; align-items:center; gap:10px; padding:6px 16px 14px; }
@@ -324,6 +355,7 @@
           <button id="calPrev" aria-label="上一页">‹</button>
           <button id="calNext" aria-label="下一页">›</button>
         </div>
+        <button class="dD-newev" id="calNewEvent">+ 新建</button>
       </div>
       <div class="dD-seg" id="calSeg">
         <button data-view="month">月</button>
@@ -342,11 +374,12 @@
       <span class="sep"></span>
       <span class="topic" id="aiTopic">本地证据 · 写日历需确认</span>
       <span class="icons">
-        <i><svg viewBox="0 0 22 22" width="18" height="18"><path stroke="#A89A86" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round" d="M6 9a5 5 0 0 1 10 0c0 5 2 6 2 6H4s2-1 2-6"/><path stroke="#A89A86" stroke-width="1.7" fill="none" stroke-linecap="round" d="M9.5 18a1.8 1.8 0 0 0 3 0"/></svg></i>
-        <i><svg viewBox="0 0 22 22" width="18" height="18"><circle stroke="#A89A86" stroke-width="1.7" fill="none" cx="10" cy="10" r="6"/><path stroke="#A89A86" stroke-width="1.7" stroke-linecap="round" d="M15 15l3 3"/></svg></i>
+        <i data-act="hdr-bell" title="通知"><svg viewBox="0 0 22 22" width="18" height="18"><path stroke="#A89A86" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round" d="M6 9a5 5 0 0 1 10 0c0 5 2 6 2 6H4s2-1 2-6"/><path stroke="#A89A86" stroke-width="1.7" fill="none" stroke-linecap="round" d="M9.5 18a1.8 1.8 0 0 0 3 0"/></svg><b class="badge" id="hdrBellBadge"></b></i>
+        <i data-act="hdr-search" title="搜索邮件"><svg viewBox="0 0 22 22" width="18" height="18"><circle stroke="#A89A86" stroke-width="1.7" fill="none" cx="10" cy="10" r="6"/><path stroke="#A89A86" stroke-width="1.7" stroke-linecap="round" d="M15 15l3 3"/></svg></i>
         <a href="/ops" title="运维面板 · 监控/证据/审批/保留控制" style="display:block;line-height:0;"><i><svg viewBox="0 0 22 22" width="18" height="18"><circle stroke="#A89A86" stroke-width="1.7" fill="none" cx="11" cy="11" r="3.2"/><path stroke="#A89A86" stroke-width="1.7" fill="none" stroke-linecap="round" d="M11 3.5v2.2M11 16.3v2.2M3.5 11h2.2M16.3 11h2.2M5.7 5.7l1.6 1.6M14.7 14.7l1.6 1.6M16.3 5.7l-1.6 1.6M7.3 14.7l-1.6 1.6"/></svg></i></a>
       </span>
     </div>
+    <div class="dD-hdrpanel" id="hdrPanel"></div>
     <div class="dD-feed" id="aiFeed"></div>
     <div class="dD-comp">
       <div class="dD-compbox">
@@ -536,6 +569,7 @@
     taskSort: 'priority',
     taskCursor: 0,           // cursor into the primary deadline→calendar card
     emailCursor: 0,          // cursor into the demoted email-review pager (更多 block)
+    hdrPanel: null,          // which header dropdown is open: 'bell' | 'search' | null
     advOpen: false,          // is the collapsed "更多" advanced block expanded
     alldayExpanded: false,   // week/day all-day band expanded to show every deadline
     categories: {},           // key -> {key,label,color}, customizable, localStorage-backed
@@ -607,7 +641,11 @@
       sourceTrust: raw.source_trust || '',
       sourceCount: raw.source_count || 0,
       evidenceUri: raw.evidence_uri || '',
-      syncState: raw.sync_state
+      syncState: raw.sync_state,
+      startTime: raw.start_time || '',
+      endTime: raw.end_time || '',
+      userCreated: raw.sync_state === 'user_created' ||
+        (raw.source_ids || []).indexOf('user:created') >= 0
     };
   }
 
@@ -1057,11 +1095,16 @@
     var c = categoryFor(item);
     return 'background:' + catTint(c.color) + ';color:' + c.color + ';border:1px solid ' + c.color + ';';
   }
+  function parseHM(value) {
+    var m = /^(\d{1,2}):(\d{2})$/.exec(String(value || '').trim());
+    return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null;
+  }
   function chipHtml(item, cls) {
+    var timePrefix = item.startTime ? item.startTime + ' ' : '';
     return '<div class="' + cls + (item.pending ? ' pending' : '') + '" data-event-id="' + escapeHtml(item.eventId) +
       '" style="' + chipStyle(item) + '" title="' +
       escapeHtml(item.title + ' · ' + item.source + (item.pending ? ' · 草稿' : ' · 已确认')) + '">' +
-      escapeHtml(item.title) + (item.uncertain ? ' ?' : '') + '</div>';
+      escapeHtml(timePrefix + item.title) + (item.uncertain ? ' ?' : '') + '</div>';
   }
 
   function renderTitle() {
@@ -1097,7 +1140,8 @@
       var isToday = key === todayKey && !out;
       var hasEvents = items.length > 0;
       html += '<div class="dD-cell' + (out ? ' out' : '') + (isToday ? ' today' : '') +
-        (hasEvents ? ' has-events' : '') + '"' + (hasEvents ? ' data-day-key="' + key + '"' : '') + '>';
+        (hasEvents ? ' has-events' : '') + '"' + (hasEvents ? ' data-day-key="' + key + '"' : '') +
+        (out ? '' : ' data-new-day="' + key + '"') + '>';
       html += '<div class="dD-dn">' + (date.getDate() === 1 ? (date.getMonth() + 1) + '/1' : date.getDate()) + '</div>';
       html += '<div class="dD-cellchips">';
       items.slice(0, 3).forEach(function (item) { html += chipHtml(item, 'dD-blk'); });
@@ -1129,7 +1173,8 @@
     // all-day band (Google/Apple style): date-only deadlines as chips in a sticky top
     // band. Collapsed shows ~2 rows with per-day "+N"; the 全天 ▾ toggle expands it
     // (taller + internally scrollable) so it never grows unbounded or clips.
-    var anyOverflow = days.some(function (d) { return (map[isoKey(d)] || []).length > 2; });
+    var allDayOf = function (d) { return (map[isoKey(d)] || []).filter(function (i) { return !i.startTime; }); };
+    var anyOverflow = days.some(function (d) { return allDayOf(d).length > 2; });
     var expanded = state.alldayExpanded;
     var toggle = anyOverflow
       ? '<button class="adg-toggle" data-act="toggle-allday">全天 ' + (expanded ? '▴' : '▾') + '</button>'
@@ -1138,7 +1183,7 @@
       '<div class="adg-lab">' + toggle + '</div>';
     days.forEach(function (d) {
       var dayKey = isoKey(d);
-      var dayItems = map[dayKey] || [];
+      var dayItems = allDayOf(d);  // timed events render in the grid below, not the all-day band
       html += '<div class="adg-cell">';
       if (expanded || dayItems.length <= 2) {
         dayItems.forEach(function (item) { html += chipHtml(item, 'ad-chip'); });
@@ -1163,10 +1208,24 @@
     var nowOffset = (now.getHours() + now.getMinutes() / 60 - START_H) * HPX + PAD;
     days.forEach(function (d) {
       var dayKey = isoKey(d);
-      html += '<div class="tg-col">';
+      html += '<div class="tg-col" data-new-day="' + dayKey + '">';
       for (var h = START_H; h <= END_H; h++) {
         html += '<div class="ln" style="top:' + ((h - START_H) * HPX + PAD) + 'px"></div>';
       }
+      // timed events as positioned blocks (all-day/date-only ones stay in the band above)
+      (map[dayKey] || []).forEach(function (item) {
+        if (!item.startTime) return;
+        var sm = parseHM(item.startTime);
+        if (sm == null) return;
+        var em = item.endTime ? parseHM(item.endTime) : null;
+        if (em == null || em <= sm) em = sm + 60;
+        var top = (sm / 60 - START_H) * HPX + PAD;
+        var blockH = Math.max(20, ((em - sm) / 60) * HPX - 2);
+        var timeLabel = item.startTime + (item.endTime ? '–' + item.endTime : '');
+        html += '<div class="tg-ev" data-event-id="' + escapeHtml(item.eventId) + '" style="top:' + top +
+          'px;height:' + blockH + 'px;' + chipStyle(item) + '" title="' + escapeHtml(timeLabel + ' ' + item.title) + '">' +
+          escapeHtml(item.title) + ' <span style="font-weight:400;opacity:.8">' + escapeHtml(timeLabel) + '</span></div>';
+      });
       if (dayKey === todayKey && nowOffset >= PAD && nowOffset <= (END_H - START_H) * HPX + PAD) {
         html += '<div class="tg-now" style="top:' + nowOffset + 'px"></div>';
       }
@@ -1265,11 +1324,17 @@
     if (state.busy) return;
     var titleEl = document.getElementById('evTitle');
     var dateEl = document.getElementById('evDate');
+    var startEl = document.getElementById('evStart');
+    var endEl = document.getElementById('evEnd');
     var title = titleEl ? titleEl.value : item.title;
     var date = dateEl ? dateEl.value : (item.dateText || item.dateKey || '');
+    var start = startEl ? startEl.value : (item.startTime || '');
+    var end = endEl ? endEl.value : (item.endTime || '');
     state.busy = true;
     fetch('/api/calendar/drafts/update?event_id=' + encodeURIComponent(item.eventId) +
-      '&title=' + encodeURIComponent(title || '') + '&date=' + encodeURIComponent(date || ''), { method: 'POST' })
+      '&title=' + encodeURIComponent(title || '') + '&date=' + encodeURIComponent(date || '') +
+      '&start=' + encodeURIComponent(start || '') + '&end=' + encodeURIComponent(end || '') +
+      (item.userCreated ? '&user=1' : ''), { method: 'POST' })
       .then(function (r) { return r.json(); })
       .then(function (res) {
         if (res.error) { botMessage('<div class="dD-body uncertain">保存失败：' + escapeHtml(res.error) + '</div>'); return; }
@@ -1280,6 +1345,82 @@
       .catch(function (err) { botMessage('<div class="dD-body uncertain">保存失败：' + escapeHtml(err) + '</div>'); })
       .finally(function () { state.busy = false; });
   }
+
+  // ---------- create / delete user events (Google/Apple-style) ----------
+  function openCreateEventPopup(prefill) {
+    closeEventPopup();
+    prefill = prefill || {};
+    var back = document.createElement('div');
+    back.className = 'ev-pop-back';
+    back.id = 'evPopBack';
+    back.innerHTML =
+      '<div class="ev-pop" id="evPop">' +
+      '<span class="ev-x" data-act="ev-close">×</span>' +
+      '<span class="ev-status" style="background:#E4EFE2;color:#4F7A4A">新建</span>' +
+      '<h3>新建日程</h3>' +
+      '<div class="ev-row"><span class="lab">标题</span><input type="text" id="ceTitle" placeholder="事件标题"></div>' +
+      '<div class="ev-row"><span class="lab">日期</span><input type="date" id="ceDate" value="' +
+        escapeHtml(prefill.date || isoKey(new Date())) + '"></div>' +
+      '<div class="ev-row"><span class="lab">时间</span><span class="ev-time">' +
+        '<input type="time" id="ceStart" value="' + escapeHtml(prefill.start || '') + '"> – ' +
+        '<input type="time" id="ceEnd"></span></div>' +
+      '<div class="ev-row"><span class="lab"></span><span class="ev-hint">时间留空 = 全天</span></div>' +
+      '<div class="ev-evi">你自己建的事件会立即显示在日历上（不走 AI 确认门，也不写外部日历）。</div>' +
+      '<div class="ev-pop-actions">' +
+      '<button class="dD-cbtn prim" data-act="ce-save">创建</button>' +
+      '<button class="dD-cbtn sec" data-act="ev-close">取消</button>' +
+      '</div></div>';
+    back.addEventListener('click', function (e) {
+      if (e.target === back) { closeEventPopup(); return; }
+      var trigger = e.target.closest('[data-act]');
+      if (!trigger) return;
+      if (trigger.dataset.act === 'ev-close') { closeEventPopup(); return; }
+      if (trigger.dataset.act === 'ce-save') { createEvent(); return; }
+    });
+    document.body.appendChild(back);
+    var t = document.getElementById('ceTitle');
+    if (t) t.focus();
+  }
+
+  function createEvent() {
+    if (state.busy) return;
+    var title = ((document.getElementById('ceTitle') || {}).value || '').trim();
+    var date = (document.getElementById('ceDate') || {}).value || '';
+    var start = (document.getElementById('ceStart') || {}).value || '';
+    var end = (document.getElementById('ceEnd') || {}).value || '';
+    if (!title) { var t = document.getElementById('ceTitle'); if (t) t.focus(); return; }
+    if (!date) { var dEl = document.getElementById('ceDate'); if (dEl) dEl.focus(); return; }
+    state.busy = true;
+    fetch('/api/calendar/create?title=' + encodeURIComponent(title) + '&date=' + encodeURIComponent(date) +
+      '&start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end), { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res.error) { showToast('创建失败：' + escapeHtml(res.error)); return; }
+        closeEventPopup();
+        showToast('已创建「' + title + '」');
+        return refresh();
+      })
+      .catch(function (err) { showToast('创建失败：' + escapeHtml(err)); })
+      .finally(function () { state.busy = false; });
+  }
+
+  function deleteEvent(eventId) {
+    if (state.busy || !eventId) return;
+    showConfirm('删除这个事件？只删本地，不影响外部日历。', function () {
+      state.busy = true;
+      fetch('/api/calendar/delete?event_id=' + encodeURIComponent(eventId), { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .then(function (res) {
+          if (res.error) { showToast('删除失败：' + escapeHtml(res.error)); return; }
+          closeEventPopup();
+          showToast('已删除');
+          return refresh();
+        })
+        .catch(function (err) { showToast('删除失败：' + escapeHtml(err)); })
+        .finally(function () { state.busy = false; });
+    });
+  }
+
   // a day with many events shows a few chips + "+N more"; this lists ALL of them so
   // nothing is unreachable when a cell can't fit every chip
   function openDayPopup(dateKey) {
@@ -1317,26 +1458,39 @@
     var statusBadge = item.pending
       ? '<span class="ev-status" style="background:#EAE6FA;color:#6A5BD0">草稿 · 待确认</span>'
       : '<span class="ev-status" style="background:#E4EFE2;color:#4F7A4A">已确认</span>';
+    var isUser = item.userCreated;
+    var dateLabel = isUser ? '日期' : '候选截止日';
+    var sourceRow = isUser ? ''
+      : '<div class="ev-row"><span class="lab">来源</span><span>' + escapeHtml(item.source) +
+        (item.uncertain ? ' · 需核对原始邮件' : '') + '</span></div>';
+    var note = isUser
+      ? '你自己建的事件，编辑/删除只写本地，不写外部日历。'
+      : '编辑标题/日期只写本地草稿；「确认加入日历」会经确认门导出本地 ICS，永不写外部日历。';
+    var actions = isUser
+      ? '<button class="dD-cbtn prim" data-act="ev-save">保存修改</button>' +
+        '<button class="dD-cbtn warn" data-act="ev-delete">删除</button>' +
+        '<button class="dD-cbtn sec" data-act="ev-close">关闭</button>'
+      : '<button class="dD-cbtn prim" data-act="ev-save">保存修改</button>' +
+        '<button class="dD-cbtn sec" data-act="ev-source">查看来源</button>' +
+        (item.pending ? '<button class="dD-cbtn warn" data-act="ev-confirm">✓ 确认加入日历</button>' : '') +
+        '<button class="dD-cbtn sec" data-act="ev-ignore">忽略</button>' +
+        '<button class="dD-cbtn sec" data-act="ev-close">关闭</button>';
     back.innerHTML =
       '<div class="ev-pop" id="evPop">' +
       '<span class="ev-x" data-act="ev-close">×</span>' +
       statusBadge +
       '<h3>' + escapeHtml(item.title) + (item.uncertain ? ' ?' : '') + '</h3>' +
       '<div class="ev-row"><span class="lab">标题</span><input type="text" id="evTitle" value="' + escapeHtml(item.title) + '"></div>' +
-      '<div class="ev-row"><span class="lab">候选截止日</span><input type="text" id="evDate" value="' +
+      '<div class="ev-row"><span class="lab">' + dateLabel + '</span><input type="text" id="evDate" value="' +
         escapeHtml(item.dateText || item.dateKey || '') + '" placeholder="如 2026-07-01 或 July 1, 2026"></div>' +
+      '<div class="ev-row"><span class="lab">时间</span><span class="ev-time">' +
+        '<input type="time" id="evStart" value="' + escapeHtml(item.startTime || '') + '"> – ' +
+        '<input type="time" id="evEnd" value="' + escapeHtml(item.endTime || '') + '"></span></div>' +
       '<div class="ev-row"><span class="lab">类别</span><div class="ev-cats" id="evCats">' +
         catChipsHtml(item) + catAddHtml(false) + '</div></div>' +
-      '<div class="ev-row"><span class="lab">来源</span><span>' + escapeHtml(item.source) +
-        (item.uncertain ? ' · 需核对原始邮件' : '') + '</span></div>' +
-      '<div class="ev-evi">编辑标题/日期只写本地草稿；「确认加入日历」会经确认门导出本地 ICS，永不写外部日历。</div>' +
-      '<div class="ev-pop-actions">' +
-      '<button class="dD-cbtn prim" data-act="ev-save">保存修改</button>' +
-      '<button class="dD-cbtn sec" data-act="ev-source">查看来源</button>' +
-      (item.pending ? '<button class="dD-cbtn warn" data-act="ev-confirm">✓ 确认加入日历</button>' : '') +
-      '<button class="dD-cbtn sec" data-act="ev-ignore">忽略</button>' +
-      '<button class="dD-cbtn sec" data-act="ev-close">关闭</button>' +
-      '</div></div>';
+      sourceRow +
+      '<div class="ev-evi">' + note + '</div>' +
+      '<div class="ev-pop-actions">' + actions + '</div></div>';
     back.addEventListener('click', function (e) {
       if (e.target === back) { closeEventPopup(); return; }
       var trigger = e.target.closest('[data-act],[data-cat]');
@@ -1362,6 +1516,7 @@
         return;
       }
       if (act === 'ev-save') { saveEventEdits(item); return; }
+      if (act === 'ev-delete') { deleteEvent(item.eventId); return; }
       if (act === 'ev-source') { openCalendarEvidence(item.eventId); return; }
       if (act === 'ev-confirm') { closeEventPopup(); handleConfirm(item.eventId, document.createElement('div')); return; }
       if (act === 'ev-ignore') { closeEventPopup(); handleIgnore(item.eventId, document.createElement('div')); return; }
@@ -1821,6 +1976,103 @@
     var dailyTasks = reviewItems().length;
     document.getElementById('aiTopic').textContent =
       '本地日历 · ' + (state.events.length + state.undated.length) + ' 条已确认 · ' + dailyTasks + ' 条截止待确认';
+    renderHdrBadge();
+  }
+
+  // ---------- header bell (通知) + search (搜索) ----------
+  function renderHdrBadge() {
+    var badge = document.getElementById('hdrBellBadge');
+    if (!badge) return;
+    var count = state.queue.length + groupsInBucket('unread').length;
+    badge.textContent = count > 99 ? '99+' : String(count);
+    badge.className = 'badge' + (count ? ' on' : '');
+  }
+
+  function nearestDeadlineText() {
+    var todayKey = isoKey(new Date());
+    var upcoming = state.events.filter(function (i) { return i.dateKey && i.dateKey >= todayKey; })
+      .concat(state.queue.filter(function (i) { return i.dateKey && i.dateKey >= todayKey; }))
+      .sort(function (a, b) { return (a.dateKey || '').localeCompare(b.dateKey || ''); });
+    if (!upcoming.length) return '';
+    return upcoming[0].dateKey + ' · ' + clip(upcoming[0].title || '', 28);
+  }
+
+  function headerNotifHtml() {
+    var pendingDrafts = state.queue.length;
+    var emailReview = groupsInBucket('unread').length;
+    var receipt = (state.daily && state.daily.review_receipt) || {};
+    var recent = (Array.isArray(receipt.recent) && receipt.recent.length) ? receipt.recent[0].summary : '';
+    var nearest = nearestDeadlineText();
+    var rows = '';
+    if (pendingDrafts) {
+      rows += '<div class="nrow tap" data-act="hdr-goto" data-group="unread"><span class="nn">' + pendingDrafts +
+        '</span><span class="nt">个截止待加入日历</span></div>';
+    }
+    if (emailReview) {
+      rows += '<div class="nrow tap" data-act="hdr-goto" data-group="unread"><span class="nn">' + emailReview +
+        '</span><span class="nt">封邮件待复核（金额/动作）</span></div>';
+    }
+    if (nearest) {
+      rows += '<div class="nrow"><span class="nn">›</span><span class="nt">最近截止 · ' + escapeHtml(nearest) + '</span></div>';
+    }
+    if (recent) {
+      rows += '<div class="nrow"><span class="nn">↺</span><span class="nt">最近变更 · ' + escapeHtml(clip(recent, 40)) + '</span></div>';
+    }
+    if (!rows) rows = '<div class="empty">暂无待处理的通知。</div>';
+    return '<h5>通知</h5>' + rows;
+  }
+
+  function headerSearchHtml() {
+    return '<div class="dD-hdrsearch"><h5>搜索邮件</h5>' +
+      '<input id="hdrSearchInput" placeholder="输入关键词，回车搜索…" autocomplete="off">' +
+      '<div class="res" id="hdrSearchRes"><div class="empty">在你本地的邮件证据里按关键词查找。</div></div></div>';
+  }
+
+  function runHeaderSearch(query) {
+    var res = document.getElementById('hdrSearchRes');
+    if (!res) return;
+    var q = String(query || '').trim();
+    if (!q) { res.innerHTML = '<div class="empty">在你本地的邮件证据里按关键词查找。</div>'; return; }
+    res.innerHTML = '<div class="empty">搜索中…</div>';
+    fetch('/api/rag/search?q=' + encodeURIComponent(q))
+      .then(function (r) { return r.json(); })
+      .then(function (docs) {
+        var seen = {}, items = [];
+        (docs || []).forEach(function (d) {
+          var meta = d.metadata || {};
+          var sid = String(meta.document_source_id || d.source_id || '');
+          if (seen[sid]) return;
+          seen[sid] = true;
+          items.push({ title: String(meta.title || meta.subject || '邮件'), snippet: clip(String(d.text || ''), 90) });
+        });
+        if (!items.length) { res.innerHTML = '<div class="empty">没找到匹配「' + escapeHtml(q) + '」的邮件。</div>'; return; }
+        res.innerHTML = items.slice(0, 8).map(function (it) {
+          return '<div class="ri"><div class="rt">' + escapeHtml(it.title) + '</div><div class="rs">' + escapeHtml(it.snippet) + '</div></div>';
+        }).join('');
+      })
+      .catch(function () { res.innerHTML = '<div class="empty">搜索失败，稍后再试。</div>'; });
+  }
+
+  function toggleHdrPanel(kind) {
+    var panel = document.getElementById('hdrPanel');
+    if (!panel) return;
+    if (state.hdrPanel === kind) { panel.className = 'dD-hdrpanel'; state.hdrPanel = null; return; }
+    state.hdrPanel = kind;
+    panel.innerHTML = kind === 'bell' ? headerNotifHtml() : headerSearchHtml();
+    panel.className = 'dD-hdrpanel on';
+    if (kind === 'search') {
+      var input = document.getElementById('hdrSearchInput');
+      if (input) {
+        input.focus();
+        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') runHeaderSearch(input.value); });
+      }
+    }
+  }
+
+  function closeHdrPanel() {
+    var panel = document.getElementById('hdrPanel');
+    if (panel) panel.className = 'dD-hdrpanel';
+    state.hdrPanel = null;
   }
 
   function welcome() {
@@ -2201,7 +2453,20 @@
     }
     var dayHit = e.target.closest('[data-day-key]');
     if (dayHit) { openDayPopup(dayHit.dataset.dayKey); return; }
+    // click empty space on a day → create a new event there (Google/Apple style)
+    var newDayHit = e.target.closest('[data-new-day]');
+    if (newDayHit) {
+      var prefill = { date: newDayHit.dataset.newDay };
+      if (newDayHit.classList.contains('tg-col')) {
+        var y = e.clientY - newDayHit.getBoundingClientRect().top;
+        var hour = Math.floor((y - 12) / HPX) + START_H;  // PAD = 12
+        if (hour >= 0 && hour <= 23) prefill.start = String(hour).padStart(2, '0') + ':00';
+      }
+      openCreateEventPopup(prefill);
+      return;
+    }
   });
+  document.getElementById('calNewEvent').addEventListener('click', function () { openCreateEventPopup(); });
   document.getElementById('calPrev').addEventListener('click', function () { step(-1); });
   document.getElementById('calNext').addEventListener('click', function () { step(1); });
   function step(dir) {
@@ -2322,6 +2587,29 @@
     if (!text) return;
     e.target.value = '';
     askAssistant(text);
+  });
+
+  // header bell / search icons + the panel's own clicks
+  document.querySelector('.dD-chh .icons').addEventListener('click', function (e) {
+    var hit = e.target.closest('[data-act]');
+    if (!hit) return;
+    if (hit.dataset.act === 'hdr-bell') toggleHdrPanel('bell');
+    else if (hit.dataset.act === 'hdr-search') toggleHdrPanel('search');
+  });
+  document.getElementById('hdrPanel').addEventListener('click', function (e) {
+    var goto = e.target.closest('[data-act="hdr-goto"]');
+    if (goto) {
+      if (goto.dataset.group) handleTaskGroup(goto.dataset.group);
+      closeHdrPanel();
+      var slot = document.getElementById('taskCardSlot');
+      if (slot) slot.scrollIntoView({ block: 'nearest' });
+    }
+  });
+  // click anywhere outside the panel/icons closes it
+  document.addEventListener('click', function (e) {
+    if (!state.hdrPanel) return;
+    if (e.target.closest('#hdrPanel') || e.target.closest('.dD-chh .icons [data-act]')) return;
+    closeHdrPanel();
   });
 
   function refresh() {

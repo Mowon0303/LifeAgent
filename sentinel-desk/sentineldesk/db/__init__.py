@@ -28,6 +28,7 @@ from .runs import (
 )
 from .email import list_email_facts, list_email_messages, upsert_email_message
 from .calendar import (
+    delete_calendar_draft,
     delete_stale_local_drafts,
     list_calendar_drafts,
     update_calendar_draft,
@@ -93,6 +94,7 @@ __all__ = [
     "upsert_calendar_draft",
     "list_calendar_drafts",
     "delete_stale_local_drafts",
+    "delete_calendar_draft",
     "update_calendar_draft",
     "update_calendar_draft_sync_state",
     # audit + approvals

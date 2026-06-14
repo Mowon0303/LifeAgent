@@ -29,7 +29,9 @@
         "days_before": 1,
         "method": "display"
       }
-    ]
+    ],
+    "start_time": "",
+    "end_time": ""
   },
   {
     "event_id": "9fc5e85745aac49a",
@@ -61,7 +63,9 @@
         "days_before": 1,
         "method": "display"
       }
-    ]
+    ],
+    "start_time": "",
+    "end_time": ""
   },
   {
     "event_id": "75ec940a97975e5a",
@@ -93,6 +97,8 @@
         "days_before": 1,
         "method": "display"
       }
-    ]
+    ],
+    "start_time": "",
+    "end_time": ""
   }
 ]

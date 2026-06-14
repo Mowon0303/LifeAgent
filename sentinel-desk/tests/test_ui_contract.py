@@ -34,6 +34,8 @@ CALENDAR_ITEM_FIELDS = {
     "source_count",
     "evidence_uri",
     "reminders",
+    "start_time",
+    "end_time",
 }
 TASK_FIELDS = {
     "task_id",

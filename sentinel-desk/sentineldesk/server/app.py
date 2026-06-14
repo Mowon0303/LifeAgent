@@ -70,6 +70,8 @@ POST_ROUTES: list[Route] = [
     Route("/api/calendar/sync", cal.handle_calendar_sync),
     Route("/api/calendar/unconfirm", cal.handle_calendar_unconfirm),
     Route("/api/calendar/drafts/update", cal.handle_calendar_drafts_update),
+    Route("/api/calendar/create", cal.handle_calendar_create),
+    Route("/api/calendar/delete", cal.handle_calendar_delete),
     Route("/api/tasks/review/bulk", tasks.handle_tasks_review_bulk),
     Route("/api/tasks/review/undo", tasks.handle_tasks_review_undo),
     Route("/api/tasks/review", tasks.handle_tasks_review),

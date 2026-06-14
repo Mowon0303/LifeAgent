@@ -84,6 +84,8 @@ def build_calendar_items(
                 "source_count": len(source_ids),
                 "evidence_uri": str(draft.get("evidence_uri") or ""),
                 "reminders": list(draft.get("reminders", [])),
+                "start_time": str(draft.get("start_time") or ""),
+                "end_time": str(draft.get("end_time") or ""),
             }
         )
     items = _dedupe_calendar_items(items)

@@ -125,14 +125,19 @@ def handle_calendar_drafts_update(h: "Handler", parsed: "ParseResult") -> None:
         return
     try:
         updated_at = utc_now()
+        # A user-created event stays approved when edited; an AI deadline draft is
+        # reset to a pending local draft so the user re-confirms the changed date.
+        is_user = query.get("user", ["0"])[0] in {"1", "true", "yes"}
         updated = db.update_calendar_draft(
             h.paths,
             event_id=event_id,
             title=query.get("title", [None])[0],
             date_text=query.get("date", [None])[0],
             severity=query.get("severity", [None])[0],
-            status="draft",
-            sync_state="local_draft",
+            status=None if is_user else "draft",
+            sync_state=None if is_user else "local_draft",
+            start_time=query.get("start", [None])[0],
+            end_time=query.get("end", [None])[0],
             updated_at=updated_at,
         )
         if not updated:
@@ -157,5 +162,100 @@ def handle_calendar_drafts_update(h: "Handler", parsed: "ParseResult") -> None:
             created_at=updated_at,
         )
         h.send_json({"updated": updated, "external_write": False})
+    except Exception as error:  # noqa: BLE001 - fail-soft API surface
+        h.send_json({"error": str(error)}, status=500)
+
+
+def handle_calendar_create(h: "Handler", parsed: "ParseResult") -> None:
+    """Create a user-authored calendar event. Unlike AI deadline drafts it is
+    approved on creation (the user is the author), so it shows as a confirmed
+    event immediately. Writes only the local SQLite draft + an audit row."""
+    import hashlib
+
+    from ..calendar.view import parse_deadline_date
+
+    query = parse_qs(parsed.query)
+    title = query.get("title", [""])[0].strip()
+    date_text = query.get("date", [""])[0].strip()
+    if not title or not date_text:
+        h.send_json({"error": "title and date are required"}, status=400)
+        return
+    if not parse_deadline_date(date_text):
+        h.send_json({"error": "date is not a recognizable calendar date (use YYYY-MM-DD)"}, status=400)
+        return
+    try:
+        now = utc_now()
+        start_time = query.get("start", [""])[0].strip()
+        end_time = query.get("end", [""])[0].strip()
+        severity = (query.get("severity", ["user"])[0] or "user").strip()
+        event_id = "user:" + hashlib.sha256(
+            "|".join([title, date_text, start_time, now]).encode("utf-8")
+        ).hexdigest()[:16]
+        db.upsert_calendar_draft(
+            h.paths,
+            event={
+                "event_id": event_id,
+                "title": title,
+                "date_text": date_text,
+                "severity": severity,
+                "confidence": 1.0,
+                "status": "approved",
+                "evidence_uri": "",
+                "source_ids": ["user:created"],
+                "reminders": [],
+                "start_time": start_time,
+                "end_time": end_time,
+            },
+            created_at=now,
+            sync_state="user_created",  # != local_draft -> approval_state approved -> solid on the board
+        )
+        db.insert_audit_event(
+            h.paths,
+            action="calendar.create",
+            actor="dashboard",
+            subject=event_id,
+            capability="calendar_draft",
+            side_effect="local_db_write",
+            allowed=True,
+            confirmation_id="",
+            metadata={"title": title, "date_text": date_text, "external_write": False},
+            created_at=now,
+        )
+        h.send_json({
+            "created": {
+                "event_id": event_id, "title": title, "date_text": date_text,
+                "start_time": start_time, "end_time": end_time,
+            },
+            "external_write": False,
+        })
+    except Exception as error:  # noqa: BLE001 - fail-soft API surface
+        h.send_json({"error": str(error)}, status=500)
+
+
+def handle_calendar_delete(h: "Handler", parsed: "ParseResult") -> None:
+    query = parse_qs(parsed.query)
+    event_id = query.get("event_id", [""])[0]
+    if not event_id:
+        h.send_json({"error": "event_id query parameter required"}, status=400)
+        return
+    try:
+        now = utc_now()
+        removed = db.delete_calendar_draft(h.paths, event_id=event_id)
+        if not removed:
+            h.send_json({"error": "calendar event not found", "event_id": event_id}, status=404)
+            return
+        db.insert_audit_event(
+            h.paths,
+            action="calendar.delete",
+            actor="dashboard",
+            subject=event_id,
+            capability="calendar_draft",
+            side_effect="local_db_write",
+            allowed=True,
+            confirmation_id="",
+            metadata={"external_write": False},
+            created_at=now,
+        )
+        h.send_json({"deleted": event_id, "external_write": False})
     except Exception as error:  # noqa: BLE001 - fail-soft API surface
         h.send_json({"error": str(error)}, status=500)

@@ -28,6 +28,8 @@ def upsert_calendar_draft(
         _json(data.get("source_ids") or []),
         _json(data.get("reminders") or []),
         sync_state,
+        str(data.get("start_time") or ""),
+        str(data.get("end_time") or ""),
         updated_at,
         str(data.get("event_id") or ""),
     )
@@ -41,7 +43,8 @@ def upsert_calendar_draft(
                 """
                 UPDATE calendar_drafts
                 SET title = ?, date_text = ?, severity = ?, confidence = ?, status = ?,
-                    evidence_uri = ?, source_ids_json = ?, reminders_json = ?, sync_state = ?, updated_at = ?
+                    evidence_uri = ?, source_ids_json = ?, reminders_json = ?, sync_state = ?,
+                    start_time = ?, end_time = ?, updated_at = ?
                 WHERE event_id = ?
                 """,
                 values,
@@ -51,9 +54,9 @@ def upsert_calendar_draft(
             """
             INSERT INTO calendar_drafts(
                 title, date_text, severity, confidence, status, evidence_uri,
-                source_ids_json, reminders_json, sync_state, updated_at, event_id, created_at
+                source_ids_json, reminders_json, sync_state, start_time, end_time, updated_at, event_id, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (*values, created_at),
         )
@@ -106,6 +109,8 @@ def update_calendar_draft(
     severity: str | None = None,
     status: str | None = None,
     sync_state: str | None = None,
+    start_time: str | None = None,
+    end_time: str | None = None,
 ) -> dict[str, Any] | None:
     with open_db(paths) as conn:
         row = conn.execute("SELECT * FROM calendar_drafts WHERE event_id = ?", (event_id,)).fetchone()
@@ -117,16 +122,27 @@ def update_calendar_draft(
         next_severity = severity if severity is not None else str(current.get("severity") or "medium")
         next_status = status if status is not None else str(current.get("status") or "draft")
         next_sync_state = sync_state if sync_state is not None else str(current.get("sync_state") or "local_draft")
+        next_start = start_time if start_time is not None else str(current.get("start_time") or "")
+        next_end = end_time if end_time is not None else str(current.get("end_time") or "")
         conn.execute(
             """
             UPDATE calendar_drafts
-            SET title = ?, date_text = ?, severity = ?, status = ?, sync_state = ?, updated_at = ?
+            SET title = ?, date_text = ?, severity = ?, status = ?, sync_state = ?,
+                start_time = ?, end_time = ?, updated_at = ?
             WHERE event_id = ?
             """,
-            (next_title, next_date_text, next_severity, next_status, next_sync_state, updated_at, event_id),
+            (next_title, next_date_text, next_severity, next_status, next_sync_state,
+             next_start, next_end, updated_at, event_id),
         )
         updated = conn.execute("SELECT * FROM calendar_drafts WHERE event_id = ?", (event_id,)).fetchone()
     return decode_row(updated)
+
+
+def delete_calendar_draft(paths: Paths, *, event_id: str) -> bool:
+    """Hard-delete a calendar draft (used for user-created events the user removes)."""
+    with open_db(paths) as conn:
+        cursor = conn.execute("DELETE FROM calendar_drafts WHERE event_id = ?", (event_id,))
+        return cursor.rowcount > 0
 
 
 def update_calendar_draft_sync_state(
