@@ -77,6 +77,21 @@ class RagEmailEmbeddingTests(unittest.TestCase):
             self.assertTrue(fused)
             self.assertIn("m-rent", str(fused[0].metadata.get("document_source_id")))
 
+    def test_index_emails_incremental_skips_already_embedded(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = get_paths(tmp)
+            _seed(paths)
+            embedder = HashEmbedder()
+            self.assertEqual(index_emails(paths, embedder=embedder), 3)
+            # a second incremental pass embeds nothing — all three are present
+            self.assertEqual(index_emails(paths, embedder=embedder, skip_indexed=True), 0)
+            # a newly arrived email is the only one embedded next time
+            db.upsert_email_message(
+                paths, message=_email("m-new", "New notice", "Some brand new content to embed."),
+                facts=[], ingested_at="2026-06-02T00:00:00Z",
+            )
+            self.assertEqual(index_emails(paths, embedder=embedder, skip_indexed=True), 1)
+
     def test_index_without_embedder_still_keyword_searchable(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             paths = get_paths(tmp)

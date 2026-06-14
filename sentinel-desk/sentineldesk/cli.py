@@ -435,6 +435,9 @@ def cmd_daily_run(args: argparse.Namespace) -> int:
             sync_summary = {**sync_summary, "reprocess": reprocess_summary}
         else:
             sync_summary = reprocess_summary
+    embed_summary = _daily_embed_step(paths, force=getattr(args, "embed", False))
+    if embed_summary is not None:
+        sync_summary = {**(sync_summary or {}), "embed": embed_summary}
     print_json(
         build_daily_landing_summary(
             paths,
@@ -448,6 +451,18 @@ def cmd_daily_run(args: argparse.Namespace) -> int:
         )
     )
     return 0
+
+
+def _daily_embed_step(paths: Paths, *, force: bool) -> dict[str, object] | None:
+    """Incrementally embed newly synced mail into the RAG store when --embed is
+    passed or [model] auto_embed is on. Already-embedded mail is skipped, so
+    this is cheap on a daily run."""
+    provider = load_model_provider(paths)
+    if not (force or provider.auto_embed):
+        return None
+    embedder = embedder_for(provider)
+    count = index_emails(paths, embedder=embedder, skip_indexed=True)
+    return {"emails_embedded": count, "embedder": embedder.name}
 
 
 def _redacted_daily_oauth_summary(summary: dict[str, object]) -> dict[str, object]:
@@ -551,8 +566,8 @@ def cmd_rag_embed_emails(args: argparse.Namespace) -> int:
     paths = paths_from_args(args)
     ensure_dirs(paths)
     embedder = embedder_for(load_model_provider(paths))
-    count = index_emails(paths, embedder=embedder, limit=args.limit)
-    print_json({"emails_indexed": count, "embedder": embedder.name})
+    count = index_emails(paths, embedder=embedder, limit=args.limit, skip_indexed=not args.all)
+    print_json({"emails_indexed": count, "embedder": embedder.name, "mode": "all" if args.all else "new-only"})
     return 0
 
 
@@ -1118,6 +1133,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="When reprocessing, update email facts without upserting local calendar drafts",
     )
+    daily_run.add_argument(
+        "--embed",
+        action="store_true",
+        help="Incrementally embed newly synced mail into the RAG store (also enabled by [model] auto_embed)",
+    )
     daily_run.add_argument("--account", default="default")
     daily_run.add_argument("--actor", default="user")
     daily_run.add_argument("--credentials-env", default="SENTINEL_GOOGLE_CREDENTIALS_JSON")
@@ -1140,8 +1160,9 @@ def build_parser() -> argparse.ArgumentParser:
     rag_search.add_argument("--mode", choices=["keyword", "semantic", "hybrid"], default="keyword",
                             help="keyword (default), semantic (embeddings), or hybrid (both, rank-fused)")
     rag_search.set_defaults(func=cmd_rag_search)
-    rag_embed = rag_sub.add_parser("embed-emails", help="Chunk + embed all stored emails into the RAG store")
+    rag_embed = rag_sub.add_parser("embed-emails", help="Chunk + embed stored emails into the RAG store (new-only by default)")
     rag_embed.add_argument("--limit", type=int, default=500)
+    rag_embed.add_argument("--all", action="store_true", help="Re-embed every email, not just newly arrived ones")
     rag_embed.set_defaults(func=cmd_rag_embed_emails)
     rag_docs = rag_sub.add_parser("docs", help="List indexed RAG documents")
     rag_docs.add_argument("--limit", type=int, default=50)

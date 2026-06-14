@@ -22,6 +22,9 @@ class ModelProvider:
     # tighten back up before relying on it.
     free_refine: bool = False
     embed_model: str = "nomic-embed-text"
+    # When on, `daily run` incrementally embeds newly synced mail into the RAG
+    # store so semantic search stays current without a manual step.
+    auto_embed: bool = False
     langchain_available: bool = False
     langgraph_available: bool = False
 
@@ -51,6 +54,7 @@ def load_model_provider(paths: Paths) -> ModelProvider:
         free_refine=bool(model_config.get("free_refine"))
         or str(model_config.get("refine") or "").lower() == "free",
         embed_model=str(model_config.get("embed_model") or "nomic-embed-text"),
+        auto_embed=bool(model_config.get("auto_embed")),
         langchain_available=importlib.util.find_spec("langchain_core") is not None,
         langgraph_available=importlib.util.find_spec("langgraph") is not None,
     )

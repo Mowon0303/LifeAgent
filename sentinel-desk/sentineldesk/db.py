@@ -981,6 +981,16 @@ def list_rag_documents(paths: Paths, *, limit: int = 100) -> list[dict[str, Any]
     return decode_rows(rows)
 
 
+def embedded_rag_source_ids(paths: Paths) -> set[str]:
+    """Source ids that already have at least one embedded chunk — used to embed
+    only newly arrived mail instead of re-embedding everything."""
+    with open_db(paths) as conn:
+        rows = conn.execute(
+            "SELECT DISTINCT source_id FROM rag_chunks WHERE embedding_json != ''"
+        ).fetchall()
+    return {str(row["source_id"]) for row in rows}
+
+
 def list_rag_chunks(paths: Paths, *, limit: int = 200) -> list[dict[str, Any]]:
     with open_db(paths) as conn:
         rows = conn.execute(

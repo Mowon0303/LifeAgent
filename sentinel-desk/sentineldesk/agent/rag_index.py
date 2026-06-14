@@ -137,14 +137,19 @@ def index_emails(
     embedder: Embedder | None = None,
     limit: int = 500,
     indexed_at: str | None = None,
+    skip_indexed: bool = False,
 ) -> int:
-    """Chunk + (optionally) embed every stored email into the RAG store, so the
-    assistant can retrieve over mail semantically, not just over imported docs."""
+    """Chunk + (optionally) embed stored email into the RAG store, so the
+    assistant can retrieve over mail semantically. With skip_indexed, mail that
+    already has embedded chunks is left alone — an incremental pass for sync."""
     from sentineldesk.email.ingest import stored_email_messages
 
     timestamp = indexed_at or utc_now()
+    already_embedded = db.embedded_rag_source_ids(paths) if skip_indexed else set()
     indexed = 0
     for message in stored_email_messages(paths, limit=limit):
+        if skip_indexed and message.source_id in already_embedded:
+            continue
         parts = [message.subject, message.body_text, *message.attachment_texts]
         text = "\n\n".join(part for part in parts if part).strip()[:EMAIL_INDEX_TEXT_CAP]
         if not text:
