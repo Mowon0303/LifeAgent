@@ -1917,7 +1917,7 @@
     return '<div class="dD-anscards">' + cards.map(function (c) {
       var head = c.kind === 'deadline'
         ? '截止 · ' + escapeHtml(c.date || c.value || '')
-        : escapeHtml(c.value || '');
+        : (c.kind === 'email' ? '邮件证据' : escapeHtml(c.value || ''));
       var meta = [];
       if (c.sender) meta.push('发件人：' + c.sender);
       if (c.received) meta.push('收到：' + c.received);

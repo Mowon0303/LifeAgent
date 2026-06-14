@@ -378,8 +378,29 @@ def _rag_general_answer(question: str, registry: ToolRegistry) -> AgentAnswer | 
         )
         for document in documents
     )
-    subjects = [str(document.get("title") or "").strip() for document in documents]
-    subjects = [subject for subject in subjects if subject][:3]
+    # One card per source email (chunks from the same email collapse), so the
+    # answer shows its sources the same way deadline answers do.
+    cards: list[dict] = []
+    seen: set[str] = set()
+    for document in documents:
+        source_id = str(document.get("source_id") or "")
+        if source_id in seen:
+            continue
+        seen.add(source_id)
+        meta = document.get("metadata") or {}
+        cards.append(
+            {
+                "kind": "email",
+                "title": str(document.get("title") or meta.get("subject") or "邮件"),
+                "value": "",
+                "date": "",
+                "source_id": source_id,
+                "sender": str(meta.get("sender") or ""),
+                "received": "",
+                "evidence": str(document.get("text") or "")[:400],
+            }
+        )
+    subjects = [card["title"].strip() for card in cards if card["title"].strip()][:3]
     summary = "我在你的邮件里找到相关内容" + (
         "：" + "；".join(subjects) + "。" if subjects else "。"
     ) + "（确认细节请看来源邮件。）"
@@ -389,7 +410,7 @@ def _rag_general_answer(question: str, registry: ToolRegistry) -> AgentAnswer | 
         confidence="medium",
         citations=citations,
         tool_calls=("search_email_rag",),
-        metadata={"rag": True, "retrieved": len(documents)},
+        metadata={"rag": True, "retrieved": len(documents), "cards": cards},
     )
 
 

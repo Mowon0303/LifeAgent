@@ -106,6 +106,11 @@ class RagGroundedChatTests(unittest.TestCase):
             self.assertTrue(answer.metadata.get("rag"))
             self.assertTrue(answer.citations)
             self.assertIn("OPT", " ".join(c.evidence for c in answer.citations))
+            # the sources are surfaced as email cards (one per source email)
+            cards = answer.metadata.get("cards")
+            self.assertTrue(cards)
+            self.assertTrue(all(card["kind"] == "email" and card["source_id"] for card in cards))
+            self.assertEqual(len(cards), len({card["source_id"] for card in cards}))  # deduped
 
     def test_greeting_still_gets_capability_reply_not_rag(self) -> None:
         from sentineldesk.agent.graph import answer_question

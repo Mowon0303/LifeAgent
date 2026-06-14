@@ -190,21 +190,23 @@ def hybrid_search(
     paths: Paths, query: str, embedder: Embedder, *, limit: int = 5
 ) -> list[RetrievedDocument]:
     """Fuse semantic (embedding) and keyword rankings with reciprocal rank
-    fusion — robust to the two scores being on different scales."""
+    fusion. Equal weight is the balance that works across query types: keyword
+    carries proper-noun queries ("USCIS"), semantic carries paraphrase and
+    cross-language ones ("我的房租账单" -> the English rent email)."""
     semantic = [document for document, _ in semantic_search(paths, query, embedder, limit=limit * 3)]
     keyword = search_index(paths, query, limit=limit * 3)
-    return _reciprocal_rank_fusion([semantic, keyword], limit=limit)
+    return _reciprocal_rank_fusion([(semantic, 1.0), (keyword, 1.0)], limit=limit)
 
 
 def _reciprocal_rank_fusion(
-    ranked_lists: list[list[RetrievedDocument]], *, limit: int, k: int = 60
+    weighted_lists: list[tuple[list[RetrievedDocument], float]], *, limit: int, k: int = 60
 ) -> list[RetrievedDocument]:
     scores: dict[str, float] = {}
     documents: dict[str, RetrievedDocument] = {}
-    for ranked in ranked_lists:
+    for ranked, weight in weighted_lists:
         for rank, document in enumerate(ranked):
             key = str(document.metadata.get("chunk_id") or document.source_id)
-            scores[key] = scores.get(key, 0.0) + 1.0 / (k + rank)
+            scores[key] = scores.get(key, 0.0) + weight / (k + rank)
             documents[key] = document
     ordered = sorted(scores, key=lambda key: -scores[key])
     return [documents[key] for key in ordered[:limit]]
