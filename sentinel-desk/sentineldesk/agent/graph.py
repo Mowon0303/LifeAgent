@@ -214,15 +214,17 @@ def _task_overview_answer(messages: list[EmailMessage]) -> AgentAnswer:
             tool_calls=("search_latest_email",),
         )
 
-    lines = [f"- {iso}: {fact.metadata.get('subject') or fact.value}" for iso, fact in deduped[:5]]
-    answer = "Upcoming on your plate:\n" + "\n".join(lines) if lines else "Nothing dated is upcoming."
-    extras: list[str] = []
-    if len(deduped) > 5:
-        extras.append(f"+{len(deduped) - 5} more deadlines")
+    # The per-item detail lives in the cards below, so the answer text stays a
+    # short headline — otherwise the model rephrases the whole list into prose
+    # that just repeats the cards.
+    count = len(deduped)
+    answer = (
+        f"You have {count} upcoming deadline{'s' if count != 1 else ''}."
+        if count
+        else "Nothing dated is upcoming."
+    )
     if amount_count:
-        extras.append(f"{amount_count} amount(s) on file — ask \"how much do I owe\" for detail")
-    if extras:
-        answer += "\n(" + "; ".join(extras) + ")"
+        answer += f" ({amount_count} amount(s) on file — ask \"how much do I owe\" for detail.)"
     citations = tuple(
         Citation(
             source_id=fact.source_id,

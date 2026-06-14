@@ -200,21 +200,22 @@
   .dD-cites { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
   .dD-cite { font-family:'IBM Plex Mono',monospace; font-size:10px; color:#6A5BD0; background:#EAE6FA;
     border-radius:5px; padding:2px 7px; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  /* structured answer cards (nearest deadline / overview) — click to expand */
+  /* structured answer cards (nearest deadline / overview) — hover for detail */
   .dD-anscards { display:flex; flex-direction:column; gap:7px; margin-top:8px; max-width:340px; }
   .dD-anscard { border-left:3px solid #B14228; background:#FBF8F1; border-radius:6px; padding:9px 12px;
-    box-shadow:0 1px 2px rgba(80,60,20,.05); cursor:pointer; transition:box-shadow .12s ease; }
+    box-shadow:0 1px 2px rgba(80,60,20,.05); cursor:default; transition:box-shadow .12s ease; }
   .dD-anscard:hover { box-shadow:0 4px 14px rgba(80,60,20,.10); }
   .dD-anscard .d { font-family:'IBM Plex Mono',monospace; font-size:11.5px; font-weight:700; color:#B14228; letter-spacing:.02em; }
-  .dD-anscard .d .chev { float:right; color:#C9BCA6; transition:transform .15s ease; }
-  .dD-anscard.expanded .d .chev { transform:rotate(90deg); }
   .dD-anscard .t { font-size:14px; font-weight:600; color:#2B2622; margin:3px 0 2px; line-height:1.35; }
-  .dD-anscard .s { font-size:11px; color:#9A8E7B; }
-  .dD-anscard-detail { display:none; margin-top:7px; padding-top:7px; border-top:1px solid #EFE7D7; }
-  .dD-anscard.expanded .dD-anscard-detail { display:block; }
-  .dD-anscard-detail .m { font-size:11.5px; color:#9A8E7B; margin-bottom:5px; overflow-wrap:break-word; }
-  .dD-anscard-detail .ev { font-size:12px; color:#514A3F; line-height:1.45; background:#F5EFE3; border-radius:5px;
-    padding:7px 9px; margin-bottom:6px; white-space:pre-wrap; overflow-wrap:break-word; }
+  /* floating detail popup (one shared element, positioned on hover) */
+  #anscardPopup { position:fixed; z-index:200; width:330px; max-width:86vw; background:#FFFDF8;
+    border:1px solid #E6DCC8; border-left:3px solid #B14228; border-radius:8px; padding:11px 13px;
+    box-shadow:0 10px 30px rgba(60,45,15,.18); display:none; pointer-events:none; }
+  #anscardPopup .pt { font-size:13.5px; font-weight:700; color:#2B2622; line-height:1.35; margin-bottom:6px; }
+  #anscardPopup .m { font-size:11.5px; color:#9A8E7B; margin-bottom:6px; overflow-wrap:break-word; }
+  #anscardPopup .ev { font-size:12px; color:#514A3F; line-height:1.45; background:#F5EFE3; border-radius:5px;
+    padding:7px 9px; margin-bottom:6px; white-space:pre-wrap; overflow-wrap:break-word; max-height:170px; overflow-y:auto; }
+  #anscardPopup .s { font-size:11px; color:#9A8E7B; }
   .dD-btns { display:flex; flex-wrap:wrap; gap:8px; margin-top:9px; max-width:340px; }
   .dD-cbtn { min-height:30px; padding:5px 12px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; border:0;
     display:inline-flex; align-items:center; justify-content:center; gap:6px; font-family:inherit; white-space:nowrap; line-height:1.2; }
@@ -1918,19 +1919,54 @@
         ? '截止 · ' + escapeHtml(c.date || c.value || '')
         : escapeHtml(c.value || '');
       var meta = [];
-      if (c.sender) meta.push('发件人：' + escapeHtml(c.sender));
-      if (c.received) meta.push('收到：' + escapeHtml(c.received));
-      var detail = '<div class="dD-anscard-detail">' +
-        (meta.length ? '<div class="m">' + meta.join(' · ') + '</div>' : '') +
-        (c.evidence ? '<div class="ev">' + escapeHtml(c.evidence) + '</div>' : '') +
-        (c.source_id ? '<div class="s">来源 · <span class="dD-cite">' + escapeHtml(c.source_id) + '</span></div>' : '') +
-        '</div>';
-      return '<div class="dD-anscard" data-anscard="1">' +
-        '<div class="d">' + head + '<span class="chev">▸</span></div>' +
+      if (c.sender) meta.push('发件人：' + c.sender);
+      if (c.received) meta.push('收到：' + c.received);
+      return '<div class="dD-anscard" data-anscard="1"' +
+        ' data-title="' + escapeHtml(c.title || c.value || '') + '"' +
+        ' data-meta="' + escapeHtml(meta.join(' · ')) + '"' +
+        ' data-evidence="' + escapeHtml(c.evidence || '') + '"' +
+        ' data-source="' + escapeHtml(c.source_id || '') + '">' +
+        '<div class="d">' + head + '</div>' +
         '<div class="t">' + escapeHtml(c.title || c.value || '') + '</div>' +
-        detail +
         '</div>';
     }).join('') + '</div>';
+  }
+
+  function anscardPopupEl() {
+    var el = document.getElementById('anscardPopup');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'anscardPopup';
+      document.body.appendChild(el);
+    }
+    return el;
+  }
+
+  function showAnscardPopup(card) {
+    var el = anscardPopupEl();
+    var meta = card.getAttribute('data-meta') || '';
+    var evidence = card.getAttribute('data-evidence') || '';
+    var source = card.getAttribute('data-source') || '';
+    el.innerHTML =
+      '<div class="pt">' + escapeHtml(card.getAttribute('data-title') || '') + '</div>' +
+      (meta ? '<div class="m">' + escapeHtml(meta) + '</div>' : '') +
+      (evidence ? '<div class="ev">' + escapeHtml(evidence) + '</div>' : '') +
+      (source ? '<div class="s">来源 · <span class="dD-cite">' + escapeHtml(source) + '</span></div>' : '');
+    el.style.display = 'block';
+    var r = card.getBoundingClientRect();
+    var w = el.offsetWidth || 330;
+    var h = el.offsetHeight || 120;
+    // prefer left of the card (the chat panel is on the right); fall back to below
+    var left = r.left - w - 10;
+    if (left < 8) left = Math.min(r.left, window.innerWidth - w - 8);
+    var top = Math.max(8, Math.min(r.top, window.innerHeight - h - 8));
+    el.style.left = left + 'px';
+    el.style.top = top + 'px';
+  }
+
+  function hideAnscardPopup() {
+    var el = document.getElementById('anscardPopup');
+    if (el) el.style.display = 'none';
   }
 
   function askAssistant(question) {
@@ -1997,12 +2033,16 @@
     else return;
     renderCalendar();
   }
+  feed.addEventListener('mouseover', function (e) {
+    var card = e.target.closest('[data-anscard]');
+    if (card) showAnscardPopup(card);
+  });
+  feed.addEventListener('mouseout', function (e) {
+    var card = e.target.closest('[data-anscard]');
+    if (card && !card.contains(e.relatedTarget)) hideAnscardPopup();
+  });
+  feed.addEventListener('scroll', hideAnscardPopup, true);
   feed.addEventListener('click', function (e) {
-    var ansCardHit = e.target.closest('[data-anscard]');
-    if (ansCardHit) {
-      ansCardHit.classList.toggle('expanded');
-      return;
-    }
     var calendarEvidenceHit = e.target.closest('[data-act="calendar-evidence"]');
     if (calendarEvidenceHit) {
       var owner = calendarEvidenceHit.closest('[data-event-id]');

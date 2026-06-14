@@ -19,9 +19,11 @@ truth, so this module enforces hard boundaries:
 from __future__ import annotations
 
 import json
+import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Protocol
 
 from sentineldesk.email.extract import AMOUNT_RE
@@ -137,6 +139,56 @@ def fact_anchors(text: str) -> list[str]:
     return unique
 
 
+# A natural rewrite re-spells the same fact ("06/15/2026" -> "6月15日",
+# "$31.05" -> "31.05 美元"). Comparing anchors by *value* — a date's month/day,
+# an amount's number — lets the model write fluently and across languages while
+# still catching a genuinely changed fact (June 15 -> June 5 changes the key).
+_DATE_ANCHOR_FORMATS = (
+    "%m/%d/%Y", "%m/%d/%y", "%Y-%m-%d", "%B %d, %Y", "%b %d, %Y", "%d %B %Y", "%d %b %Y",
+)
+CHINESE_DATE_RE = re.compile(r"(?:\d{4}\s*年)?\s*(\d{1,2})\s*月\s*(\d{1,2})\s*[日号]")
+CHINESE_AMOUNT_RE = re.compile(r"(\d[\d,]*(?:\.\d+)?)\s*(?:美元|美金|元|块|rmb|usd)", re.IGNORECASE)
+
+
+def _amount_key(raw: str) -> str | None:
+    digits = re.sub(r"[^\d.]", "", raw)
+    if not digits or digits == ".":
+        return None
+    try:
+        return "amt:" + format(float(digits), ".2f")
+    except ValueError:
+        return None
+
+
+def _date_key(raw: str) -> str:
+    for fmt in _DATE_ANCHOR_FORMATS:
+        try:
+            parsed = datetime.strptime(raw.strip(), fmt)
+            return "date:%02d-%02d" % (parsed.month, parsed.day)
+        except ValueError:
+            continue
+    return "raw:" + " ".join(raw.casefold().split())  # unparseable → require verbatim
+
+
+def _anchor_map(text: str) -> dict[str, str]:
+    """Map each fact in the text to a value key -> a human-readable form, so a
+    missing/introduced fact can be reported with the original anchor string."""
+    found: dict[str, str] = {}
+    for match in DATE_RE.finditer(text):
+        found.setdefault(_date_key(match.group(0)), match.group(0))
+    for match in CHINESE_DATE_RE.finditer(text):
+        found.setdefault("date:%02d-%02d" % (int(match.group(1)), int(match.group(2))), match.group(0))
+    for match in AMOUNT_RE.finditer(text):
+        key = _amount_key(match.group(0))
+        if key:
+            found.setdefault(key, match.group(0))
+    for match in CHINESE_AMOUNT_RE.finditer(text):
+        key = _amount_key(match.group(1))
+        if key:
+            found.setdefault(key, match.group(0))
+    return found
+
+
 def refine_answer(
     answer: AgentAnswer,
     *,
@@ -173,7 +225,7 @@ def refine_answer(
     if answer.requires_confirmation:
         return answer, record("skipped_confirmation_boundary")
 
-    anchors = fact_anchors(answer.answer)
+    original_facts = _anchor_map(answer.answer)
     user_prompt = (
         "<question>\n" + question.strip() + "\n</question>\n"
         "<verified_answer>\n" + answer.answer.strip() + "\n</verified_answer>\n"
@@ -191,11 +243,11 @@ def refine_answer(
     rewritten = normalize_text(result.text)
     if not rewritten or len(rewritten) > MAX_REWRITE_CHARS:
         return answer, record("fallback_length", result, detail=f"chars={len(rewritten)}")
-    lowered = rewritten.casefold()
-    missing = [anchor for anchor in anchors if anchor.casefold() not in lowered]
+    rewrite_facts = _anchor_map(rewritten)
+    missing = [original_facts[key] for key in original_facts if key not in rewrite_facts]
     if missing:
         return answer, record("fallback_anchor_check", result, detail="missing=" + "; ".join(missing[:5]))
-    introduced = [anchor for anchor in fact_anchors(rewritten) if anchor.casefold() not in answer.answer.casefold()]
+    introduced = [rewrite_facts[key] for key in rewrite_facts if key not in original_facts]
     if introduced:
         return answer, record("fallback_new_facts", result, detail="introduced=" + "; ".join(introduced[:5]))
 
