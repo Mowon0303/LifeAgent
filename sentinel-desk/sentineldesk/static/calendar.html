@@ -200,13 +200,21 @@
   .dD-cites { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
   .dD-cite { font-family:'IBM Plex Mono',monospace; font-size:10px; color:#6A5BD0; background:#EAE6FA;
     border-radius:5px; padding:2px 7px; max-width:200px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  /* structured answer cards (nearest deadline / overview) */
+  /* structured answer cards (nearest deadline / overview) — click to expand */
   .dD-anscards { display:flex; flex-direction:column; gap:7px; margin-top:8px; max-width:340px; }
   .dD-anscard { border-left:3px solid #B14228; background:#FBF8F1; border-radius:6px; padding:9px 12px;
-    box-shadow:0 1px 2px rgba(80,60,20,.05); }
+    box-shadow:0 1px 2px rgba(80,60,20,.05); cursor:pointer; transition:box-shadow .12s ease; }
+  .dD-anscard:hover { box-shadow:0 4px 14px rgba(80,60,20,.10); }
   .dD-anscard .d { font-family:'IBM Plex Mono',monospace; font-size:11.5px; font-weight:700; color:#B14228; letter-spacing:.02em; }
-  .dD-anscard .t { font-size:14px; font-weight:600; color:#2B2622; margin:3px 0 4px; line-height:1.35; }
+  .dD-anscard .d .chev { float:right; color:#C9BCA6; transition:transform .15s ease; }
+  .dD-anscard.expanded .d .chev { transform:rotate(90deg); }
+  .dD-anscard .t { font-size:14px; font-weight:600; color:#2B2622; margin:3px 0 2px; line-height:1.35; }
   .dD-anscard .s { font-size:11px; color:#9A8E7B; }
+  .dD-anscard-detail { display:none; margin-top:7px; padding-top:7px; border-top:1px solid #EFE7D7; }
+  .dD-anscard.expanded .dD-anscard-detail { display:block; }
+  .dD-anscard-detail .m { font-size:11.5px; color:#9A8E7B; margin-bottom:5px; overflow-wrap:break-word; }
+  .dD-anscard-detail .ev { font-size:12px; color:#514A3F; line-height:1.45; background:#F5EFE3; border-radius:5px;
+    padding:7px 9px; margin-bottom:6px; white-space:pre-wrap; overflow-wrap:break-word; }
   .dD-btns { display:flex; flex-wrap:wrap; gap:8px; margin-top:9px; max-width:340px; }
   .dD-cbtn { min-height:30px; padding:5px 12px; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; border:0;
     display:inline-flex; align-items:center; justify-content:center; gap:6px; font-family:inherit; white-space:nowrap; line-height:1.2; }
@@ -1909,13 +1917,18 @@
       var head = c.kind === 'deadline'
         ? '截止 · ' + escapeHtml(c.date || c.value || '')
         : escapeHtml(c.value || '');
-      var src = c.source_id
-        ? '<div class="s">来源 · <span class="dD-cite">' + escapeHtml(c.source_id) + '</span></div>'
-        : '';
-      return '<div class="dD-anscard">' +
-        '<div class="d">' + head + '</div>' +
+      var meta = [];
+      if (c.sender) meta.push('发件人：' + escapeHtml(c.sender));
+      if (c.received) meta.push('收到：' + escapeHtml(c.received));
+      var detail = '<div class="dD-anscard-detail">' +
+        (meta.length ? '<div class="m">' + meta.join(' · ') + '</div>' : '') +
+        (c.evidence ? '<div class="ev">' + escapeHtml(c.evidence) + '</div>' : '') +
+        (c.source_id ? '<div class="s">来源 · <span class="dD-cite">' + escapeHtml(c.source_id) + '</span></div>' : '') +
+        '</div>';
+      return '<div class="dD-anscard" data-anscard="1">' +
+        '<div class="d">' + head + '<span class="chev">▸</span></div>' +
         '<div class="t">' + escapeHtml(c.title || c.value || '') + '</div>' +
-        src +
+        detail +
         '</div>';
     }).join('') + '</div>';
   }
@@ -1985,6 +1998,11 @@
     renderCalendar();
   }
   feed.addEventListener('click', function (e) {
+    var ansCardHit = e.target.closest('[data-anscard]');
+    if (ansCardHit) {
+      ansCardHit.classList.toggle('expanded');
+      return;
+    }
     var calendarEvidenceHit = e.target.closest('[data-act="calendar-evidence"]');
     if (calendarEvidenceHit) {
       var owner = calendarEvidenceHit.closest('[data-event-id]');

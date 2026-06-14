@@ -232,11 +232,7 @@ def _task_overview_answer(messages: list[EmailMessage]) -> AgentAnswer:
         )
         for iso, fact in deduped[:3]
     )
-    cards = [
-        {"kind": "deadline", "title": str(fact.metadata.get("subject") or fact.value),
-         "value": fact.value, "date": iso, "source_id": fact.source_id}
-        for iso, fact in deduped[:5]
-    ]
+    cards = [_fact_card(fact, "deadline") for iso, fact in deduped[:5]]
     return AgentAnswer(
         intent=Intent.TASK_OVERVIEW,
         answer=answer,
@@ -283,13 +279,20 @@ def _latest_global_answer(
 
 def _fact_card(fact, kind: str) -> dict:
     """A compact, UI-renderable summary of a fact: the email subject as the
-    headline, the resolved date for deadlines, and the source for the chip."""
+    headline and the resolved date up top, with the sender, receipt date, and
+    the evidence snippet revealed when the card is expanded."""
+    from sentineldesk.extract import _reference_date
+
+    received = _reference_date(fact.received_at)
     card = {
         "kind": kind,
         "title": str(fact.metadata.get("subject") or fact.value),
         "value": fact.value,
         "date": "",
         "source_id": fact.source_id,
+        "sender": str(fact.metadata.get("sender") or ""),
+        "received": received.isoformat() if received else str(fact.received_at or "")[:10],
+        "evidence": str(fact.evidence or "")[:400],
     }
     if kind == "deadline":
         from sentineldesk.calendar.view import parse_deadline_date
