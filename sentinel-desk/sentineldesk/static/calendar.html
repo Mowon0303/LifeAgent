@@ -251,6 +251,15 @@
   .dD-anscard:hover { box-shadow:0 4px 14px rgba(80,60,20,.10); }
   .dD-anscard .d { font-family:'IBM Plex Mono',monospace; font-size:11.5px; font-weight:700; color:#B14228; letter-spacing:.02em; }
   .dD-anscard .t { font-size:14px; font-weight:600; color:#2B2622; margin:3px 0 2px; line-height:1.35; }
+  /* proposed-event card: the chat shows it after a "add to calendar" request, user confirms inline */
+  .dD-propose { border:1px solid #CFE0F7; border-left:3px solid #2A6FDB; background:#F5F8FE; border-radius:8px;
+    padding:10px 13px; margin-top:8px; max-width:340px; }
+  .dD-propose.done { border-left-color:#3F8A4F; background:#F3F8F4; }
+  .dD-propose-h { font-size:11.5px; font-weight:700; color:#2A6FDB; letter-spacing:.02em; }
+  .dD-propose-t { font-size:14px; font-weight:600; color:#2B2622; margin:3px 0 1px; line-height:1.35; }
+  .dD-propose-d { font-family:'IBM Plex Mono',monospace; font-size:12px; color:#514A3F; }
+  .dD-propose-ok { font-size:12.5px; font-weight:600; color:#3F8A4F; }
+  .dD-propose-cancel { font-size:12.5px; color:#9A8E7B; }
   /* floating detail popup (one shared element, positioned on hover) */
   #anscardPopup { position:fixed; z-index:200; width:330px; max-width:86vw; background:#FFFDF8;
     border:1px solid #E6DCC8; border-left:3px solid #B14228; border-radius:8px; padding:11px 13px;
@@ -2359,6 +2368,52 @@
     }).join('') + '</div>';
   }
 
+  // A "add this to my calendar" request comes back with metadata.proposed_event;
+  // the model proposed the slots, the user confirms here, and only then do we write.
+  function proposeEventHtml(p) {
+    var when = escapeHtml(p.date) + (p.start_time ? ' ' + escapeHtml(p.start_time) +
+      (p.end_time ? '–' + escapeHtml(p.end_time) : '') : '');
+    return '<div class="dD-propose" data-title="' + escapeHtml(p.title) + '" data-date="' + escapeHtml(p.date) +
+      '" data-start="' + escapeHtml(p.start_time || '') + '" data-end="' + escapeHtml(p.end_time || '') + '">' +
+      '<div class="dD-propose-h">📅 待确认事件</div>' +
+      '<div class="dD-propose-t">' + escapeHtml(p.title) + '</div>' +
+      '<div class="dD-propose-d">' + when + '</div>' +
+      '<div class="dD-btns">' +
+      '<button class="dD-cbtn prim" data-act="confirm-event">✓ 确认加入日历</button>' +
+      '<button class="dD-cbtn sec" data-act="cancel-event">取消</button>' +
+      '</div></div>';
+  }
+
+  function confirmProposedEvent(btn) {
+    if (state.busy) return;
+    var card = btn.closest('.dD-propose');
+    if (!card) return;
+    var title = card.dataset.title || '', date = card.dataset.date || '';
+    if (!title || !date) return;
+    var start = card.dataset.start || '', end = card.dataset.end || '';
+    state.busy = true;
+    fetch('/api/calendar/create?title=' + encodeURIComponent(title) + '&date=' + encodeURIComponent(date) +
+      '&start=' + encodeURIComponent(start) + '&end=' + encodeURIComponent(end), { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res.error) { showToast('加入失败：' + escapeHtml(res.error)); return; }
+        card.classList.add('done');
+        var btns = card.querySelector('.dD-btns');
+        if (btns) btns.innerHTML = '<span class="dD-propose-ok">✓ 已加入日历</span>';
+        showToast('已加入「' + title + '」');
+        return refresh();
+      })
+      .catch(function (err) { showToast('加入失败：' + escapeHtml(err)); })
+      .finally(function () { state.busy = false; });
+  }
+
+  function cancelProposedEvent(btn) {
+    var card = btn.closest('.dD-propose');
+    if (!card) return;
+    var btns = card.querySelector('.dD-btns');
+    if (btns) btns.innerHTML = '<span class="dD-propose-cancel">已取消</span>';
+  }
+
   function anscardPopupEl() {
     var el = document.getElementById('anscardPopup');
     if (!el) {
@@ -2427,6 +2482,8 @@
             return '<span class="dD-cite" title="' + escapeHtml(c.evidence || '') + '">' + escapeHtml(c.source_id) + '</span>';
           }).join('') + '</div>';
         }
+        var proposed = answer.metadata && answer.metadata.proposed_event;
+        if (proposed && proposed.title && proposed.date) html += proposeEventHtml(proposed);
         botMessage(html);
       })
       .catch(function (err) { botMessage('<div class="dD-body uncertain">请求失败：' + escapeHtml(err) + '</div>'); });
@@ -2575,6 +2632,8 @@
       if (evidenceWrap && evidenceWrap.dataset.taskId) handleTaskEvidence(evidenceWrap.dataset.taskId, btn);
       return;
     }
+    if (btn.dataset.act === 'confirm-event') { confirmProposedEvent(btn); return; }
+    if (btn.dataset.act === 'cancel-event') { cancelProposedEvent(btn); return; }
     var wrap = btn.closest('.dD-btns');
     var eventId = wrap.dataset.eventId;
     state.queue = state.queue.filter(function (item) { return item.eventId !== eventId; });

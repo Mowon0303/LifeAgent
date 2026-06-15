@@ -826,7 +826,9 @@ class EmailCalendarAgentTests(unittest.TestCase):
         self.assertEqual(answer.intent, Intent.CALENDAR_ACTION)
         self.assertEqual(answer.tool_calls, ("draft_calendar_event",))
         self.assertNotIn("sync_calendar_event", answer.tool_calls)
-        self.assertTrue(answer.requires_confirmation)
+        # No concrete date and no model: the injection can't conjure an event — and the
+        # path never writes server-side anyway (creation is a separate confirm click).
+        self.assertIsNone((answer.metadata or {}).get("proposed_event"))
 
     def test_conflicting_deadlines_are_uncertain_with_safest_candidate(self) -> None:
         answer = answer_question("What is my move-out deadline?", messages=[lease_message(), conflicting_lease_message()])
@@ -1001,11 +1003,13 @@ class EmailCalendarAgentTests(unittest.TestCase):
             self.assertTrue(answer.requires_confirmation)
             self.assertEqual(answer.metadata["recommended_tools"], ["read_evidence_bundle", "draft_calendar_event"])
 
-    def test_calendar_question_returns_confirmation_boundary(self) -> None:
+    def test_calendar_question_without_a_date_asks_instead_of_writing(self) -> None:
+        # "Put this deadline on my calendar" has no concrete date and no model here, so
+        # the path asks for specifics rather than writing — and never writes server-side.
         answer = answer_question("Put this deadline on my calendar")
         self.assertEqual(answer.intent, Intent.CALENDAR_ACTION)
-        self.assertTrue(answer.requires_confirmation)
         self.assertEqual(answer.tool_calls, ("draft_calendar_event",))
+        self.assertIsNone((answer.metadata or {}).get("proposed_event"))
 
     def test_detect_model_provider_is_optional(self) -> None:
         provider = detect_model_provider()

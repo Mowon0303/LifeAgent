@@ -195,6 +195,7 @@ def _finalize_stage(state: dict[str, Any]) -> dict[str, Any]:
         intent_override=Intent(intent_value) if intent_value else None,
         general_mode=state.get("general_mode"),
         calendar=list(state.get("calendar") or []),
+        chat_client=state.get("chat_client"),  # CALENDAR_ACTION uses it to propose event slots
     )
     state["answer"] = answer
     _append_trace(state, "finalize", {"confidence": answer.confidence, "uncertain": answer.uncertain})

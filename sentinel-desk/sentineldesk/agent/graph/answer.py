@@ -13,6 +13,7 @@ from ..conflict import detect_fact_conflict
 from ..router import classify_intent
 from ..schemas import AgentAnswer, Citation, Intent
 from ..tools import ToolRegistry, default_tool_registry
+from .calendar_action import _calendar_action_answer
 from .facts import _latest_global_answer, _task_overview_answer
 from .general import _general_answer
 from .policy import _answer_policy_question
@@ -29,6 +30,7 @@ def answer_question(
     intent_override: Intent | None = None,
     general_mode: str | None = None,
     calendar: list[dict] | None = None,
+    chat_client: object | None = None,
 ) -> AgentAnswer:
     active_registry = registry or default_tool_registry()
     # intent_override carries the workflow's LLM-resolved intent; without it we
@@ -122,13 +124,9 @@ def answer_question(
 
     if intent == Intent.CALENDAR_ACTION:
         active_registry.assert_can_call("draft_calendar_event")
-        return AgentAnswer(
-            intent=intent,
-            answer="I can draft a calendar event, but external calendar sync requires explicit confirmation.",
-            confidence="medium",
-            tool_calls=("draft_calendar_event",),
-            requires_confirmation=True,
-        )
+        from sentineldesk.extract import utc_now
+
+        return _calendar_action_answer(question, client=chat_client, today=utc_now()[:10])
 
     if intent == Intent.PAGE_CHANGE:
         spec = active_registry.assert_can_call("capture_latest_portal")
