@@ -138,6 +138,9 @@
   .dD-hdrsearch .ri:hover { background:#FBF6EC; }
   .dD-hdrsearch .ri .rt { font-size:12.5px; font-weight:600; color:#2B2622; line-height:1.35; }
   .dD-hdrsearch .ri .rs { font-size:11.5px; color:#9A8E7B; line-height:1.35; margin-top:2px; }
+  .dD-hdrsearch .ri .rmeta { font-size:11px; color:#B49A6A; margin-top:1px; }
+  .dD-hdrsearch .rcount { font-size:11px; color:#9A8E7B; margin:2px 0 5px; }
+  .dD-hdrpanel h5.sub { margin-top:10px; }
 
   .dD-feed { flex:1; overflow-y:auto; padding:14px 0 8px; display:flex; flex-direction:column; }
   .dD-div { display:flex; align-items:center; gap:10px; padding:6px 16px 14px; }
@@ -258,6 +261,7 @@
   .dD-propose-h { font-size:11.5px; font-weight:700; color:#2A6FDB; letter-spacing:.02em; }
   .dD-propose-t { font-size:14px; font-weight:600; color:#2B2622; margin:3px 0 1px; line-height:1.35; }
   .dD-propose-d { font-family:'IBM Plex Mono',monospace; font-size:12px; color:#514A3F; }
+  .dD-propose-sub { font-size:11.5px; color:#8A7F6C; margin-top:2px; }
   .dD-propose-ok { font-size:12.5px; font-weight:600; color:#3F8A4F; }
   .dD-propose-cancel { font-size:12.5px; color:#9A8E7B; }
   .dD-picker { flex-direction:column; align-items:stretch; }
@@ -1999,13 +2003,12 @@
     badge.className = 'badge' + (count ? ' on' : '');
   }
 
-  function nearestDeadlineText() {
+  function nearestDeadlines(n) {
     var todayKey = isoKey(new Date());
-    var upcoming = state.events.filter(function (i) { return i.dateKey && i.dateKey >= todayKey; })
+    return state.events.filter(function (i) { return i.dateKey && i.dateKey >= todayKey; })
       .concat(state.queue.filter(function (i) { return i.dateKey && i.dateKey >= todayKey; }))
-      .sort(function (a, b) { return (a.dateKey || '').localeCompare(b.dateKey || ''); });
-    if (!upcoming.length) return '';
-    return upcoming[0].dateKey + ' · ' + clip(upcoming[0].title || '', 28);
+      .sort(function (a, b) { return (a.dateKey || '').localeCompare(b.dateKey || ''); })
+      .slice(0, n);
   }
 
   function headerNotifHtml() {
@@ -2013,7 +2016,6 @@
     var emailReview = groupsInBucket('unread').length;
     var receipt = (state.daily && state.daily.review_receipt) || {};
     var recent = (Array.isArray(receipt.recent) && receipt.recent.length) ? receipt.recent[0].summary : '';
-    var nearest = nearestDeadlineText();
     var rows = '';
     if (pendingDrafts) {
       rows += '<div class="nrow tap" data-act="hdr-goto" data-group="unread"><span class="nn">' + pendingDrafts +
@@ -2023,8 +2025,13 @@
       rows += '<div class="nrow tap" data-act="hdr-goto" data-group="unread"><span class="nn">' + emailReview +
         '</span><span class="nt">封邮件待复核（金额/动作）</span></div>';
     }
-    if (nearest) {
-      rows += '<div class="nrow"><span class="nn">›</span><span class="nt">最近截止 · ' + escapeHtml(nearest) + '</span></div>';
+    var ups = nearestDeadlines(3);
+    if (ups.length) {
+      rows += '<h5 class="sub">接下来</h5>' + ups.map(function (u) {
+        return '<div class="nrow tap" data-act="hdr-deadline" data-key="' + escapeHtml(u.dateKey) + '">' +
+          '<span class="nn">' + escapeHtml((u.dateKey || '').slice(5)) + '</span>' +
+          '<span class="nt">' + escapeHtml(clip(u.title || '', 26)) + '</span></div>';
+      }).join('');
     }
     if (recent) {
       rows += '<div class="nrow"><span class="nn">↺</span><span class="nt">最近变更 · ' + escapeHtml(clip(recent, 40)) + '</span></div>';
@@ -2054,12 +2061,20 @@
           var sid = String(meta.document_source_id || d.source_id || '');
           if (seen[sid]) return;
           seen[sid] = true;
-          items.push({ title: String(meta.title || meta.subject || '邮件'), snippet: clip(String(d.text || ''), 90) });
+          items.push({
+            title: String(meta.title || meta.subject || '邮件'),
+            sender: String(meta.sender || ''),
+            snippet: clip(String(d.text || ''), 90)
+          });
         });
         if (!items.length) { res.innerHTML = '<div class="empty">没找到匹配「' + escapeHtml(q) + '」的邮件。</div>'; return; }
-        res.innerHTML = items.slice(0, 8).map(function (it) {
-          return '<div class="ri"><div class="rt">' + escapeHtml(it.title) + '</div><div class="rs">' + escapeHtml(it.snippet) + '</div></div>';
-        }).join('');
+        res.innerHTML = '<div class="rcount">找到 ' + items.length + ' 封 · 点一条让助手讲讲</div>' +
+          items.slice(0, 8).map(function (it) {
+            return '<div class="ri" data-act="hdr-srch-ask" data-q="' + escapeHtml(it.title) + '">' +
+              '<div class="rt">' + escapeHtml(it.title) + '</div>' +
+              (it.sender ? '<div class="rmeta">' + escapeHtml(it.sender) + '</div>' : '') +
+              '<div class="rs">' + escapeHtml(it.snippet) + '</div></div>';
+          }).join('');
       })
       .catch(function () { res.innerHTML = '<div class="empty">搜索失败，稍后再试。</div>'; });
   }
@@ -2372,18 +2387,52 @@
 
   // A "add this to my calendar" request comes back with metadata.proposed_event;
   // the model proposed the slots, the user confirms here, and only then do we write.
-  function proposeEventHtml(p) {
-    var when = escapeHtml(p.date) + (p.start_time ? ' ' + escapeHtml(p.start_time) +
-      (p.end_time ? '–' + escapeHtml(p.end_time) : '') : '');
-    return '<div class="dD-propose" data-title="' + escapeHtml(p.title) + '" data-date="' + escapeHtml(p.date) +
-      '" data-start="' + escapeHtml(p.start_time || '') + '" data-end="' + escapeHtml(p.end_time || '') + '">' +
+  // When the request referenced an email and several matched ("那封 Tripalink" — titled
+  // vs. from), proposed_event.candidates carries the alternatives and we offer a picker.
+  function proposeEventHtml(p, idx) {
+    idx = idx || 0;
+    var cands = p.candidates || [];
+    var sel = cands[idx] || p;
+    var title = sel.title || '', date = sel.date || '', start = sel.start_time || '', end = sel.end_time || '';
+    var when = escapeHtml(date) + (start ? ' ' + escapeHtml(start) + (end ? '–' + escapeHtml(end) : '') : '');
+    var sub = (cands.length > 1 && sel.subject) ? '<div class="dD-propose-sub">来自邮件：' +
+      escapeHtml(sel.subject) + (sel.sender ? ' · ' + escapeHtml(sel.sender) : '') + '</div>' : '';
+    var alt = cands.length > 1 ? '<button class="dD-cbtn sec" data-act="event-not-this">不是这个</button>' : '';
+    return '<div class="dD-propose" data-propose="' + escapeHtml(JSON.stringify(p)) + '" data-idx="' + idx + '"' +
+      ' data-title="' + escapeHtml(title) + '" data-date="' + escapeHtml(date) +
+      '" data-start="' + escapeHtml(start) + '" data-end="' + escapeHtml(end) + '">' +
       '<div class="dD-propose-h">📅 待确认事件</div>' +
-      '<div class="dD-propose-t">' + escapeHtml(p.title) + '</div>' +
-      '<div class="dD-propose-d">' + when + '</div>' +
+      '<div class="dD-propose-t">' + escapeHtml(title) + '</div>' +
+      '<div class="dD-propose-d">' + when + '</div>' + sub +
       '<div class="dD-btns">' +
       '<button class="dD-cbtn prim" data-act="confirm-event">✓ 确认加入日历</button>' +
+      alt +
       '<button class="dD-cbtn sec" data-act="cancel-event">取消</button>' +
       '</div></div>';
+  }
+
+  function proposeEventPickerHtml(p) {
+    var rows = (p.candidates || []).map(function (c, i) {
+      var label = (c.subject || c.title || '') + ' · ' + (c.date || '') + (c.sender ? ' · ' + c.sender : '');
+      return '<button class="dD-cbtn sec dD-pickrow" data-act="event-pick" data-pick="' + i + '">' +
+        escapeHtml(label) + '</button>';
+    }).join('');
+    return '<div class="dD-propose" data-propose="' + escapeHtml(JSON.stringify(p)) + '">' +
+      '<div class="dD-propose-h">你指的是哪封邮件？</div>' +
+      '<div class="dD-btns dD-picker">' + rows +
+        '<button class="dD-cbtn sec" data-act="cancel-event">取消</button></div></div>';
+  }
+
+  function eventNotThis(btn) {
+    var card = btn.closest('.dD-propose');
+    if (!card) return;
+    card.outerHTML = proposeEventPickerHtml(JSON.parse(card.dataset.propose || '{}'));
+  }
+
+  function eventPick(btn) {
+    var card = btn.closest('.dD-propose');
+    if (!card) return;
+    card.outerHTML = proposeEventHtml(JSON.parse(card.dataset.propose || '{}'), parseInt(btn.dataset.pick || '0', 10));
   }
 
   function confirmProposedEvent(btn) {
@@ -2724,6 +2773,8 @@
     }
     if (btn.dataset.act === 'confirm-event') { confirmProposedEvent(btn); return; }
     if (btn.dataset.act === 'cancel-event') { cancelProposedEvent(btn); return; }
+    if (btn.dataset.act === 'event-not-this') { eventNotThis(btn); return; }
+    if (btn.dataset.act === 'event-pick') { eventPick(btn); return; }
     if (btn.dataset.act === 'confirm-change') { confirmChange(btn); return; }
     if (btn.dataset.act === 'change-not-this') { changeNotThis(btn); return; }
     if (btn.dataset.act === 'change-pick') { changePick(btn); return; }
@@ -2755,7 +2806,23 @@
       closeHdrPanel();
       var slot = document.getElementById('taskCardSlot');
       if (slot) slot.scrollIntoView({ block: 'nearest' });
+      return;
     }
+    var dl = e.target.closest('[data-act="hdr-deadline"]');
+    if (dl && dl.dataset.key) {
+      closeHdrPanel();
+      var onBoard = state.events.some(function (it) { return it.dateKey === dl.dataset.key; });
+      if (onBoard) {
+        openDayPopup(dl.dataset.key);  // a confirmed event — show that day
+      } else {
+        handleTaskGroup('unread');     // a pending candidate — send to the review queue to confirm
+        var slot2 = document.getElementById('taskCardSlot');
+        if (slot2) slot2.scrollIntoView({ block: 'nearest' });
+      }
+      return;
+    }
+    var ask = e.target.closest('[data-act="hdr-srch-ask"]');
+    if (ask && ask.dataset.q) { closeHdrPanel(); askAssistant('「' + ask.dataset.q + '」这封邮件说了什么？'); return; }
   });
   // click anywhere outside the panel/icons closes it
   document.addEventListener('click', function (e) {
