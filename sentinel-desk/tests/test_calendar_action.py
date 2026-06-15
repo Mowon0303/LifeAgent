@@ -3,9 +3,19 @@ from __future__ import annotations
 import unittest
 
 from sentineldesk.agent.graph import answer_question
-from sentineldesk.agent.graph.calendar_action import _extract_slots
+from sentineldesk.agent.graph.calendar_action import (
+    _calendar_action_answer,
+    _classify_calendar_action,
+    _extract_slots,
+)
 from sentineldesk.agent.llm import ModelCallResult
 from sentineldesk.agent.schemas import Intent
+
+EVENTS = [
+    {"event_id": "e1", "title": "牙医预约", "date_key": "2026-06-25", "start_time": "14:00"},
+    {"event_id": "e2", "title": "团队同步会", "date_key": "2026-07-01", "start_time": "10:00"},
+    {"event_id": "e3", "title": "导师组会", "date_key": "2026-07-03"},
+]
 
 
 class FakeChat:
@@ -70,6 +80,63 @@ class CalendarActionTests(unittest.TestCase):
         slots = _extract_slots("三天后和导师开会", client=FakeChat("{}"), today="2026-06-14")
         self.assertEqual(slots["date"], "2026-06-17")
         self.assertIn("导师", slots["title"])
+
+
+class CalendarEditDeleteTests(unittest.TestCase):
+    def test_classify_create_edit_delete(self) -> None:
+        self.assertEqual(_classify_calendar_action("把6月20号牙医加到日历"), "create")
+        self.assertEqual(_classify_calendar_action("把牙医那条改到周四"), "edit")
+        self.assertEqual(_classify_calendar_action("删掉下周的组会"), "delete")
+
+    def test_delete_resolves_the_target_and_requires_confirmation(self) -> None:
+        answer = _calendar_action_answer(
+            "删掉牙医那条", client=FakeChat('{"targets":[1],"changes":{}}'),
+            today="2026-06-14", events=EVENTS,
+        )
+        self.assertTrue(answer.requires_confirmation)  # a delete is a write — confirm first
+        change = answer.metadata["proposed_change"]
+        self.assertEqual(change["action"], "delete")
+        self.assertEqual(change["target"]["event_id"], "e1")
+
+    def test_edit_resolves_target_and_changes(self) -> None:
+        answer = _calendar_action_answer(
+            "把团队同步会改到7月2号", client=FakeChat('{"targets":[2],"changes":{"date":"2026-07-02"}}'),
+            today="2026-06-14", events=EVENTS,
+        )
+        change = answer.metadata["proposed_change"]
+        self.assertEqual(change["action"], "edit")
+        self.assertEqual(change["target"]["event_id"], "e2")
+        self.assertEqual(change["changes"]["date"], "2026-07-02")
+
+    def test_edit_relative_date_is_resolved_deterministically(self) -> None:
+        # The model echoed a wrong date for "下周三"; the resolver overrides it (6-17).
+        answer = _calendar_action_answer(
+            "把牙医改到下周三", client=FakeChat('{"targets":[1],"changes":{"date":"2026-06-20"}}'),
+            today="2026-06-14", events=EVENTS,
+        )
+        self.assertEqual(answer.metadata["proposed_change"]["changes"]["date"], "2026-06-17")
+
+    def test_top3_candidates_surface_for_the_not_that_one_fallback(self) -> None:
+        answer = _calendar_action_answer(
+            "删掉那个会", client=FakeChat('{"targets":[2,3,1],"changes":{}}'),
+            today="2026-06-14", events=EVENTS,
+        )
+        change = answer.metadata["proposed_change"]
+        self.assertEqual(change["target"]["event_id"], "e2")           # top-1
+        self.assertEqual([c["event_id"] for c in change["candidates"]], ["e2", "e3", "e1"])
+
+    def test_no_events_to_edit(self) -> None:
+        answer = _calendar_action_answer("删掉牙医", client=FakeChat("{}"), today="2026-06-14", events=[])
+        self.assertIsNone((answer.metadata or {}).get("proposed_change"))
+        self.assertIn("还没有", answer.answer)
+
+    def test_unmatched_target_asks_instead_of_guessing(self) -> None:
+        answer = _calendar_action_answer(
+            "删掉买菜", client=FakeChat('{"targets":[],"changes":{}}'),
+            today="2026-06-14", events=EVENTS,
+        )
+        self.assertIsNone((answer.metadata or {}).get("proposed_change"))
+        self.assertIn("没找到", answer.answer)
 
 
 if __name__ == "__main__":

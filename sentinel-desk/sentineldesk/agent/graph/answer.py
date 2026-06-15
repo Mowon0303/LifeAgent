@@ -126,7 +126,9 @@ def answer_question(
         active_registry.assert_can_call("draft_calendar_event")
         from sentineldesk.extract import utc_now
 
-        return _calendar_action_answer(question, client=chat_client, today=utc_now()[:10])
+        return _calendar_action_answer(
+            question, client=chat_client, today=utc_now()[:10], events=calendar or []
+        )
 
     if intent == Intent.PAGE_CHANGE:
         spec = active_registry.assert_can_call("capture_latest_portal")

@@ -21,4 +21,6 @@
 {"case_id": "route-follow-showall", "category": "followup", "question": "全都给我看看", "previous_intent": "task_overview", "expected_intent": "task_overview", "needs_model": true}
 {"case_id": "route-search-email-1", "category": "search", "question": "USCIS 那封邮件写了啥", "expected_intent": "general", "expected_general_mode": "search", "needs_model": true}
 {"case_id": "route-search-email-2", "category": "search", "question": "Tripalink 发的那封说了什么", "expected_intent": "general", "expected_general_mode": "search", "needs_model": true}
+{"case_id": "route-edit-event", "category": "paraphrase", "question": "把牙医那条改到周四", "expected_intent": "calendar_action", "needs_model": true}
+{"case_id": "route-delete-event", "category": "paraphrase", "question": "删掉下周的组会", "expected_intent": "calendar_action", "needs_model": true}
 {"case_id": "route-smalltalk", "category": "greeting", "question": "随便聊聊呗", "expected_intent": "general", "needs_model": true}

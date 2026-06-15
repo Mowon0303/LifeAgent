@@ -260,6 +260,8 @@
   .dD-propose-d { font-family:'IBM Plex Mono',monospace; font-size:12px; color:#514A3F; }
   .dD-propose-ok { font-size:12.5px; font-weight:600; color:#3F8A4F; }
   .dD-propose-cancel { font-size:12.5px; color:#9A8E7B; }
+  .dD-picker { flex-direction:column; align-items:stretch; }
+  .dD-pickrow { justify-content:flex-start; }
   /* floating detail popup (one shared element, positioned on hover) */
   #anscardPopup { position:fixed; z-index:200; width:330px; max-width:86vw; background:#FFFDF8;
     border:1px solid #E6DCC8; border-left:3px solid #B14228; border-radius:8px; padding:11px 13px;
@@ -2414,6 +2416,92 @@
     if (btns) btns.innerHTML = '<span class="dD-propose-cancel">已取消</span>';
   }
 
+  // ---- edit / delete an existing event from chat (top-1, with a top-3 fallback) ----
+  function changeDesc(action, target, changes) {
+    var when = (target.date || '') + (target.start_time ? ' ' + target.start_time : '');
+    if (action === 'delete') return when + ' · 删除';
+    var parts = [];
+    if (changes.date) parts.push('日期→' + changes.date);
+    if (changes.start_time) parts.push('时间→' + changes.start_time + (changes.end_time ? '–' + changes.end_time : ''));
+    if (changes.title) parts.push('标题→' + changes.title);
+    return when + ' · 改为 ' + parts.join('，');
+  }
+
+  function proposeChangeHtml(change, idx) {
+    idx = idx || 0;
+    var cands = change.candidates || [];
+    var target = cands[idx] || change.target;
+    var isDel = change.action === 'delete';
+    var alt = cands.length > 1 ? '<button class="dD-cbtn sec" data-act="change-not-this">不是这个</button>' : '';
+    return '<div class="dD-propose" data-change="' + escapeHtml(JSON.stringify(change)) + '" data-idx="' + idx + '">' +
+      '<div class="dD-propose-h">' + (isDel ? '🗑 待确认删除' : '✏️ 待确认修改') + '</div>' +
+      '<div class="dD-propose-t">' + escapeHtml(target.title || '') + '</div>' +
+      '<div class="dD-propose-d">' + escapeHtml(changeDesc(change.action, target, change.changes || {})) + '</div>' +
+      '<div class="dD-btns">' +
+        '<button class="dD-cbtn prim" data-act="confirm-change">✓ 确认' + (isDel ? '删除' : '修改') + '</button>' +
+        alt +
+        '<button class="dD-cbtn sec" data-act="cancel-event">取消</button>' +
+      '</div></div>';
+  }
+
+  function proposeChangePickerHtml(change) {
+    var rows = (change.candidates || []).map(function (c, i) {
+      return '<button class="dD-cbtn sec dD-pickrow" data-act="change-pick" data-pick="' + i + '">' +
+        escapeHtml(c.title || '') + ' · ' + escapeHtml(c.date || '') + '</button>';
+    }).join('');
+    return '<div class="dD-propose" data-change="' + escapeHtml(JSON.stringify(change)) + '">' +
+      '<div class="dD-propose-h">你指的是哪一个？</div>' +
+      '<div class="dD-btns dD-picker">' + rows +
+        '<button class="dD-cbtn sec" data-act="cancel-event">取消</button></div></div>';
+  }
+
+  function changeNotThis(btn) {
+    var card = btn.closest('.dD-propose');
+    if (!card) return;
+    card.outerHTML = proposeChangePickerHtml(JSON.parse(card.dataset.change || '{}'));
+  }
+
+  function changePick(btn) {
+    var card = btn.closest('.dD-propose');
+    if (!card) return;
+    card.outerHTML = proposeChangeHtml(JSON.parse(card.dataset.change || '{}'), parseInt(btn.dataset.pick || '0', 10));
+  }
+
+  function confirmChange(btn) {
+    if (state.busy) return;
+    var card = btn.closest('.dD-propose');
+    if (!card) return;
+    var change = JSON.parse(card.dataset.change || '{}');
+    var idx = parseInt(card.dataset.idx || '0', 10);
+    var target = (change.candidates || [])[idx] || change.target;
+    if (!target || !target.event_id) return;
+    var isDel = change.action === 'delete';
+    var url;
+    if (isDel) {
+      url = '/api/calendar/delete?event_id=' + encodeURIComponent(target.event_id);
+    } else {
+      var c = change.changes || {};
+      url = '/api/calendar/drafts/update?event_id=' + encodeURIComponent(target.event_id) + '&user=1';
+      if (c.date) url += '&date=' + encodeURIComponent(c.date);
+      if (c.start_time) url += '&start=' + encodeURIComponent(c.start_time);
+      if (c.end_time) url += '&end=' + encodeURIComponent(c.end_time);
+      if (c.title) url += '&title=' + encodeURIComponent(c.title);
+    }
+    state.busy = true;
+    fetch(url, { method: 'POST' })
+      .then(function (r) { return r.json(); })
+      .then(function (res) {
+        if (res.error) { showToast((isDel ? '删除' : '修改') + '失败：' + escapeHtml(res.error)); return; }
+        card.classList.add('done');
+        var btns = card.querySelector('.dD-btns');
+        if (btns) btns.innerHTML = '<span class="dD-propose-ok">✓ 已' + (isDel ? '删除' : '修改') + '</span>';
+        showToast('已' + (isDel ? '删除' : '修改') + '「' + (target.title || '') + '」');
+        return refresh();
+      })
+      .catch(function (err) { showToast('操作失败：' + escapeHtml(err)); })
+      .finally(function () { state.busy = false; });
+  }
+
   function anscardPopupEl() {
     var el = document.getElementById('anscardPopup');
     if (!el) {
@@ -2484,6 +2572,8 @@
         }
         var proposed = answer.metadata && answer.metadata.proposed_event;
         if (proposed && proposed.title && proposed.date) html += proposeEventHtml(proposed);
+        var change = answer.metadata && answer.metadata.proposed_change;
+        if (change && change.target) html += proposeChangeHtml(change);
         botMessage(html);
       })
       .catch(function (err) { botMessage('<div class="dD-body uncertain">请求失败：' + escapeHtml(err) + '</div>'); });
@@ -2634,6 +2724,9 @@
     }
     if (btn.dataset.act === 'confirm-event') { confirmProposedEvent(btn); return; }
     if (btn.dataset.act === 'cancel-event') { cancelProposedEvent(btn); return; }
+    if (btn.dataset.act === 'confirm-change') { confirmChange(btn); return; }
+    if (btn.dataset.act === 'change-not-this') { changeNotThis(btn); return; }
+    if (btn.dataset.act === 'change-pick') { changePick(btn); return; }
     var wrap = btn.closest('.dD-btns');
     var eventId = wrap.dataset.eventId;
     state.queue = state.queue.filter(function (item) { return item.eventId !== eventId; });
