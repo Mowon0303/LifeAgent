@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from sentineldesk.relative_times import resolve_clock_time
+from sentineldesk.relative_times import resolve_clock_range, resolve_clock_time
 
 
 class ResolveClockTimeTests(unittest.TestCase):
@@ -38,6 +38,23 @@ class ResolveClockTimeTests(unittest.TestCase):
         self.assertEqual(resolve_clock_time("三点开会"), "")
         self.assertEqual(resolve_clock_time("提醒我明天交房租"), "")
         self.assertEqual(resolve_clock_time("把会议加到日历"), "")
+
+
+class ResolveClockRangeTests(unittest.TestCase):
+    def test_range_shares_the_start_marker(self) -> None:
+        self.assertEqual(resolve_clock_range("下午2点到3点开会"), ("14:00", "15:00"))
+        self.assertEqual(resolve_clock_range("晚上7点到9点"), ("19:00", "21:00"))
+        self.assertEqual(resolve_clock_range("上午10点半到11点"), ("10:30", "11:00"))
+
+    def test_range_each_side_can_have_its_own_marker(self) -> None:
+        self.assertEqual(resolve_clock_range("下午2点到晚上8点"), ("14:00", "20:00"))
+
+    def test_single_time_returns_empty_end(self) -> None:
+        self.assertEqual(resolve_clock_range("晚上8点"), ("20:00", ""))
+
+    def test_unmarked_range_is_left_to_the_model(self) -> None:
+        self.assertEqual(resolve_clock_range("三点到四点"), ("", ""))
+        self.assertEqual(resolve_clock_range("提醒我明天交房租"), ("", ""))
 
 
 if __name__ == "__main__":

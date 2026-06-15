@@ -19,7 +19,7 @@ from typing import Any
 
 from sentineldesk.calendar.view import parse_deadline_date
 from sentineldesk.relative_dates import resolve_relative_date
-from sentineldesk.relative_times import resolve_clock_time
+from sentineldesk.relative_times import resolve_clock_range
 
 from ..schemas import AgentAnswer, Intent
 
@@ -168,8 +168,12 @@ def _resolve_email_reference(question: str, *, registry: Any, messages: list, to
         viable = [match for match in matches if match[3]]
         if viable:
             top = viable[0][2]
-            candidates = [_email_brief(match[2], match[3]) for match in viable][:_MAX_EMAIL_CANDIDATES]
-            return top, _subject_of(top), _source_of(top), viable[0][3], candidates
+            briefs = [_email_brief(match[2], match[3]) for match in viable]
+            # Dateless name-matches can't become events, but include them (greyed in the
+            # picker, no date) so the user can see them — and see *why* they weren't
+            # proposed — instead of them silently vanishing.
+            briefs += [_email_brief(match[2], "") for match in matches if not match[3]]
+            return top, _subject_of(top), _source_of(top), viable[0][3], briefs[:_MAX_EMAIL_CANDIDATES]
         # Matched by name, but nothing has a usable deadline — surface the best match so
         # the "no deadline" reply can name it, with no alternatives to pick from.
         top = matches[0][2]
@@ -360,10 +364,11 @@ def _normalize_changes(question: str, changes: dict, today: str) -> dict:
     date = resolved or parse_deadline_date(str(changes.get("date") or "").strip())
     if date:
         out["date"] = date
-    start = resolve_clock_time(question) or _valid_hm(str(changes.get("start_time") or ""))
+    range_start, range_end = resolve_clock_range(question)
+    start = range_start or _valid_hm(str(changes.get("start_time") or ""))
     if start:
         out["start_time"] = start
-    end = _valid_hm(str(changes.get("end_time") or ""))
+    end = range_end or _valid_hm(str(changes.get("end_time") or ""))
     if end:
         out["end_time"] = end
     title = str(changes.get("title") or "").strip()
@@ -450,13 +455,14 @@ def _extract_slots(question: str, *, client: Any, today: str) -> dict | None:
         title = _title_from_question(question)
     if not title or not date:
         return None
+    # A marked time ("下午4点") / range ("下午2点到3点") is resolved deterministically and
+    # overrides the model's guess — same reasoning as the date; the model botches AM/PM.
+    start_time, end_time = resolve_clock_range(question)
     return {
         "title": title[:120],
         "date": date,
-        # A marked time ("下午4点") is resolved deterministically and overrides the
-        # model's guess — same reasoning as the date; the model botches AM/PM.
-        "start_time": resolve_clock_time(question) or _valid_hm(str(data.get("start_time") or "")),
-        "end_time": _valid_hm(str(data.get("end_time") or "")),
+        "start_time": start_time or _valid_hm(str(data.get("start_time") or "")),
+        "end_time": end_time or _valid_hm(str(data.get("end_time") or "")),
     }
 
 

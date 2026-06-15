@@ -246,9 +246,10 @@ class CalendarFromEmailTests(unittest.TestCase):
         self.assertEqual(candidates[1]["date"], "2026-07-05")
         self.assertTrue(all(c["date"] and c["source_email"] for c in candidates))
 
-    def test_only_deadline_bearing_emails_are_offered_as_candidates(self) -> None:
-        # A second email matches by sender but has no deadline — it can't become an event,
-        # so it must not appear in the picker even though it matched the reference.
+    def test_dateless_name_matches_are_shown_in_the_picker_but_marked(self) -> None:
+        # A second email matches by sender but has no deadline. It can't become an event,
+        # but it's still surfaced in the picker (greyed, date="") so the user sees it and
+        # why it wasn't proposed — the deadline-bearing one stays the top pick.
         titled = EmailMessage(
             message_id="t1", thread_id="th1", sender="leasing@tripalink.com",
             subject="Tripalink 租约续签", received_at="2026-06-01T00:00:00Z",
@@ -263,9 +264,10 @@ class CalendarFromEmailTests(unittest.TestCase):
             "把 Tripalink 那封的截止加日历", client=None, today="2026-06-14",
             events=[], registry=FakeRegistry([]), messages=[titled, no_deadline],
         )
-        # Only the deadline-bearing email is viable -> a lone candidate, so no picker.
-        self.assertIsNone(answer.metadata["proposed_event"].get("candidates"))
-        self.assertEqual(answer.metadata["proposed_event"]["date"], "2026-07-10")
+        event = answer.metadata["proposed_event"]
+        self.assertEqual(event["date"], "2026-07-10")  # the deadline-bearing email is proposed
+        dates = {c["date"] for c in event["candidates"]}
+        self.assertEqual(dates, {"2026-07-10", ""})    # both shown; the dateless one marked date=""
 
 
 if __name__ == "__main__":
