@@ -14,11 +14,19 @@ The public demo uses synthetic Gmail-style email fixtures plus synthetic OPT, ap
 
 - Email-first deadline, amount, and action extraction.
 - Tool-first assistant answers with citations and explicit uncertainty.
+- **Conversational calendar operations** — create, edit, and delete events by just
+  talking to the assistant. The local model *proposes*; deterministic code resolves
+  the hard parts (relative dates like `下周三`, clock times like `下午4点`, and which
+  existing event or email you mean); nothing is written until you confirm. See
+  [Talk To Your Calendar](#talk-to-your-calendar).
 - Local calendar drafts with confirmation-gated ICS/Google/Apple write boundaries.
 - RAG for trusted docs and policy explanations, not primary alerting.
 - Optional LangGraph-shaped route/tools/finalize workflow metadata.
 - Portal monitoring fallback with deterministic diff and fail-loud health checks.
 - Redacted reports and share packages for review without leaking raw local evidence.
+- **Evals for the LLM-in-the-loop paths** — intent routing and calendar-slot
+  extraction are measured against golden sets (a deterministic keyword-router gate
+  in CI, plus live-model accuracy). See [docs/AGENT_EVAL.md](docs/AGENT_EVAL.md).
 - Regression tests and evals focused on silent-failure prevention, privacy, and package shape.
 
 ## Run The Demo
@@ -68,6 +76,28 @@ python3 -B -m sentineldesk --home .demo daily run
 ```
 
 `daily run` is the product landing loop: refresh inbox evidence when requested, extract or reuse tasks, show calendar drafts, show connector readiness without raw cursors/account values, and keep calendar writes behind separate confirmation-gated commands.
+
+## Talk To Your Calendar
+
+In the assistant chat you operate the calendar in natural language. The pattern is
+always **model proposes → deterministic code validates → you confirm** (nothing is
+written before the confirm click):
+
+```
+"把6月20号下午3点的牙医预约加到日历"   → proposes 牙医预约 · 2026-06-20 14:00 ... 15:00? → confirm
+"提醒我下周三上午十点开组会"           → 下周三 resolved in code to 2026-06-17 (the model botches it) · 10:00
+"把 Tripalink 那封的截止加到日历"       → pulls the deadline out of the referenced email; if several
+                                          emails match, a "不是这个" picker lets you pick the right one
+"把牙医改到下午4点"                     → 下午4点 resolved to 16:00 (not the model's 14:00) → confirm
+"删掉那个会"                           → top match + a top-N picker when it's ambiguous → confirm
+```
+
+Why deterministic resolvers: the local model reads "today" from the prompt but
+botches weekday/AM-PM arithmetic, and semantic search ranks bare names poorly — so
+relative dates (`relative_dates.py`), clock times (`relative_times.py`), and
+event/email reference resolution are done in code and override the model's guess.
+The measured effect is in [docs/AGENT_EVAL.md](docs/AGENT_EVAL.md) (slot date-accuracy
+0.67 → 1.00 after the date resolver).
 
 ## Show A Meaningful Change
 
@@ -207,7 +237,7 @@ The current implementation is standard-library first so it runs without network 
 - Ollama semantic classifier only when deterministic diff detects a candidate change.
 - Vertical portal packs for OPT/USCIS/OIS, appointment slots, or lease/rent deadline portals.
 - Email-first intelligence for Gmail/email threads, attachments, deadlines, amounts, and action items.
-- Calendar action layer that drafts deadline events, edits local draft dates, dedupes events, exports ICS, and requires confirmation before any external calendar write.
+- Calendar action layer that drafts deadline events, edits local draft dates, dedupes events, exports ICS, and requires confirmation before any external calendar write — including conversational create/edit/delete with deterministic date/time/reference resolution.
 - LangChain/LangGraph assistant layer for model-swappable tool orchestration and RAG, without replacing the deterministic monitor core.
 
 ## Test
@@ -215,9 +245,16 @@ The current implementation is standard-library first so it runs without network 
 ```bash
 cd sentinel-desk
 python3 -m unittest discover -s tests -v
+
+# Golden-set evals (email extraction is deterministic; the agent paths add a
+# CI-safe keyword-router gate plus live-model accuracy with --provider ollama)
+python3 -m sentineldesk eval email-extract
+python3 -m sentineldesk eval agent-routing                 # keyword-only, CI-safe
+python3 -m sentineldesk eval agent-routing  --provider ollama
+python3 -m sentineldesk eval calendar-slots --provider ollama
 ```
 
-The tests cover extraction, session health, fail-loud classification, CLI/database setup, Chrome launcher safety, deterministic Chrome CDP target routing, CDP screenshot artifacts, scenario transitions, lease/rent vertical behavior, dashboard smoke routes, evidence bundles, local calendar draft editing, evidence-backed `ask` answers, RAG-backed policy answers, redacted reports, redacted share packages, redacted-output privacy audit, project-tree release audit, clean source release packaging, dashboard package downloads, plan-tracker replies, and PII/path redaction.
+The tests cover extraction, session health, fail-loud classification, CLI/database setup, Chrome launcher safety, deterministic Chrome CDP target routing, CDP screenshot artifacts, scenario transitions, lease/rent vertical behavior, dashboard smoke routes, evidence bundles, local calendar draft editing, conversational calendar create/edit/delete with deterministic date/time/reference resolvers, evidence-backed `ask` answers, RAG-backed policy answers, redacted reports, redacted share packages, redacted-output privacy audit, project-tree release audit, clean source release packaging, dashboard package downloads, plan-tracker replies, and PII/path redaction.
 
 ## Privacy Boundary
 
