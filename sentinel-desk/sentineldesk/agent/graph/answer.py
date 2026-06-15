@@ -127,7 +127,8 @@ def answer_question(
         from sentineldesk.extract import utc_now
 
         return _calendar_action_answer(
-            question, client=chat_client, today=utc_now()[:10], events=calendar or []
+            question, client=chat_client, today=utc_now()[:10], events=calendar or [],
+            registry=active_registry, messages=messages or [],
         )
 
     if intent == Intent.PAGE_CHANGE:

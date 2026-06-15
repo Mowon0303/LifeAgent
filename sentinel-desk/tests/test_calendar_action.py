@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 
 from sentineldesk.agent.graph import answer_question
 from sentineldesk.agent.graph.calendar_action import (
@@ -10,6 +11,25 @@ from sentineldesk.agent.graph.calendar_action import (
 )
 from sentineldesk.agent.llm import ModelCallResult
 from sentineldesk.agent.schemas import Intent
+from sentineldesk.email.models import EmailMessage
+
+
+class FakeRegistry:
+    def __init__(self, documents: list) -> None:
+        self.documents = documents
+
+    def assert_can_call(self, name: str) -> SimpleNamespace:
+        return SimpleNamespace(handler=object())
+
+    def call(self, name: str, **kwargs) -> dict:
+        return {"documents": self.documents}
+
+
+def _email(message_id: str, subject: str, body: str) -> EmailMessage:
+    return EmailMessage(
+        message_id=message_id, thread_id="t-" + message_id, sender="ops@example.com",
+        subject=subject, received_at="2026-06-01T00:00:00Z", body_text=body,
+    )
 
 EVENTS = [
     {"event_id": "e1", "title": "牙医预约", "date_key": "2026-06-25", "start_time": "14:00"},
@@ -137,6 +157,39 @@ class CalendarEditDeleteTests(unittest.TestCase):
         )
         self.assertIsNone((answer.metadata or {}).get("proposed_change"))
         self.assertIn("没找到", answer.answer)
+
+
+class CalendarFromEmailTests(unittest.TestCase):
+    def test_create_from_a_referenced_email_uses_the_emails_deadline(self) -> None:
+        msg = _email("m1", "USCIS Case Update", "Please submit your documents by 07/01/2026 — this deadline is firm.")
+        registry = FakeRegistry([{"source_id": msg.source_id, "metadata": {"subject": "USCIS Case Update"}, "text": msg.body_text}])
+        answer = _calendar_action_answer(
+            "把 USCIS 那封的截止加到日历", client=None, today="2026-06-14",
+            events=[], registry=registry, messages=[msg],
+        )
+        event = answer.metadata["proposed_event"]
+        self.assertEqual(event["date"], "2026-07-01")   # the email's date, not a model guess
+        self.assertIn("USCIS", event["title"])
+        self.assertTrue(answer.requires_confirmation)
+        self.assertEqual(answer.metadata.get("source_email"), msg.source_id)
+
+    def test_no_matching_email_asks(self) -> None:
+        answer = _calendar_action_answer(
+            "把那封邮件的截止加日历", client=None, today="2026-06-14",
+            events=[], registry=FakeRegistry([]), messages=[],
+        )
+        self.assertIsNone((answer.metadata or {}).get("proposed_event"))
+        self.assertIn("没找到", answer.answer)
+
+    def test_referenced_email_without_a_deadline_asks_for_a_date(self) -> None:
+        msg = _email("m2", "Newsletter", "Thanks for subscribing to our weekly roundup.")
+        registry = FakeRegistry([{"source_id": msg.source_id, "metadata": {"subject": "Newsletter"}, "text": msg.body_text}])
+        answer = _calendar_action_answer(
+            "把这封邮件的截止加日历", client=None, today="2026-06-14",
+            events=[], registry=registry, messages=[msg],
+        )
+        self.assertIsNone((answer.metadata or {}).get("proposed_event"))
+        self.assertIn("没找到明确的截止", answer.answer)
 
 
 if __name__ == "__main__":

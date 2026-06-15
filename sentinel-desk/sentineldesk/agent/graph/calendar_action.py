@@ -49,16 +49,31 @@ def _classify_calendar_action(question: str) -> str:
     return "create"
 
 
+_EMAIL_REF_RE = re.compile(r"邮件|这封|那封|那个邮件|来信|信里|邮箱里|email", re.IGNORECASE)
+
+
 def _calendar_action_answer(
-    question: str, *, client: Any, today: str, events: list[dict] | None = None
+    question: str,
+    *,
+    client: Any,
+    today: str,
+    events: list[dict] | None = None,
+    registry: Any = None,
+    messages: list | None = None,
 ) -> AgentAnswer:
     action = _classify_calendar_action(question)
     if action in ("edit", "delete"):
         return _edit_delete_answer(question, action, list(events or []), client=client, today=today)
-    return _create_answer(question, client=client, today=today)
+    return _create_answer(question, client=client, today=today, registry=registry, messages=messages)
 
 
-def _create_answer(question: str, *, client: Any, today: str) -> AgentAnswer:
+def _create_answer(
+    question: str, *, client: Any, today: str, registry: Any = None, messages: list | None = None
+) -> AgentAnswer:
+    # "把 USCIS 那封的截止加日历" — the date lives in an email, not the message. Pull it
+    # from the referenced mail via RAG instead of asking the model for a date.
+    if _EMAIL_REF_RE.search(question):
+        return _email_event_answer(question, registry=registry, messages=messages or [], today=today)
     slots = _extract_slots(question, client=client, today=today)
     if slots is None:
         # Can't place it (no model, or no clear event/date) — ask, never guess a date.
@@ -82,6 +97,128 @@ def _create_answer(question: str, *, client: Any, today: str) -> AgentAnswer:
         requires_confirmation=True,
         metadata={"proposed_event": slots},
     )
+
+
+_QUERY_STRIP = re.compile(
+    r"把|帮我|请|麻烦|邮件|这封|那封|那个|来信|信里|邮箱里|email|的|截止|到期|最后期限|deadline|due|"
+    r"加到日历|加入日历|加日历|到日历|添加|日历|事项|提醒我?",
+    re.IGNORECASE,
+)
+
+
+def _email_event_answer(question: str, *, registry: Any, messages: list, today: str) -> AgentAnswer:
+    """Find the email the user referenced, pull its deadline, and propose a calendar
+    event from it. Fully deterministic given the email — the date is the email's, not a
+    model guess. Reuses the create confirm card."""
+    message, subject, source_id, deadline = _resolve_email_reference(
+        question, registry=registry, messages=messages, today=today
+    )
+    if message is None and not subject:
+        return _calendar_reply("没找到相关邮件。你指哪封？说个关键词（发件人或主题），比如「USCIS」。")
+    if not deadline:
+        return _calendar_reply("「" + (subject or "那封邮件") + "」里我没找到明确的截止日期。你想手动给个日期吗？")
+    slots = {"title": _clean_subject(subject) or "邮件事项", "date": deadline, "start_time": "", "end_time": ""}
+    return AgentAnswer(
+        intent=Intent.CALENDAR_ACTION,
+        answer="要把「" + (subject or "那封邮件") + "」的截止 " + deadline + " 加到日历吗？（确认后才写）",
+        confidence="medium",
+        tool_calls=("draft_calendar_event",),
+        requires_confirmation=True,
+        metadata={"proposed_event": slots, "source_email": source_id},
+    )
+
+
+def _resolve_email_reference(question: str, *, registry: Any, messages: list, today: str):
+    """Return (message, subject, source_id, deadline) for the referenced email.
+
+    A named reference ("Tripalink", "USCIS") matches the subject/sender deterministically
+    — far more reliable than semantic RAG, which ranks bare keywords poorly. RAG is the
+    fallback when nothing matches by name."""
+    query = _email_search_query(question)
+    tokens = [token.lower() for token in re.split(r"[\s，,、]+", query) if len(token) >= 2]
+    best: tuple | None = None  # (score, has_deadline, message, deadline)
+    for message in messages:
+        subject = str(getattr(message, "subject", "") or "").lower()
+        sender = str(getattr(message, "sender", "") or "").lower()
+        subject_hits = sum(1 for token in tokens if token in subject)
+        sender_hits = sum(1 for token in tokens if token in sender)
+        if not subject_hits and not sender_hits:
+            continue
+        deadline = _nearest_deadline(message, today)
+        # A subject match is a stronger reference than a sender-only match ("the
+        # Tripalink one" means the email titled Tripalink, not every email from them).
+        score = subject_hits * 2 + sender_hits
+        candidate = (score, 1 if deadline else 0, message, deadline)
+        if best is None or candidate[:2] > best[:2]:
+            best = candidate
+    if best is not None:
+        message = best[2]
+        return message, str(getattr(message, "subject", "") or ""), str(getattr(message, "source_id", "") or ""), best[3]
+
+    document = _top_email_match(query, registry)
+    if document is None:
+        return None, "", "", ""
+    source_id = str(document.get("source_id") or "")
+    metadata = document.get("metadata") if isinstance(document.get("metadata"), dict) else {}
+    message = next((m for m in messages if str(getattr(m, "source_id", "") or "") == source_id), None)
+    subject = str(metadata.get("subject") or document.get("title") or (getattr(message, "subject", "") if message else ""))
+    deadline = (
+        _nearest_deadline(message, today)
+        if message is not None
+        else _deadline_from_text(str(document.get("text") or ""), today)
+    )
+    return message, subject.strip(), source_id, deadline
+
+
+def _email_search_query(question: str) -> str:
+    cleaned = re.sub(r"\s+", " ", _QUERY_STRIP.sub(" ", question)).strip()
+    return cleaned or question
+
+
+def _top_email_match(query: str, registry: Any) -> dict | None:
+    if registry is None:
+        return None
+    try:
+        spec = registry.assert_can_call("search_email_rag")
+    except (KeyError, PermissionError):
+        return None
+    if getattr(spec, "handler", None) is None:
+        return None
+    try:
+        result = registry.call("search_email_rag", query=query, limit=4)
+    except Exception:
+        return None
+    documents = list(result.get("documents") or []) if isinstance(result, dict) else []
+    return documents[0] if documents else None
+
+
+def _nearest_deadline(message: Any, today: str) -> str:
+    from sentineldesk.email.extract import extract_email_facts
+
+    isos = [
+        parse_deadline_date(fact.value)
+        for fact in extract_email_facts(message)
+        if fact.kind == "deadline" and parse_deadline_date(fact.value)
+    ]
+    return _pick_deadline(isos, today)
+
+
+def _deadline_from_text(text: str, today: str) -> str:
+    from sentineldesk.extract import extract_deadlines
+
+    isos = [parse_deadline_date(str(d.get("date_text") or "")) for d in extract_deadlines(text)]
+    return _pick_deadline([iso for iso in isos if iso], today)
+
+
+def _pick_deadline(isos: list[str], today: str) -> str:
+    if not isos:
+        return ""
+    upcoming = sorted(iso for iso in isos if iso >= today)
+    return upcoming[0] if upcoming else sorted(isos)[0]
+
+
+def _clean_subject(subject: str) -> str:
+    return re.sub(r"^(?:re|fwd|fw)\s*[:：]\s*", "", subject, flags=re.IGNORECASE).strip()[:120]
 
 
 def _edit_delete_answer(
