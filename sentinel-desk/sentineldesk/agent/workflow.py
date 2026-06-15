@@ -11,7 +11,7 @@ from .graph import answer_question
 from .llm import ChatClient, chat_client_for, refine_answer
 from .memory import build_memory
 from .model import ModelProvider
-from .router import classify_intent, is_greeting, llm_route_label, _LLM_LABEL_INTENT, _continue_intent
+from .router import resolve_intent
 from .schemas import AgentAnswer, Intent
 from .tools import ToolRegistry
 
@@ -147,34 +147,20 @@ def _previous_intent(history: list[dict[str, Any]] | None) -> str | None:
 def _route_stage(state: dict[str, Any]) -> dict[str, Any]:
     question = str(state.get("question") or "")
     previous_intent = state.get("previous_intent")
-    intent = classify_intent(question, previous_intent=previous_intent)
-    general_mode = None
-    routed_by = "keyword"
-    # Keyword pass is the fast deterministic default. Only when it gives up (GENERAL,
-    # and not a greeting) do we ask the model — which generalizes to any phrasing.
-    if intent == Intent.GENERAL and not is_greeting(question):
-        label = llm_route_label(
-            question, client=state.get("chat_client"), previous_intent=previous_intent,
-            context=str(state.get("memory_block") or ""),
-        )
-        if label in _LLM_LABEL_INTENT:
-            intent = _LLM_LABEL_INTENT[label]
-            routed_by = "llm"
-        elif label == "search":
-            general_mode = "search"  # a real email-content question -> RAG
-            routed_by = "llm"
-        else:
-            # The model couldn't place it (or no model). If we were just talking about
-            # the user's tasks, a short unplaceable follow-up like "比如呢"/"其他事都是什么"
-            # means "go on / which ones" — continue the overview rather than dump a
-            # generic blurb. (No honest-menu fallback: a non-answer reads as a bug.)
-            continued = _continue_intent(previous_intent or "")
-            if continued is not None:
-                intent = continued
-                routed_by = "continue"
-    state["intent"] = intent.value
-    state["general_mode"] = general_mode
-    _append_trace(state, "route", {"intent": intent.value, "routed_by": routed_by, "general_mode": general_mode})
+    # The keyword pass leads; only a GENERAL non-greeting consults the model, then
+    # falls back to continuing a task thread. Shared with the routing eval.
+    decision = resolve_intent(
+        question,
+        previous_intent=previous_intent,
+        client=state.get("chat_client"),
+        context=str(state.get("memory_block") or ""),
+    )
+    state["intent"] = decision.intent.value
+    state["general_mode"] = decision.general_mode
+    _append_trace(
+        state, "route",
+        {"intent": decision.intent.value, "routed_by": decision.routed_by, "general_mode": decision.general_mode},
+    )
     return state
 
 

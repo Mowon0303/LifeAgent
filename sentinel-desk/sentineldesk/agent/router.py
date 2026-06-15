@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import urllib.error
+from dataclasses import dataclass
 from typing import Any
 
 from .schemas import Intent
@@ -116,6 +117,37 @@ _LLM_ROUTE_SYSTEM = (
     "unclear = a greeting, small talk, or it fits none of the above\n"
     "Output only the single label."
 )
+
+
+@dataclass(frozen=True)
+class RouteDecision:
+    intent: Intent
+    routed_by: str  # "keyword" | "llm" | "continue"
+    general_mode: str | None = None
+
+
+def resolve_intent(
+    question: str,
+    *,
+    previous_intent: str | None = None,
+    client: Any = None,
+    context: str = "",
+) -> RouteDecision:
+    """The full routing decision, shared by the workflow and the routing eval so
+    both exercise the same logic. Keyword pass first; only a GENERAL non-greeting
+    consults the model, then falls back to continuing a task thread."""
+    intent = classify_intent(question, previous_intent=previous_intent)
+    if intent != Intent.GENERAL or is_greeting(question):
+        return RouteDecision(intent, "keyword")
+    label = llm_route_label(question, client=client, previous_intent=previous_intent, context=context)
+    if label in _LLM_LABEL_INTENT:
+        return RouteDecision(_LLM_LABEL_INTENT[label], "llm")
+    if label == "search":
+        return RouteDecision(Intent.GENERAL, "llm", "search")
+    continued = _continue_intent(previous_intent or "")
+    if continued is not None:
+        return RouteDecision(continued, "continue")
+    return RouteDecision(Intent.GENERAL, "keyword")
 
 
 def llm_route_label(

@@ -1,0 +1,12 @@
+{"case_id": "slot-abs-time", "category": "absolute", "question": "把6月20号下午3点的牙医预约加到日历", "today": "2026-06-14", "expected": {"date": "2026-06-20", "start_time": "15:00", "title_contains": "牙医"}}
+{"case_id": "slot-abs-notime", "category": "absolute", "question": "8月1号要交季度报告，加日历", "today": "2026-06-14", "expected": {"date": "2026-08-01", "title_contains": "报告"}}
+{"case_id": "slot-iso", "category": "absolute", "question": "提醒我 2026-09-09 提交材料", "today": "2026-06-14", "expected": {"date": "2026-09-09", "title_contains": "材料"}}
+{"case_id": "slot-en-mdy", "category": "english", "question": "add dentist appointment on 6/25/2026 at 9am", "today": "2026-06-14", "expected": {"date": "2026-06-25", "start_time": "09:00", "title_contains": "dentist"}}
+{"case_id": "slot-range", "category": "range", "question": "7月1号下午2点到3点团队同步会", "today": "2026-06-14", "expected": {"date": "2026-07-01", "start_time": "14:00", "end_time": "15:00", "title_contains": "团队"}}
+{"case_id": "slot-rel-tomorrow", "category": "relative", "question": "提醒我明天交房租", "today": "2026-06-14", "expected": {"date": "2026-06-15", "title_contains": "房租"}}
+{"case_id": "slot-rel-dayafter", "category": "relative", "question": "后天上午十点体检", "today": "2026-06-14", "expected": {"date": "2026-06-16", "start_time": "10:00", "title_contains": "体检"}}
+{"case_id": "slot-rel-ndays", "category": "relative", "question": "三天后和导师开会", "today": "2026-06-14", "expected": {"date": "2026-06-17", "title_contains": "会"}}
+{"case_id": "slot-weekday-rel", "category": "weekday_relative", "question": "下周三上午十点开组会", "today": "2026-06-14", "expected": {"date": "2026-06-17", "start_time": "10:00", "title_contains": "组会"}}
+{"case_id": "slot-noevent-look", "category": "no_event", "question": "帮我看看日历", "today": "2026-06-14", "expected": null}
+{"case_id": "slot-noevent-vague", "category": "no_event", "question": "帮我加个日历", "today": "2026-06-14", "expected": null}
+{"case_id": "slot-no-date", "category": "no_event", "question": "提醒我交报告", "today": "2026-06-14", "expected": null}

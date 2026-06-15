@@ -35,6 +35,8 @@ from .commands_inspect import (
     cmd_approvals_list,
     cmd_audit_list,
     cmd_connectors_state,
+    cmd_eval_agent_routing,
+    cmd_eval_calendar_slots,
     cmd_eval_email_extract,
     cmd_model_calls,
     cmd_model_status,
@@ -228,6 +230,22 @@ def build_parser() -> argparse.ArgumentParser:
     eval_email.add_argument("--report-md", help="Write a Markdown eval report to this path")
     eval_email.add_argument("--json", action="store_true", help="Print the full JSON report")
     eval_email.set_defaults(func=cmd_eval_email_extract)
+
+    def _add_eval_model_args(parser: Any) -> None:
+        parser.add_argument("--provider", default="local", help="local (keyword-only) or ollama")
+        parser.add_argument("--model", default="qwen2.5:7b", help="Model id when --provider ollama")
+        parser.add_argument("--base-url", default="http://127.0.0.1:11434", help="Ollama base URL")
+        parser.add_argument("--json", action="store_true", help="Print the full JSON report")
+
+    eval_routing = evals_sub.add_parser("agent-routing", help="Score intent routing (keyword + optional model)")
+    eval_routing.add_argument("--golden", default="evals/golden/agent/agent_routing.jsonl", help="Golden JSONL file")
+    _add_eval_model_args(eval_routing)
+    eval_routing.set_defaults(func=cmd_eval_agent_routing)
+
+    eval_slots = evals_sub.add_parser("calendar-slots", help="Score calendar-event slot extraction (needs a model)")
+    eval_slots.add_argument("--golden", default="evals/golden/agent/calendar_slots.jsonl", help="Golden JSONL file")
+    _add_eval_model_args(eval_slots)
+    eval_slots.set_defaults(func=cmd_eval_calendar_slots)
 
     email = sub.add_parser("email", help="Ingest and inspect local email evidence")
     email_sub = email.add_subparsers(dest="email_command", required=True)

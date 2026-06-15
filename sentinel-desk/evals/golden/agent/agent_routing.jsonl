@@ -1,0 +1,24 @@
+{"case_id": "route-kw-deadline", "category": "keyword", "question": "最近有什么截止", "expected_intent": "latest_deadline", "needs_model": false}
+{"case_id": "route-kw-amount", "category": "keyword", "question": "这个月要交多少钱", "expected_intent": "latest_amount", "needs_model": false}
+{"case_id": "route-kw-overview", "category": "keyword", "question": "最近有什么要处理的", "expected_intent": "task_overview", "needs_model": false}
+{"case_id": "route-kw-calendar", "category": "keyword", "question": "把这个加到日历", "expected_intent": "calendar_action", "needs_model": false}
+{"case_id": "route-kw-nextstep", "category": "keyword", "question": "我下一步该怎么办", "expected_intent": "next_step_recommendation", "needs_model": false}
+{"case_id": "route-kw-policy", "category": "keyword", "question": "这个条款是什么意思", "expected_intent": "policy_question", "needs_model": false}
+{"case_id": "route-kw-greeting", "category": "greeting", "question": "你好", "expected_intent": "general", "needs_model": false}
+{"case_id": "route-kw-thanks", "category": "greeting", "question": "谢谢啦", "expected_intent": "general", "needs_model": false}
+{"case_id": "route-kw-en-overview", "category": "keyword", "question": "what's on my plate", "expected_intent": "task_overview", "needs_model": false}
+{"case_id": "route-kw-followup-other", "category": "followup", "question": "其他的呢", "previous_intent": "task_overview", "expected_intent": "task_overview", "needs_model": false}
+{"case_id": "route-para-overview-1", "category": "paraphrase", "question": "把我手头要紧的事儿都摊开看看", "expected_intent": "task_overview", "needs_model": true}
+{"case_id": "route-para-overview-2", "category": "paraphrase", "question": "我这周得忙活哪些", "expected_intent": "task_overview", "needs_model": true}
+{"case_id": "route-para-amount-1", "category": "paraphrase", "question": "我账上还剩多少没还", "expected_intent": "latest_amount", "needs_model": true}
+{"case_id": "route-para-amount-2", "category": "paraphrase", "question": "我还差人家多少", "expected_intent": "latest_amount", "needs_model": true}
+{"case_id": "route-para-deadline-1", "category": "paraphrase", "question": "提交的最后时限是哪天", "expected_intent": "latest_deadline", "needs_model": true}
+{"case_id": "route-para-calendar-1", "category": "paraphrase", "question": "记一下明天上午的面试", "expected_intent": "calendar_action", "needs_model": true}
+{"case_id": "route-para-nextstep-1", "category": "paraphrase", "question": "那我现在该干点啥", "expected_intent": "next_step_recommendation", "needs_model": true}
+{"case_id": "route-para-policy-1", "category": "paraphrase", "question": "这写的是什么规矩", "expected_intent": "policy_question", "needs_model": true}
+{"case_id": "route-follow-biru", "category": "followup", "question": "比如呢", "previous_intent": "task_overview", "expected_intent": "task_overview", "needs_model": true}
+{"case_id": "route-follow-otherthings", "category": "followup", "question": "其他事都是什么", "previous_intent": "latest_amount", "expected_intent": "task_overview", "needs_model": true}
+{"case_id": "route-follow-showall", "category": "followup", "question": "全都给我看看", "previous_intent": "task_overview", "expected_intent": "task_overview", "needs_model": true}
+{"case_id": "route-search-email-1", "category": "search", "question": "USCIS 那封邮件写了啥", "expected_intent": "general", "expected_general_mode": "search", "needs_model": true}
+{"case_id": "route-search-email-2", "category": "search", "question": "Tripalink 发的那封说了什么", "expected_intent": "general", "expected_general_mode": "search", "needs_model": true}
+{"case_id": "route-smalltalk", "category": "greeting", "question": "随便聊聊呗", "expected_intent": "general", "needs_model": true}

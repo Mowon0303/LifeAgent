@@ -52,6 +52,42 @@ def cmd_model_status(args: argparse.Namespace) -> int:
     return 0
 
 
+def _eval_chat_client(args: argparse.Namespace):
+    """Build a chat client for the LLM-in-the-loop evals, or None (keyword-only)."""
+    if getattr(args, "provider", "local") == "local":
+        return None
+    from ..agent.llm import chat_client_for
+    from ..agent.model import ModelProvider
+
+    return chat_client_for(ModelProvider(provider=args.provider, model=args.model, base_url=args.base_url))
+
+
+def cmd_eval_agent_routing(args: argparse.Namespace) -> int:
+    from ..evals.agent_eval import evaluate_routing, render_routing_summary
+
+    report = evaluate_routing(args.golden, client=_eval_chat_client(args))
+    if args.json:
+        print_json(report.to_dict())
+    else:
+        print(render_routing_summary(report))
+    return 0
+
+
+def cmd_eval_calendar_slots(args: argparse.Namespace) -> int:
+    from ..evals.agent_eval import evaluate_slots, render_slots_summary
+
+    client = _eval_chat_client(args)
+    if client is None:
+        print("calendar-slots eval needs a model — pass --provider ollama")
+        return 2
+    report = evaluate_slots(args.golden, client=client)
+    if args.json:
+        print_json(report.to_dict())
+    else:
+        print(render_slots_summary(report))
+    return 0
+
+
 def cmd_eval_email_extract(args: argparse.Namespace) -> int:
     report = evaluate_golden_path(args.golden)
     if args.report_md:
