@@ -43,27 +43,32 @@ alone only catches the continuation/greeting cases.
 
 **Calendar slots — 12 cases**
 
-| metric | accuracy |
-|---|---|
-| overall (all fields) | 0.75 |
-| **date** | **0.67** |
-| abstention (no-event → propose nothing) | 1.00 |
+| metric | before resolver | after (deterministic relative dates) |
+|---|---|---|
+| overall (all fields) | 0.75 | **1.00** |
+| date | 0.67 | **1.00** |
+| abstention (no-event → propose nothing) | 1.00 | 1.00 |
 
-By category: absolute 2/3, english 1/1, range 1/1, no_event 3/3, relative 2/3,
-**weekday_relative 0/1**.
+Relative dates were the weak spot before (by category: relative 2/3,
+**weekday_relative 0/1**); after the resolver, every category is 1/1. (The model
+path is non-deterministic, so a run may still flake on an *absolute* date — the
+*relative* dates are now deterministic and covered by `tests/test_relative_dates.py`.)
 
-## Finding → motivates the deterministic date resolver
+## Finding → the deterministic date resolver (P1)
 
-Abstention and absolute/range dates are solid; **relative dates are the weak spot.**
-Concretely, "下周三上午十点开组会" (today = Sunday 2026-06-14) was extracted as
-**2026-06-20** — the correct next-Wednesday is **2026-06-17**. The prompt *does*
-include "Today is 2026-06-14", so this isn't a missing-context problem: the model
-has the date and botches the weekday arithmetic. "三天后" was dropped entirely.
+The eval pinned the failure precisely: "下周三上午十点开组会" (today = Sunday
+2026-06-14) came back as **2026-06-20**; the correct next-Wednesday is **2026-06-17**.
+The prompt *does* include "Today is 2026-06-14", so it wasn't missing context — the
+model has the date and botches the weekday arithmetic. "三天后" it dropped entirely
+(returned `{}`).
 
-That's the empirical case for resolving relative dates **deterministically**
-(anchor on today, compute 明天/后天/N天后/下周X in code) rather than asking the model
-to do calendar math — the user still confirms the date on the proposal card, so this
-raises the default-correct rate without changing the trust model.
+Fix (`sentineldesk/relative_dates.py`): resolve relative phrases
+(明天/后天/N天后/下周X/这周X/next Friday/in N days) **deterministically**, anchored on
+today, and hand the model the answer instead of asking it to do calendar math. The
+resolved date overrides the model's guess; when the model still abstains on the
+title, it's salvaged from the question. The user confirms on the card either way, so
+this raises the default-correct rate without touching the trust model. Result: slot
+date-accuracy 0.67 → 1.00.
 
 ## Run it
 

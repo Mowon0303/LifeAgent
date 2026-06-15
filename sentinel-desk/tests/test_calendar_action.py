@@ -3,6 +3,7 @@ from __future__ import annotations
 import unittest
 
 from sentineldesk.agent.graph import answer_question
+from sentineldesk.agent.graph.calendar_action import _extract_slots
 from sentineldesk.agent.llm import ModelCallResult
 from sentineldesk.agent.schemas import Intent
 
@@ -39,8 +40,9 @@ class CalendarActionTests(unittest.TestCase):
 
     def test_unparseable_date_is_not_proposed(self) -> None:
         # The model echoed a relative phrase it couldn't resolve — don't guess a date.
-        client = FakeChat('{"title":"交报告","date":"next Friday","start_time":"","end_time":""}')
-        answer = answer_question("提醒我下周五交报告", chat_client=client)
+        # No resolvable relative phrase, and the model's date is junk -> don't guess.
+        client = FakeChat('{"title":"交报告","date":"sometime soon","start_time":"","end_time":""}')
+        answer = answer_question("提醒我尽快把报告交了", chat_client=client)
         self.assertIsNone((answer.metadata or {}).get("proposed_event"))
 
     def test_no_model_falls_back_to_a_clarify_not_a_crash(self) -> None:
@@ -52,6 +54,22 @@ class CalendarActionTests(unittest.TestCase):
         client = FakeChat('{"title":"x","date":"2026-08-01","start_time":"25:99","end_time":""}')
         answer = answer_question("加个8月1号的x到日历", chat_client=client)
         self.assertEqual(answer.metadata.get("proposed_event")["start_time"], "")
+
+    def test_resolver_overrides_a_wrong_model_date(self) -> None:
+        # The model put a wrong date for "下周三" (6-20); the deterministic resolver
+        # wins (6-17 from Sunday 2026-06-14). Title/time from the model are kept.
+        client = FakeChat('{"title":"组会","date":"2026-06-20","start_time":"10:00","end_time":""}')
+        slots = _extract_slots("下周三上午十点开组会", client=client, today="2026-06-14")
+        self.assertEqual(slots["date"], "2026-06-17")
+        self.assertEqual(slots["title"], "组会")
+        self.assertEqual(slots["start_time"], "10:00")
+
+    def test_title_is_salvaged_when_model_abstains_on_a_relative_request(self) -> None:
+        # qwen returns "{}" for "三天后和导师开会"; we have the resolved date, so derive
+        # the title from the question instead of dropping the whole request.
+        slots = _extract_slots("三天后和导师开会", client=FakeChat("{}"), today="2026-06-14")
+        self.assertEqual(slots["date"], "2026-06-17")
+        self.assertIn("导师", slots["title"])
 
 
 if __name__ == "__main__":

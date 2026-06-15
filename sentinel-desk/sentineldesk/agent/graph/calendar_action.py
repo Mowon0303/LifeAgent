@@ -15,6 +15,7 @@ import urllib.error
 from typing import Any
 
 from sentineldesk.calendar.view import parse_deadline_date
+from sentineldesk.relative_dates import resolve_relative_date
 
 from ..schemas import AgentAnswer, Intent
 
@@ -65,17 +66,29 @@ def _extract_slots(question: str, *, client: Any, today: str) -> dict | None:
     call fails, or the proposal has no usable title + parseable date."""
     if client is None:
         return None
+    # Resolve any relative date deterministically — the model has "today" in the
+    # prompt but botches weekday math, so we do it and hand it the answer.
+    resolved = resolve_relative_date(question, today)
+    system = _slot_system(today)
+    if resolved:
+        system += '\nThe event date has been resolved to ' + resolved + '; use exactly that as "date".'
     try:
-        result = client.chat(system=_slot_system(today), user=question.strip())
+        result = client.chat(system=system, user=question.strip())
     except (urllib.error.URLError, OSError, ValueError, KeyError, AttributeError):
         return None
     data = _parse_json_object(str(getattr(result, "text", "") or ""))
     if not isinstance(data, dict):
         return None
     title = str(data.get("title") or "").strip()
-    # Validate the date with the SAME parser the create endpoint uses, so a proposal
-    # we accept here can't be rejected at write time.
-    date = parse_deadline_date(str(data.get("date") or "").strip())
+    # A resolved relative date is authoritative (overrides the model's guess);
+    # otherwise validate the model's absolute date with the SAME parser the create
+    # endpoint uses, so a proposal we accept here can't be rejected at write time.
+    date = resolved or parse_deadline_date(str(data.get("date") or "").strip())
+    if not title and date:
+        # The model sometimes abstains on the title even when we've handed it the date
+        # (qwen returns "{}"). We have a valid date, so salvage a title deterministically
+        # rather than drop the whole request; the user still confirms it on the card.
+        title = _title_from_question(question)
     if not title or not date:
         return None
     return {
@@ -101,3 +114,27 @@ def _parse_json_object(text: str) -> dict | None:
 def _valid_hm(value: str) -> str:
     value = value.strip()
     return value if _HM_RE.match(value) else ""
+
+
+# Tokens to peel off a request to recover the core event title when the model
+# abstained — relative-date phrases, time expressions, and lead-in fillers.
+_TITLE_STRIP = [
+    r"大后天|后天|明天|今天|明儿|今儿",
+    r"下(?:个)?(?:周|星期|礼拜)[一二三四五六日天七]",
+    r"(?:这|本)(?:周|星期|礼拜)[一二三四五六日天七]",
+    r"(?:周|星期|礼拜)[一二三四五六日天七]",
+    r"过\s*(?:\d+|[一二两三四五六七八九十]+)\s*天",
+    r"(?:\d+|[一二两三四五六七八九十]+)\s*天\s*(?:之?后|後)?",
+    r"\d{1,2}[:：]\d{2}",
+    r"上午|下午|早上|晚上|中午|凌晨",
+    r"[一二三四五六七八九十两\d]+\s*点(?:半|[一二三四五六七八九十\d]+分?)?",
+    r"提醒我|提醒|帮我|记一下|记下|添加到日历|加到日历|加入日历|加日历|到日历|日历|安排|预约",
+]
+
+
+def _title_from_question(question: str) -> str:
+    text = question
+    for pattern in _TITLE_STRIP:
+        text = re.sub(pattern, "", text)
+    text = re.sub(r"\s+", "", text)
+    return text.strip("，。、,.:：；;的和把给与跟为 　")[:120]
