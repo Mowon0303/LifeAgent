@@ -10,3 +10,5 @@
 {"case_id": "slot-noevent-look", "category": "no_event", "question": "帮我看看日历", "today": "2026-06-14", "expected": null}
 {"case_id": "slot-noevent-vague", "category": "no_event", "question": "帮我加个日历", "today": "2026-06-14", "expected": null}
 {"case_id": "slot-no-date", "category": "no_event", "question": "提醒我交报告", "today": "2026-06-14", "expected": null}
+{"case_id": "slot-pm-evening", "category": "marked_time", "question": "7月5号晚上8点和朋友聚餐", "today": "2026-06-14", "expected": {"date": "2026-07-05", "start_time": "20:00", "title_contains": "聚餐"}}
+{"case_id": "slot-pm-afternoon", "category": "marked_time", "question": "8月10号下午4点半牙医复诊", "today": "2026-06-14", "expected": {"date": "2026-08-10", "start_time": "16:30", "title_contains": "牙医"}}

@@ -101,6 +101,12 @@ class CalendarActionTests(unittest.TestCase):
         self.assertEqual(slots["date"], "2026-06-17")
         self.assertIn("导师", slots["title"])
 
+    def test_marked_time_overrides_the_models_wrong_time(self) -> None:
+        # The model gave 08:00 for "晚上8点"; the deterministic resolver wins (20:00).
+        client = FakeChat('{"title":"开会","date":"2026-06-20","start_time":"08:00","end_time":""}')
+        slots = _extract_slots("晚上8点开会", client=client, today="2026-06-14")
+        self.assertEqual(slots["start_time"], "20:00")
+
 
 class CalendarEditDeleteTests(unittest.TestCase):
     def test_classify_create_edit_delete(self) -> None:
@@ -135,6 +141,14 @@ class CalendarEditDeleteTests(unittest.TestCase):
             today="2026-06-14", events=EVENTS,
         )
         self.assertEqual(answer.metadata["proposed_change"]["changes"]["date"], "2026-06-17")
+
+    def test_edit_marked_time_is_resolved_deterministically(self) -> None:
+        # "下午4点" — the model said 14:00, the resolver overrides to 16:00.
+        answer = _calendar_action_answer(
+            "把牙医改到下午4点", client=FakeChat('{"targets":[1],"changes":{"start_time":"14:00"}}'),
+            today="2026-06-14", events=EVENTS,
+        )
+        self.assertEqual(answer.metadata["proposed_change"]["changes"]["start_time"], "16:00")
 
     def test_top3_candidates_surface_for_the_not_that_one_fallback(self) -> None:
         answer = _calendar_action_answer(

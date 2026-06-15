@@ -70,6 +70,12 @@ title, it's salvaged from the question. The user confirms on the card either way
 this raises the default-correct rate without touching the trust model. Result: slot
 date-accuracy 0.67 → 1.00.
 
+**Times have the same problem and the same fix.** The model botched AM/PM the same
+way — "下午4点" came back as 14:00 (should be 16:00) — so `sentineldesk/relative_times.py`
+resolves marked clock times (上午/下午/晚上 X点 / X点半 / 4pm) deterministically and
+overrides the model's time, in both create and edit. Two `marked_time` golden cases
+cover it; the resolver itself is exhaustively unit-tested in `tests/test_relative_times.py`.
+
 ## Run it
 
 ```sh

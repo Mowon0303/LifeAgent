@@ -19,6 +19,7 @@ from typing import Any
 
 from sentineldesk.calendar.view import parse_deadline_date
 from sentineldesk.relative_dates import resolve_relative_date
+from sentineldesk.relative_times import resolve_clock_time
 
 from ..schemas import AgentAnswer, Intent
 
@@ -359,7 +360,7 @@ def _normalize_changes(question: str, changes: dict, today: str) -> dict:
     date = resolved or parse_deadline_date(str(changes.get("date") or "").strip())
     if date:
         out["date"] = date
-    start = _valid_hm(str(changes.get("start_time") or ""))
+    start = resolve_clock_time(question) or _valid_hm(str(changes.get("start_time") or ""))
     if start:
         out["start_time"] = start
     end = _valid_hm(str(changes.get("end_time") or ""))
@@ -452,7 +453,9 @@ def _extract_slots(question: str, *, client: Any, today: str) -> dict | None:
     return {
         "title": title[:120],
         "date": date,
-        "start_time": _valid_hm(str(data.get("start_time") or "")),
+        # A marked time ("下午4点") is resolved deterministically and overrides the
+        # model's guess — same reasoning as the date; the model botches AM/PM.
+        "start_time": resolve_clock_time(question) or _valid_hm(str(data.get("start_time") or "")),
         "end_time": _valid_hm(str(data.get("end_time") or "")),
     }
 
