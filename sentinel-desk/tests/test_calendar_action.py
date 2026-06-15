@@ -191,6 +191,68 @@ class CalendarFromEmailTests(unittest.TestCase):
         self.assertIsNone((answer.metadata or {}).get("proposed_event"))
         self.assertIn("没找到明确的截止", answer.answer)
 
+    def test_single_match_does_not_offer_a_picker(self) -> None:
+        # One viable email -> propose it, but no candidates list (nothing to pick between).
+        msg = _email("m1", "USCIS Case Update", "Please submit your documents by 07/01/2026 — this deadline is firm.")
+        registry = FakeRegistry([{"source_id": msg.source_id, "metadata": {"subject": "USCIS Case Update"}, "text": msg.body_text}])
+        answer = _calendar_action_answer(
+            "把 USCIS 那封的截止加日历", client=None, today="2026-06-14",
+            events=[], registry=registry, messages=[msg],
+        )
+        self.assertIsNone(answer.metadata["proposed_event"].get("candidates"))
+
+    def test_ambiguous_reference_surfaces_a_disambiguation_picker(self) -> None:
+        # "那封 Tripalink" is ambiguous: one email TITLED Tripalink (subject match, ×2),
+        # one FROM Tripalink (sender match, ×1). Both have a deadline, so both are viable —
+        # surface the alternatives instead of silently picking the top score.
+        titled = EmailMessage(
+            message_id="t1", thread_id="th1", sender="leasing@tripalink.com",
+            subject="Tripalink 租约续签", received_at="2026-06-01T00:00:00Z",
+            body_text="Please sign your lease renewal by 07/10/2026 — this deadline is firm.",
+        )
+        from_pm = EmailMessage(
+            message_id="t2", thread_id="th2", sender="billing@tripalink.com",
+            subject="月度账单提醒", received_at="2026-06-02T00:00:00Z",
+            body_text="Your rent payment is due by 07/05/2026 — this deadline is firm.",
+        )
+        answer = _calendar_action_answer(
+            "把 Tripalink 那封的截止加日历", client=None, today="2026-06-14",
+            events=[], registry=FakeRegistry([]), messages=[titled, from_pm],
+        )
+        self.assertTrue(answer.requires_confirmation)  # red line: nothing written until confirm
+        event = answer.metadata["proposed_event"]
+        # Top-1 is the subject match (the email TITLED Tripalink), with its own deadline.
+        self.assertEqual(event["date"], "2026-07-10")
+        self.assertIn("Tripalink", event["title"])
+        candidates = event["candidates"]
+        self.assertEqual(len(candidates), 2)
+        self.assertIn("Tripalink", candidates[0]["subject"])           # subject match ranks first
+        # The sender match is offered as a real alternative, carrying its own date + source.
+        self.assertEqual(candidates[1]["source_email"], from_pm.source_id)
+        self.assertEqual(candidates[1]["date"], "2026-07-05")
+        self.assertTrue(all(c["date"] and c["source_email"] for c in candidates))
+
+    def test_only_deadline_bearing_emails_are_offered_as_candidates(self) -> None:
+        # A second email matches by sender but has no deadline — it can't become an event,
+        # so it must not appear in the picker even though it matched the reference.
+        titled = EmailMessage(
+            message_id="t1", thread_id="th1", sender="leasing@tripalink.com",
+            subject="Tripalink 租约续签", received_at="2026-06-01T00:00:00Z",
+            body_text="Please sign your lease renewal by 07/10/2026 — this deadline is firm.",
+        )
+        no_deadline = EmailMessage(
+            message_id="t2", thread_id="th2", sender="news@tripalink.com",
+            subject="Tripalink 社区周报", received_at="2026-06-02T00:00:00Z",
+            body_text="Thanks for being part of the Tripalink community this month.",
+        )
+        answer = _calendar_action_answer(
+            "把 Tripalink 那封的截止加日历", client=None, today="2026-06-14",
+            events=[], registry=FakeRegistry([]), messages=[titled, no_deadline],
+        )
+        # Only the deadline-bearing email is viable -> a lone candidate, so no picker.
+        self.assertIsNone(answer.metadata["proposed_event"].get("candidates"))
+        self.assertEqual(answer.metadata["proposed_event"]["date"], "2026-07-10")
+
 
 if __name__ == "__main__":
     unittest.main()

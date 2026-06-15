@@ -109,15 +109,22 @@ _QUERY_STRIP = re.compile(
 def _email_event_answer(question: str, *, registry: Any, messages: list, today: str) -> AgentAnswer:
     """Find the email the user referenced, pull its deadline, and propose a calendar
     event from it. Fully deterministic given the email — the date is the email's, not a
-    model guess. Reuses the create confirm card."""
-    message, subject, source_id, deadline = _resolve_email_reference(
+    model guess. Reuses the create confirm card.
+
+    "那封 Tripalink" is genuinely ambiguous — the email *titled* Tripalink, or one *from*
+    Tripalink — so when several emails match, we carry the alternatives and let the card
+    offer a "不是这个" picker instead of silently guessing."""
+    message, subject, source_id, deadline, candidates = _resolve_email_reference(
         question, registry=registry, messages=messages, today=today
     )
     if message is None and not subject:
         return _calendar_reply("没找到相关邮件。你指哪封？说个关键词（发件人或主题），比如「USCIS」。")
     if not deadline:
         return _calendar_reply("「" + (subject or "那封邮件") + "」里我没找到明确的截止日期。你想手动给个日期吗？")
-    slots = {"title": _clean_subject(subject) or "邮件事项", "date": deadline, "start_time": "", "end_time": ""}
+    slots: dict[str, Any] = {"title": _clean_subject(subject) or "邮件事项", "date": deadline, "start_time": "", "end_time": ""}
+    # Only offer the picker when there's a real choice to make — a lone match needs none.
+    if len(candidates) > 1:
+        slots["candidates"] = candidates
     return AgentAnswer(
         intent=Intent.CALENDAR_ACTION,
         answer="要把「" + (subject or "那封邮件") + "」的截止 " + deadline + " 加到日历吗？（确认后才写）",
@@ -129,14 +136,19 @@ def _email_event_answer(question: str, *, registry: Any, messages: list, today: 
 
 
 def _resolve_email_reference(question: str, *, registry: Any, messages: list, today: str):
-    """Return (message, subject, source_id, deadline) for the referenced email.
+    """Return (message, subject, source_id, deadline, candidates) for the referenced email.
 
     A named reference ("Tripalink", "USCIS") matches the subject/sender deterministically
     — far more reliable than semantic RAG, which ranks bare keywords poorly. RAG is the
-    fallback when nothing matches by name."""
+    fallback when nothing matches by name.
+
+    ``candidates`` is the ranked (best-first) list of *deadline-bearing* name-matches as
+    picker briefs. An email without a deadline can't become a calendar event, so it's not
+    a viable alternative; the top-1 we propose is always the highest-scored one that does
+    have a date."""
     query = _email_search_query(question)
     tokens = [token.lower() for token in re.split(r"[\s，,、]+", query) if len(token) >= 2]
-    best: tuple | None = None  # (score, has_deadline, message, deadline)
+    matches: list[tuple] = []  # (score, has_deadline, message, deadline)
     for message in messages:
         subject = str(getattr(message, "subject", "") or "").lower()
         sender = str(getattr(message, "sender", "") or "").lower()
@@ -148,26 +160,64 @@ def _resolve_email_reference(question: str, *, registry: Any, messages: list, to
         # A subject match is a stronger reference than a sender-only match ("the
         # Tripalink one" means the email titled Tripalink, not every email from them).
         score = subject_hits * 2 + sender_hits
-        candidate = (score, 1 if deadline else 0, message, deadline)
-        if best is None or candidate[:2] > best[:2]:
-            best = candidate
-    if best is not None:
-        message = best[2]
-        return message, str(getattr(message, "subject", "") or ""), str(getattr(message, "source_id", "") or ""), best[3]
+        matches.append((score, 1 if deadline else 0, message, deadline))
+    if matches:
+        # Rank best-first; the sort is stable, so equal scores keep their listed order.
+        matches.sort(key=lambda match: match[:2], reverse=True)
+        viable = [match for match in matches if match[3]]
+        if viable:
+            top = viable[0][2]
+            candidates = [_email_brief(match[2], match[3]) for match in viable][:_MAX_EMAIL_CANDIDATES]
+            return top, _subject_of(top), _source_of(top), viable[0][3], candidates
+        # Matched by name, but nothing has a usable deadline — surface the best match so
+        # the "no deadline" reply can name it, with no alternatives to pick from.
+        top = matches[0][2]
+        return top, _subject_of(top), _source_of(top), "", []
 
     document = _top_email_match(query, registry)
     if document is None:
-        return None, "", "", ""
+        return None, "", "", "", []
     source_id = str(document.get("source_id") or "")
     metadata = document.get("metadata") if isinstance(document.get("metadata"), dict) else {}
     message = next((m for m in messages if str(getattr(m, "source_id", "") or "") == source_id), None)
-    subject = str(metadata.get("subject") or document.get("title") or (getattr(message, "subject", "") if message else ""))
+    subject = str(metadata.get("subject") or document.get("title") or (getattr(message, "subject", "") if message else "")).strip()
     deadline = (
         _nearest_deadline(message, today)
         if message is not None
         else _deadline_from_text(str(document.get("text") or ""), today)
     )
-    return message, subject.strip(), source_id, deadline
+    # RAG returns a single top doc, so there's never more than one alternative here.
+    return message, subject, source_id, deadline, []
+
+
+_MAX_EMAIL_CANDIDATES = 5
+
+
+def _email_brief(message: Any, deadline: str) -> dict:
+    """A picker-ready summary of a matched email — enough to tell a subject match from a
+    sender match ("titled Tripalink" vs "from Tripalink") and to re-fill the create card."""
+    subject = _subject_of(message)
+    return {
+        "title": _clean_subject(subject) or "邮件事项",
+        "date": deadline,
+        "start_time": "",
+        "end_time": "",
+        "subject": subject,
+        "sender": _sender_of(message),
+        "source_email": _source_of(message),
+    }
+
+
+def _subject_of(message: Any) -> str:
+    return str(getattr(message, "subject", "") or "")
+
+
+def _sender_of(message: Any) -> str:
+    return str(getattr(message, "sender", "") or "")
+
+
+def _source_of(message: Any) -> str:
+    return str(getattr(message, "source_id", "") or "")
 
 
 def _email_search_query(question: str) -> str:
