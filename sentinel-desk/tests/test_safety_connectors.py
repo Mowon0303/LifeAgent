@@ -22,7 +22,7 @@ from sentineldesk.email.connectors import ConnectorUnavailable, EmailSyncRequest
 from sentineldesk.email.ingest import ingest_messages
 from sentineldesk.retention import plan_purge, purge
 
-from tests.dates import iso, timestamp, us
+from tests.dates import iso, long_form, timestamp, us
 
 
 class SafetyConnectorTests(unittest.TestCase):
@@ -233,8 +233,13 @@ class SafetyConnectorTests(unittest.TestCase):
     def test_retention_purge_is_preview_first_and_confirmation_gated(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             paths = get_paths(Path(tmp) / "home")
+            # "Old" is relative to the pinned day. Seeding at a fixed 2026 date
+            # makes these rows *newer* than the purge audit event whenever the
+            # clock is behind it, which flips the ordering assertion at the end.
+            old_ts = timestamp(-400, time_of_day="00:00:00")
+            cutoff = iso(-30)
             message = LocalJsonEmailConnector(_write_email_json(Path(tmp))).search(EmailSyncRequest()).messages[0]
-            ingest_messages(paths, [message], ingested_at="2026-01-01T00:00:00Z")
+            ingest_messages(paths, [message], ingested_at=old_ts)
             db.insert_approval_record(
                 paths,
                 confirmation_id="old-approval",
@@ -246,20 +251,20 @@ class SafetyConnectorTests(unittest.TestCase):
                 status="confirmed",
                 evidence_refs=["email:m-old"],
                 metadata={"event_ids": ["deadline-old"]},
-                created_at="2026-01-01T00:00:00Z",
-                consumed_at="2026-01-01T00:00:00Z",
+                created_at=old_ts,
+                consumed_at=old_ts,
             )
 
-            preview = plan_purge(paths, before="2026-02-01", sources=("email", "calendar", "approvals"))
+            preview = plan_purge(paths, before=cutoff, sources=("email", "calendar", "approvals"))
             self.assertTrue(preview.dry_run)
             self.assertEqual(preview.counts, {"email": 1, "calendar": 1, "approvals": 1})
             self.assertTrue(db.list_email_messages(paths))
             self.assertTrue(db.list_approval_records(paths))
 
             with self.assertRaises(PermissionError):
-                purge(paths, before="2026-02-01", sources=("email", "calendar", "approvals"), confirmed=False)
+                purge(paths, before=cutoff, sources=("email", "calendar", "approvals"), confirmed=False)
 
-            result = purge(paths, before="2026-02-01", sources=("email", "calendar", "approvals"), confirmed=True)
+            result = purge(paths, before=cutoff, sources=("email", "calendar", "approvals"), confirmed=True)
             self.assertTrue(result.deleted)
             self.assertEqual(db.list_email_messages(paths), [])
             self.assertEqual(db.list_calendar_drafts(paths), [])
@@ -296,8 +301,8 @@ def _write_email_json(root: Path) -> Path:
                     "thread_id": "t-old",
                     "sender": "leasing@example.com",
                     "subject": "Old Notice",
-                    "received_at": "2026-01-01",
-                    "body": "Submit notice by January 15, 2026.",
+                    "received_at": iso(-400),
+                    "body": f"Submit notice by {long_form(-380)}.",
                 }
             ]
         ),

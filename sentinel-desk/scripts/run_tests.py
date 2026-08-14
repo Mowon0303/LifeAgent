@@ -27,6 +27,8 @@ ROOT = Path(__file__).resolve().parents[1]
 # A floor, not an exact count: it only has to be high enough that a collapsed or
 # half-collected suite trips it. Raise it when the suite grows substantially.
 DEFAULT_MIN_TESTS = 400
+MAX_SUMMARY_CASES = 20
+MAX_SUMMARY_TRACEBACK_CHARS = 3000
 
 
 def _failed_imports(suite: unittest.TestSuite) -> list[str]:
@@ -43,6 +45,52 @@ def _flatten(suite: unittest.TestSuite):
             yield from _flatten(item)
         else:
             yield item
+
+
+def _write_step_summary(result: unittest.TestResult, *, broken: list[str], today: str) -> None:
+    """Publish the outcome to the GitHub job summary.
+
+    Actions logs need `actions:read` to fetch even on a public repository, but the
+    job summary is exposed through the check-run output, which anyone can read. A
+    failure that only exists in the log is a failure nobody outside the repo can
+    diagnose, so the counts and the actual tracebacks go here too.
+    """
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if not summary_path:
+        return
+
+    status = "passed" if result.wasSuccessful() and not broken else "FAILED"
+    lines = [
+        f"### Unit tests: {status}",
+        "",
+        f"- platform: `{sys.platform}`, python `{sys.version.split()[0]}`",
+        f"- product clock (today): `{today}`",
+        f"- tests run: **{result.testsRun}**, failures: **{len(result.failures)}**, "
+        f"errors: **{len(result.errors)}**, skipped: {len(result.skipped)}",
+        "",
+    ]
+    if broken:
+        lines += ["**Test modules that failed to import:**", ""]
+        lines += [f"- `{name}`" for name in broken] + [""]
+
+    problems = [("FAIL", case, tb) for case, tb in result.failures]
+    problems += [("ERROR", case, tb) for case, tb in result.errors]
+    for kind, case, traceback_text in problems[:MAX_SUMMARY_CASES]:
+        lines += [
+            f"<details><summary>{kind}: {case.id()}</summary>",
+            "",
+            "```",
+            traceback_text.strip()[:MAX_SUMMARY_TRACEBACK_CHARS],
+            "```",
+            "",
+            "</details>",
+            "",
+        ]
+    if len(problems) > MAX_SUMMARY_CASES:
+        lines.append(f"_...and {len(problems) - MAX_SUMMARY_CASES} more; see the full log._")
+
+    with open(summary_path, "a", encoding="utf-8") as handle:
+        handle.write("\n".join(lines) + "\n")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -81,6 +129,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"skipped:        {len(result.skipped)}")
     print(f"expected fails: {len(result.expectedFailures)}")
     print(f"product clock:  {clock.today_iso()}")
+
+    _write_step_summary(result, broken=broken, today=clock.today_iso())
 
     if broken:
         return 1
