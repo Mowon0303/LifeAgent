@@ -56,7 +56,7 @@ The older ops-heavy recording helper remains archived as optional tooling, but i
 
 ```bash
 cd sentinel-desk
-python3 -B -m sentineldesk --home .demo daily run --email-json fixtures/ui/sample_emails.json
+python3 -B -m sentineldesk --home .demo daily run --email-json fixtures/ui/sample_emails.json --fixture-dates
 ```
 
 Expected result: JSON with `mode: "daily_landing"`, a task review queue, local calendar drafts, safe next actions, and `external_writes_performed: false`.
@@ -165,7 +165,7 @@ python3 -m sentineldesk evidence RUN_ID --report
 python3 -m sentineldesk evidence RUN_ID --package
 python3 -m sentineldesk plan status
 python3 -m sentineldesk plan status --json
-python3 -m sentineldesk daily run --email-json fixtures/ui/sample_emails.json
+python3 -m sentineldesk daily run --email-json fixtures/ui/sample_emails.json --fixture-dates
 python3 -m sentineldesk daily run --sync-gmail --account user@example.com
 python3 -m sentineldesk privacy audit --path .demo/artifacts --require-clean
 python3 -m sentineldesk privacy release-audit --path . --require-clean
@@ -217,7 +217,7 @@ The dashboard exposes the same privacy-safe package through `/api/package/<run_i
 
 For the interview-ready diagram and talking points, see `docs/ARCHITECTURE.md`. For the public sharing boundary, see `docs/PRIVACY_AUDIT.md`.
 
-For real Gmail/Calendar handoff, `python3 -m sentineldesk --home .demo integrations handoff --account user@example.com --output .demo/live-verification-handoff.md` writes the human checklist, and `bash scripts/live_verification_preflight.sh` runs the redacted live-readiness checks, package export, completion audit, redacted-output privacy audit, and final clean source release-package audit. Gmail sync, Google OAuth token flow, local verification draft seeding, and external calendar writes stay disabled unless explicitly enabled through `SENTINEL_LIVE_*` environment variables.
+For real Gmail/Calendar handoff, `python3 -m sentineldesk --home .demo integrations handoff --account user@example.com --output .demo/live-verification-handoff.md` writes the human checklist, and `python3 -B -m sentineldesk integrations preflight` (wrapped by `scripts/live_verification_preflight.sh` / `.ps1`; no Bash needed on Windows) runs the redacted live-readiness checks, package export, completion audit, redacted-output privacy audit, and final clean source release-package audit. Gmail sync, Google OAuth token flow, local verification draft seeding, and external calendar writes stay disabled unless explicitly enabled through `SENTINEL_LIVE_*` environment variables.
 
 ```text
 target URL
@@ -244,7 +244,10 @@ The current implementation is standard-library first so it runs without network 
 
 ```bash
 cd sentinel-desk
-python3 -m unittest discover -s tests -v
+python3 -B scripts/run_tests.py
+
+# Prove the suite does not depend on the day it runs
+python3 -B scripts/run_tests.py --now 2027-03-02
 
 # Golden-set evals (email extraction is deterministic; the agent paths add a
 # CI-safe keyword-router gate plus live-model accuracy with --provider ollama)
@@ -254,7 +257,29 @@ python3 -m sentineldesk eval agent-routing  --provider ollama
 python3 -m sentineldesk eval calendar-slots --provider ollama
 ```
 
-The tests cover extraction, session health, fail-loud classification, CLI/database setup, Chrome launcher safety, deterministic Chrome CDP target routing, CDP screenshot artifacts, scenario transitions, lease/rent vertical behavior, dashboard smoke routes, evidence bundles, local calendar draft editing, conversational calendar create/edit/delete with deterministic date/time/reference resolvers, evidence-backed `ask` answers, RAG-backed policy answers, redacted reports, redacted share packages, redacted-output privacy audit, project-tree release audit, clean source release packaging, dashboard package downloads, plan-tracker replies, and PII/path redaction.
+On Windows (PowerShell), the same commands with `.\.agent-venv\Scripts\python.exe` in
+place of `python3`. `scripts/run_tests.py` prints the final test count and the product
+clock it ran under, and fails if a test module did not import — `unittest discover` exits
+`0` in that case, which is how a shrinking suite goes unnoticed.
+
+The tests cover extraction, session health, fail-loud classification, CLI/database setup, Chrome launcher safety on all three platforms' default-profile layouts, deterministic Chrome CDP target routing, CDP screenshot artifacts, scenario transitions, lease/rent vertical behavior, dashboard smoke routes, evidence bundles, local calendar draft editing, conversational calendar create/edit/delete with deterministic date/time/reference resolvers, evidence-backed `ask` answers, RAG-backed policy answers, redacted reports, redacted share packages, redacted-output privacy audit, project-tree release audit, clean source release packaging, dashboard package downloads, plan-tracker replies, PII/path redaction including Windows drive and UNC paths, owner-only OAuth token writes with fail-closed behavior, and date-boundary behavior (yesterday/today/tomorrow, year boundaries, leap day, dateless deadlines) under pinned clocks.
+
+### Imported mail is never rewritten
+
+Loading a local JSON export is verbatim. The `{{today±N}}` tokens that keep the
+*synthetic* fixtures from expiring are opt-in per call — `--fixture-dates` on the CLI,
+`load_fixture_email_json()` in code — because a real message containing that literal
+text has to still contain it after import. Nothing about a file's name, directory, or
+contents can enable the substitution. See [docs/UI_CONTRACT.md](docs/UI_CONTRACT.md#relative-dates-in-sample_emailsjson).
+
+### Dates in tests
+
+No test may hard-code a calendar date that has to stay in the future. `tests/dates.py`
+provides `iso(+n)` / `us(+n)` / `long_form(+n)` for relative dates, `pinned(day)` to freeze
+the product clock, and `each_baseline()` to re-run a date-sensitive scenario at several
+pinned days — including one before and one after the dates this suite originally used.
+Production code reads "now" from `sentineldesk.clock`, which honours the `SENTINELDESK_NOW`
+environment variable so a whole CLI or subprocess run can be pinned too.
 
 ## Privacy Boundary
 

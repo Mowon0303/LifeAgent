@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from .. import db
@@ -14,9 +15,11 @@ from ..gmail_readiness import build_gmail_readiness
 from ..gmail_sync_diagnostics import build_gmail_sync_diagnostics
 from ..integrations.google_oauth import normalize_google_scopes, write_google_oauth_token
 from ..integrations.live_verification import (
+    PreflightConfig,
     build_completion_audit,
     build_env_template,
     format_handoff_checklist,
+    run_preflight,
     run_verification,
 )
 from ..reports import integration_package_path_for, write_integration_verification_package
@@ -226,6 +229,18 @@ def cmd_integrations_env_template(args: argparse.Namespace) -> int:
         )
     )
     return 0
+
+
+def cmd_integrations_preflight(args: argparse.Namespace) -> int:
+    config = PreflightConfig.from_environment()
+    overrides: dict[str, object] = {}
+    if getattr(args, "account", None):
+        overrides["account"] = args.account
+    if getattr(args, "dry_run", False):
+        overrides["dry_run"] = True
+    if overrides:
+        config = replace(config, **overrides)
+    return run_preflight(config)
 
 
 def cmd_integrations_google_token(args: argparse.Namespace) -> int:

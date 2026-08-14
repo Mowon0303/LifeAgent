@@ -94,10 +94,15 @@ def cmd_eval_email_extract(args: argparse.Namespace) -> int:
         output = Path(args.report_md)
         output.parent.mkdir(parents=True, exist_ok=True)
         output.write_text(render_markdown_report(report), encoding="utf-8")
+    payload = report.to_dict()
     if args.json:
-        print_json(report.to_dict())
+        print_json(payload)
     else:
         print(render_text_summary(report))
         if args.report_md:
             print(f"report: {args.report_md}")
+    failures = payload.get("failures") or []
+    if getattr(args, "require_clean", False) and failures:
+        print(f"eval failed: {len(failures)} of {payload.get('case_count', 0)} golden cases did not match")
+        return 1
     return 0

@@ -7,6 +7,7 @@ from typing import Any
 
 from sentineldesk import db
 from sentineldesk.calendar.draft import draft_events_from_facts
+from sentineldesk.clock import render_date_tokens
 from sentineldesk.config import Paths
 from sentineldesk.extract import utc_now
 
@@ -16,7 +17,27 @@ from .extract import extract_email_facts
 from .models import EmailMessage
 
 
-def load_email_json(path: str | Path) -> list[EmailMessage]:
+# Only these fields of a message are eligible for date-token materialization, and
+# only when the caller explicitly asks for it. Everything else in the file — ids,
+# senders, thread keys, comments — is always carried through verbatim.
+FIXTURE_DATE_TOKEN_FIELDS = ("received_at", "date", "subject", "body_text", "body")
+FIXTURE_DATE_TOKEN_LIST_FIELDS = ("attachment_texts",)
+
+
+def load_email_json(path: str | Path, *, materialize_date_tokens: bool = False) -> list[EmailMessage]:
+    """Load messages from a local JSON export.
+
+    By default this is a **verbatim** loader: whatever the file says is what the
+    message says. Imported mail is evidence, and evidence that the importer
+    quietly rewrites is not evidence — a real message containing the literal text
+    ``{{today+8}}`` must still contain it after loading.
+
+    ``materialize_date_tokens=True`` opts a *synthetic fixture* into the
+    ``{{today±N}}`` substitution described in :mod:`sentineldesk.clock`, so demo
+    and acceptance inboxes stay actionable instead of rotting into a pile of
+    expired deadlines. The choice belongs to the caller: nothing about the file's
+    name, location, or contents can turn it on.
+    """
     source_path = Path(path)
     raw = json.loads(source_path.read_text(encoding="utf-8"))
     raw_messages = raw.get("messages", []) if isinstance(raw, dict) else raw
@@ -24,8 +45,28 @@ def load_email_json(path: str | Path) -> list[EmailMessage]:
     for index, item in enumerate(raw_messages):
         if not isinstance(item, dict):
             continue
+        if materialize_date_tokens:
+            item = _materialize_fixture_dates(item)
         messages.append(_message_from_dict(item, index, base_dir=source_path.parent))
     return messages
+
+
+def load_fixture_email_json(path: str | Path) -> list[EmailMessage]:
+    """Load a synthetic fixture inbox, materializing its ``{{today±N}}`` tokens."""
+    return load_email_json(path, materialize_date_tokens=True)
+
+
+def _materialize_fixture_dates(item: dict[str, Any]) -> dict[str, Any]:
+    resolved = dict(item)
+    for field in FIXTURE_DATE_TOKEN_FIELDS:
+        value = resolved.get(field)
+        if isinstance(value, str):
+            resolved[field] = render_date_tokens(value)
+    for field in FIXTURE_DATE_TOKEN_LIST_FIELDS:
+        value = resolved.get(field)
+        if isinstance(value, list):
+            resolved[field] = [render_date_tokens(entry) if isinstance(entry, str) else entry for entry in value]
+    return resolved
 
 
 def ingest_messages(

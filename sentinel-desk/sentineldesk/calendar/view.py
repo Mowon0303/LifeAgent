@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
+
+from ..clock import today_iso
 
 
 _THREAD_PREFIX = re.compile(r"^\s*(re|fw|fwd|回复|答复|转发)\s*[:：]\s*", re.IGNORECASE)
@@ -48,7 +50,7 @@ def build_calendar_items(
     today: str | None = None,
 ) -> list[dict[str, Any]]:
     approved_event_ids = _approved_event_ids(approvals)
-    today_key = (today or datetime.now(timezone.utc).date().isoformat())[:10]
+    today_key = (today or today_iso())[:10]
     items: list[dict[str, Any]] = []
     for draft in drafts:
         date_key = parse_deadline_date(str(draft.get("date_text") or ""))

@@ -3,12 +3,102 @@ name: CI
 on:
   push:
   pull_request:
+  # Date rot does not need a commit to happen: a fixture that quietly expires
+  # breaks a repository nobody has touched. The schedule is the only thing that
+  # catches that before a user does.
+  schedule:
+    - cron: "17 6 * * *"
+  workflow_dispatch:
+
+# Every step below is a single command with no shell-specific syntax, so the
+# Windows leg needs neither Bash nor a POSIX shell.
+defaults:
+  run:
+    working-directory: sentinel-desk
 
 jobs:
   test:
-    name: Test, eval, and privacy gates
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    name: Tests · ${{ matrix.os }} · Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 is the support floor and the gate. Both platforms run the full
+        # suite: the privacy and filesystem behaviour differs between them, and
+        # that difference is exactly what used to go untested.
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.11"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Show Python version
+        run: python -VV
+
+      - name: Check package metadata
+        run: python -B scripts/check_package_metadata.py
+
+      - name: Run unit tests
+        run: python -B scripts/run_tests.py
+
+      - name: Run privacy regression tests
+        run: python -B -m unittest tests.test_windows_path_redaction tests.test_privacy_audit tests.test_redact tests.test_evidence_package -v
+
+      - name: Run date-boundary regression tests
+        run: python -B -m unittest tests.test_date_boundaries tests.test_past_deadline_hidden tests.test_relative_dates tests.test_relative_deadline -v
+
+      - name: Compile Python modules
+        run: python -m compileall -q sentineldesk tests scripts
+
+      - name: Run email extraction eval
+        run: python -B -m sentineldesk eval email-extract --golden evals/golden --require-clean
+
+      - name: Run first-run acceptance
+        run: python -B -m sentineldesk --home ${{ runner.temp }}/lifeagent-first-run acceptance first-run --port 8787
+
+      - name: Live verification preflight (dry run, no shell required)
+        run: python -B -m sentineldesk integrations preflight --dry-run
+        env:
+          SENTINEL_LIVE_HOME: ${{ runner.temp }}/lifeagent-preflight
+          SENTINEL_LIVE_RUN_RELEASE_PACKAGE: "0"
+
+      - name: Prepare email-first product state
+        run: python -B -m sentineldesk --home ${{ runner.temp }}/lifeagent-demo demo record-prep --port 8787
+
+      - name: Run the synthetic daily workflow
+        run: python -B -m sentineldesk --home ${{ runner.temp }}/lifeagent-demo daily run --email-json fixtures/ui/sample_emails.json --fixture-dates
+
+      - name: Audit redacted demo artifacts
+        run: python -B -m sentineldesk --home ${{ runner.temp }}/lifeagent-demo privacy audit --require-clean
+
+      - name: Build clean source release package
+        run: python -B -m sentineldesk privacy release-package --source . --output ${{ runner.temp }}/sentineldesk.release.zip
+
+      - name: Extract source release package
+        run: python -B -m zipfile -e ${{ runner.temp }}/sentineldesk.release.zip ${{ runner.temp }}/extracted-sentineldesk
+
+      - name: Audit extracted source release package
+        run: python -B -m sentineldesk privacy release-audit --path ${{ runner.temp }}/extracted-sentineldesk --require-clean
+
+  date-rot-guard:
+    # Runs the same suite with the product clock pinned ahead of and behind
+    # today. A fixture or test that only works "this month" fails here now,
+    # rather than in the user's working copy months from now.
+    name: Date-rot guard · ${{ matrix.os }} · today ${{ matrix.offset }}d
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        offset: ["365", "1825", "-365"]
 
     steps:
       - name: Check out repository
@@ -19,53 +109,14 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Show Python version
-        run: python -VV
+      - name: Resolve the pinned day
+        id: day
+        run: python -B scripts/shifted_date.py ${{ matrix.offset }}
 
-      - name: Check package metadata
-        working-directory: sentinel-desk
-        run: |
-          python - <<'PY'
-          import tomllib
-          with open("pyproject.toml", "rb") as fh:
-              project = tomllib.load(fh)["project"]
-          assert project["name"] == "sentineldesk"
-          assert "email-first" in project["description"].lower()
-          PY
+      - name: Run unit tests at ${{ steps.day.outputs.day }}
+        run: python -B scripts/run_tests.py --now ${{ steps.day.outputs.day }}
 
-      - name: Run unit tests
-        working-directory: sentinel-desk
-        run: python -B -m unittest discover -s tests -q
-
-      - name: Compile Python modules
-        working-directory: sentinel-desk
-        run: python -m compileall -q sentineldesk tests
-
-      - name: Run email extraction eval
-        working-directory: sentinel-desk
-        run: python -B -m sentineldesk eval email-extract --golden evals/golden --json > /tmp/lifeagent-email-eval.json
-
-      - name: Run first-run acceptance
-        working-directory: sentinel-desk
-        run: python -B -m sentineldesk --home /tmp/lifeagent-ci-first-run acceptance first-run --port 8787 > /tmp/lifeagent-first-run.json
-
-      - name: Prepare email-first product state
-        working-directory: sentinel-desk
-        run: |
-          python -B -m sentineldesk --home /tmp/lifeagent-ci-demo demo record-prep --port 8787
-          python -B -m sentineldesk --home /tmp/lifeagent-ci-demo daily run --email-json fixtures/ui/sample_emails.json > /tmp/lifeagent-daily.json
-
-      - name: Audit redacted demo artifacts
-        working-directory: sentinel-desk
-        run: python -B -m sentineldesk --home /tmp/lifeagent-ci-demo privacy audit --require-clean
-
-      - name: Build clean source release package
-        working-directory: sentinel-desk
-        run: python -B -m sentineldesk privacy release-package --source . --output /tmp/sentineldesk.release.zip
-
-      - name: Audit extracted source release package
-        working-directory: sentinel-desk
-        run: |
-          rm -rf /tmp/extracted-sentineldesk
-          python -B -m zipfile -e /tmp/sentineldesk.release.zip /tmp/extracted-sentineldesk
-          python -B -m sentineldesk privacy release-audit --path /tmp/extracted-sentineldesk --require-clean
+      - name: Run first-run acceptance at ${{ steps.day.outputs.day }}
+        run: python -B -m sentineldesk --home ${{ runner.temp }}/lifeagent-first-run acceptance first-run --port 8787
+        env:
+          SENTINELDESK_NOW: ${{ steps.day.outputs.day }}

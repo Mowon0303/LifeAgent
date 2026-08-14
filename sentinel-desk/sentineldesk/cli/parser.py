@@ -9,6 +9,13 @@ from __future__ import annotations
 import argparse
 
 from .. import __version__
+from ..clock import shift_iso
+
+FIXTURE_DATES_HELP = (
+    "Treat the JSON as a synthetic fixture and materialize {{today+N}} date tokens in "
+    "its message fields. Off by default: imported mail is loaded verbatim, because "
+    "rewriting message text would corrupt the evidence. Never use this on real mail."
+)
 from .commands_calendar import cmd_calendar_edit, cmd_calendar_sync
 from .commands_core import (
     cmd_acceptance_first_run,
@@ -50,6 +57,7 @@ from .commands_integrations import (
     cmd_integrations_google_token,
     cmd_integrations_handoff,
     cmd_integrations_package,
+    cmd_integrations_preflight,
     cmd_integrations_reports,
     cmd_integrations_seed_calendar_draft,
 )
@@ -99,6 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
     acceptance_sub = acceptance.add_subparsers(dest="acceptance_command", required=True)
     acceptance_first = acceptance_sub.add_parser("first-run", help="Prepare and verify the local first-run MVP")
     acceptance_first.add_argument("--email-json", help="Synthetic email fixture to use. Defaults to fixtures/ui/sample_emails.json")
+    acceptance_first.add_argument("--fixture-dates", action="store_true", help=FIXTURE_DATES_HELP + " Implied for the built-in fixture.")
     acceptance_first.add_argument("--port", type=int, default=8787, help="Dashboard port to include in the printed serve command")
     acceptance_first.set_defaults(func=cmd_acceptance_first_run)
 
@@ -163,6 +172,7 @@ def build_parser() -> argparse.ArgumentParser:
     daily_sub = daily.add_subparsers(dest="daily_command", required=True)
     daily_run = daily_sub.add_parser("run", help="Refresh optional email evidence and summarize tasks/calendar drafts")
     daily_run.add_argument("--email-json", help="Optional local JSON email export to ingest before building the daily queue")
+    daily_run.add_argument("--fixture-dates", action="store_true", help=FIXTURE_DATES_HELP)
     daily_run.add_argument("--sync-gmail", action="store_true", help="Explicitly refresh Gmail through readonly OAuth before summarizing")
     daily_run.add_argument("--query", help="Optional email/Gmail search query for this refresh")
     daily_run.add_argument("--since", help="Override incremental Gmail cursor/date. Defaults to stored connector cursor.")
@@ -229,6 +239,11 @@ def build_parser() -> argparse.ArgumentParser:
     eval_email.add_argument("--golden", default="evals/golden", help="Golden JSONL file or directory")
     eval_email.add_argument("--report-md", help="Write a Markdown eval report to this path")
     eval_email.add_argument("--json", action="store_true", help="Print the full JSON report")
+    eval_email.add_argument(
+        "--require-clean",
+        action="store_true",
+        help="Exit non-zero if any golden case fails, so CI actually gates on the eval",
+    )
     eval_email.set_defaults(func=cmd_eval_email_extract)
 
     def _add_eval_model_args(parser: Any) -> None:
@@ -253,6 +268,7 @@ def build_parser() -> argparse.ArgumentParser:
     email_scan.add_argument("--json", required=True, help="Local JSON file containing email messages")
     email_scan.add_argument("--query", help="Optional query to filter messages before ingest")
     email_scan.add_argument("--limit", type=int, default=50)
+    email_scan.add_argument("--fixture-dates", action="store_true", help=FIXTURE_DATES_HELP)
     email_scan.set_defaults(func=cmd_email_scan)
     email_sync_gmail = email_sub.add_parser("sync-gmail", help="Sync Gmail through an authenticated Google client")
     email_sync_gmail.add_argument("--query", help="Optional Gmail search query")
@@ -404,7 +420,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="Create a local verification calendar draft for live calendar sync tests",
     )
     integrations_seed_calendar.add_argument("--title", default="Deadline: LifeAgent live calendar verification")
-    integrations_seed_calendar.add_argument("--date", default="2026-07-15")
+    # Relative by default: a fixed date here would silently stop producing a
+    # *pending* draft once real time passed it.
+    integrations_seed_calendar.add_argument("--date", default=shift_iso(30))
     integrations_seed_calendar.add_argument("--source-id", default="live-verification:manual-calendar-draft")
     integrations_seed_calendar.add_argument("--evidence-uri", default="live-verification://manual-calendar-draft")
     integrations_seed_calendar.add_argument("--severity", choices=["low", "medium", "critical"], default="medium")
@@ -418,6 +436,17 @@ def build_parser() -> argparse.ArgumentParser:
     integrations_env.add_argument("--apple-user-env", default="SENTINEL_APPLE_ID")
     integrations_env.add_argument("--apple-password-env", default="SENTINEL_APPLE_APP_PASSWORD")
     integrations_env.set_defaults(func=cmd_integrations_env_template)
+    integrations_preflight = integrations_sub.add_parser(
+        "preflight",
+        help="Run the live verification preflight sequence (no Bash required)",
+    )
+    integrations_preflight.add_argument("--account", help="Override SENTINEL_LIVE_ACCOUNT")
+    integrations_preflight.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Print every step without running it (also enabled by SENTINEL_LIVE_DRY_RUN=1)",
+    )
+    integrations_preflight.set_defaults(func=cmd_integrations_preflight)
     integrations_token = integrations_sub.add_parser("google-token", help="Run local Google OAuth and write token JSON without printing it")
     integrations_token.add_argument("--credentials-env", default="SENTINEL_GOOGLE_CREDENTIALS_JSON")
     integrations_token.add_argument("--token-env", default="SENTINEL_GOOGLE_TOKEN_JSON")

@@ -5,6 +5,7 @@ import json
 import os
 import io
 import stat
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -21,6 +22,7 @@ from sentineldesk.integrations.apple_calendar import AppleCalendarConfig
 from sentineldesk.integrations.google_oauth import GoogleTokenWriteResult, write_google_oauth_token
 from sentineldesk.integrations.google_workspace import GMAIL_READONLY_SCOPE, GoogleOAuthConfig
 from sentineldesk.secrets import env_secret, resolve_secret, secret_status
+from sentineldesk.secure_files import FileProtectionError, describe_protection
 
 
 class AuthenticatedIntegrationTests(unittest.TestCase):
@@ -164,9 +166,46 @@ class AuthenticatedIntegrationTests(unittest.TestCase):
                 raw_result = str(result.to_dict())
                 self.assertNotIn("oauth-secret-token", raw_result)
                 self.assertIn("env:SENTINEL_TEST_GOOGLE_TOKEN:***", raw_result)
-                self.assertEqual(stat.S_IMODE(output_path.stat().st_mode), 0o600)
                 self.assertIn("oauth-secret-token", output_path.read_text(encoding="utf-8"))
-                self.assertIn("$(cat", result.export_hint)
+                # The restriction is real and re-verified from disk, not just claimed.
+                self.assertTrue(result.protection["owner_only"])
+                self.assertTrue(describe_protection(output_path).owner_only)
+                if sys.platform.startswith("win"):
+                    self.assertEqual(result.protection["mechanism"], "windows_acl")
+                    self.assertIn("Get-Content", result.export_hint)
+                else:
+                    self.assertEqual(result.protection["mechanism"], "posix_mode")
+                    self.assertEqual(stat.S_IMODE(output_path.stat().st_mode), 0o600)
+                    self.assertIn("$(cat", result.export_hint)
+        finally:
+            if old is None:
+                os.environ.pop(name, None)
+            else:
+                os.environ[name] = old
+
+    def test_google_oauth_token_write_fails_closed_when_hardening_fails(self) -> None:
+        """A token must never survive on disk if it could not be locked down."""
+        name = "SENTINEL_TEST_GOOGLE_CREDS_FAILCLOSED"
+        old = os.environ.get(name)
+        os.environ[name] = '{"installed":{"client_id":"c","client_secret":"s","redirect_uris":["http://localhost"]}}'
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                output_path = Path(tmp) / "google-token.json"
+                with patch(
+                    "sentineldesk.secure_files.protect_owner_only",
+                    side_effect=FileProtectionError("cannot restrict"),
+                ):
+                    with self.assertRaises(FileProtectionError):
+                        write_google_oauth_token(
+                            credentials_ref=env_secret(name),
+                            output_path=output_path,
+                            token_env="SENTINEL_TEST_GOOGLE_TOKEN",
+                            scopes=(GMAIL_READONLY_SCOPE,),
+                            port=0,
+                            open_browser=False,
+                            flow_factory=FakeInstalledAppFlow,
+                        )
+                self.assertFalse(output_path.exists(), "unprotected token file must be removed")
         finally:
             if old is None:
                 os.environ.pop(name, None)
@@ -178,7 +217,7 @@ class AuthenticatedIntegrationTests(unittest.TestCase):
             token_path = Path(tmp) / "token.json"
             result = GoogleTokenWriteResult(
                 output_path=str(token_path),
-                output_mode="0o600",
+                protection={"mechanism": "posix_mode", "detail": "0o600", "owner_only": True},
                 token_env="SENTINEL_GOOGLE_TOKEN_JSON",
                 token_env_ref="env:SENTINEL_GOOGLE_TOKEN_JSON:***",
                 export_hint=f'export SENTINEL_GOOGLE_TOKEN_JSON="$(cat {token_path})"',

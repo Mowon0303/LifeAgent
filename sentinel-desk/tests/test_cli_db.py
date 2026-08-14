@@ -84,7 +84,10 @@ class CliDbTests(unittest.TestCase):
         self.assertEqual(summary["summary"]["fact_counts"]["deadline"], 3)
         self.assertEqual(summary["summary"]["task_queue_count"], 7)
         self.assertEqual(summary["summary"]["calendar_pending_count"], 3)
-        self.assertIn("2026-07-01", summary["summary"]["calendar_dates"])
+        # Every fixture deadline is still ahead of today, whenever "today" is.
+        calendar_dates = summary["summary"]["calendar_dates"]
+        self.assertEqual(len(calendar_dates), 3)
+        self.assertTrue(all(date >= summary["summary"]["today"] for date in calendar_dates), calendar_dates)
         self.assertEqual(summary["summary"]["gmail_readiness_status"], "needs_oauth")
         self.assertEqual(summary["ask_smoke"]["intent"], "latest_deadline")
         self.assertIn("search_latest_email", summary["ask_smoke"]["tool_calls"])
@@ -101,7 +104,7 @@ class CliDbTests(unittest.TestCase):
     def test_daily_run_ingests_local_email_and_summarizes_landing_queue(self) -> None:
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
-            code = main(["--home", self.home, "daily", "run", "--email-json", str(self.sample_emails)])
+            code = main(["--home", self.home, "daily", "run", "--email-json", str(self.sample_emails), "--fixture-dates"])
         self.assertEqual(code, 0)
         summary = json.loads(output.getvalue())
         self.assertEqual(summary["status"], "ready")
@@ -121,7 +124,7 @@ class CliDbTests(unittest.TestCase):
         self.assertEqual(events[0]["metadata"]["sync_mode"], "local_json")
 
     def test_daily_run_uses_stored_only_state_without_refresh(self) -> None:
-        self.assertEqual(main(["--home", self.home, "email", "scan", "--json", str(self.sample_emails)]), 0)
+        self.assertEqual(main(["--home", self.home, "email", "scan", "--json", str(self.sample_emails), "--fixture-dates"]), 0)
         output = io.StringIO()
         with contextlib.redirect_stdout(output):
             code = main(["--home", self.home, "daily", "run", "--task-limit", "2", "--calendar-limit", "2"])
@@ -270,7 +273,7 @@ class CliDbTests(unittest.TestCase):
 
     def test_daily_summary_embeds_ready_gmail_readiness_without_secret_values(self) -> None:
         paths = get_paths(self.home)
-        self.assertEqual(main(["--home", self.home, "email", "scan", "--json", str(self.sample_emails)]), 0)
+        self.assertEqual(main(["--home", self.home, "email", "scan", "--json", str(self.sample_emails), "--fixture-dates"]), 0)
         db.upsert_connector_state(
             paths,
             connector="gmail_api",

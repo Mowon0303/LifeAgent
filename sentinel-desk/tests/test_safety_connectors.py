@@ -22,6 +22,8 @@ from sentineldesk.email.connectors import ConnectorUnavailable, EmailSyncRequest
 from sentineldesk.email.ingest import ingest_messages
 from sentineldesk.retention import plan_purge, purge
 
+from tests.dates import iso, timestamp, us
+
 
 class SafetyConnectorTests(unittest.TestCase):
     def test_local_json_connector_parses_attachment_paths_and_trust_labels(self) -> None:
@@ -137,8 +139,8 @@ class SafetyConnectorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             paths = get_paths(Path(tmp) / "home")
             # confirm two distinct deadline drafts to local ICS
-            e1 = DeadlineEvent("Deadline: Rent", "2026-07-01", ("email:m1",))
-            e2 = DeadlineEvent("Deadline: Statement", "2026-07-02", ("email:m2",))
+            e1 = DeadlineEvent("Deadline: Rent", iso(+18), ("email:m1",))
+            e2 = DeadlineEvent("Deadline: Statement", iso(+19), ("email:m2",))
             sync_calendar_draft(paths, CalendarDraft((e1,)), IcsFileCalendarAdapter(Path(tmp) / "a.ics"),
                                 confirmed=True, confirmation_id="c1", actor="test")
             sync_calendar_draft(paths, CalendarDraft((e2,)), IcsFileCalendarAdapter(Path(tmp) / "b.ics"),
@@ -170,25 +172,26 @@ class SafetyConnectorTests(unittest.TestCase):
         from sentineldesk.calendar.view import build_calendar_items
         from sentineldesk.email.models import EmailFact
 
-        dated = EmailFact(kind="deadline", value="07/04/2026", source_id="email:m1",
-                          source_type="email", trust_label="email_evidence", evidence="due 07/04/2026",
-                          confidence=0.9, received_at="2026-06-20T00:00:00Z", metadata={"subject": "Pay rent"})
+        due = us(+21)
+        dated = EmailFact(kind="deadline", value=due, source_id="email:m1",
+                          source_type="email", trust_label="email_evidence", evidence=f"due {due}",
+                          confidence=0.9, received_at=timestamp(-3), metadata={"subject": "Pay rent"})
         # Anchored to an external event (the program end date), not the email, so
         # it has no resolvable date and must never become a calendar event. (A
         # from-now phrase like "within 30 days" now resolves at the draft layer —
         # covered in tests/test_relative_deadline.py.)
         relative = EmailFact(kind="deadline", value="within 30 days of the program end date", source_id="email:m2",
                              source_type="email", trust_label="email_evidence", evidence="apply within 30 days of the program end date",
-                             confidence=0.9, received_at="2026-06-20T00:00:00Z", metadata={"subject": "Renew plan"})
+                             confidence=0.9, received_at=timestamp(-3), metadata={"subject": "Renew plan"})
 
         # generation: only the dated deadline becomes a calendar draft
         draft = draft_events_from_facts([dated, relative], evidence_uri="evidence://m")
         self.assertEqual(len(draft.events), 1)
-        self.assertEqual(draft.events[0].date_text, "07/04/2026")
+        self.assertEqual(draft.events[0].date_text, due)
 
         # display guard: a dateless draft that is already stored is dropped from the board
         rows = [
-            {"event_id": "e1", "title": "Deadline: Pay rent", "date_text": "07/04/2026", "confidence": 0.9, "source_ids": ["email:m1"]},
+            {"event_id": "e1", "title": "Deadline: Pay rent", "date_text": due, "confidence": 0.9, "source_ids": ["email:m1"]},
             {"event_id": "e2", "title": "Deadline: Renew plan", "date_text": "within 30 days of the program end date", "confidence": 0.9, "source_ids": ["email:m2"]},
         ]
         items = build_calendar_items(rows, [])

@@ -35,13 +35,18 @@ def build_daily_landing_summary(
     """
     db.init_db(paths)
     timestamp = now or utc_now()
+    # One day for the whole summary: the task queue and the calendar board must
+    # never disagree about which deadlines are still ahead.
+    today_key = timestamp[:10]
     messages = db.list_email_messages(paths, limit=500)
     facts = db.list_email_facts(paths, limit=1000)
-    all_tasks = list_tasks(paths, limit=1000)
+    all_tasks = list_tasks(paths, limit=1000, today=today_key)
     task_queue = [task for task in all_tasks if str(task.get("status") or "new") in LANDING_STATUSES]
     task_queue.sort(key=_landing_task_sort_key)
     approvals = db.list_approval_records(paths, limit=500)
-    calendar_items = build_calendar_items(db.list_calendar_drafts(paths, limit=1000), approvals)
+    calendar_items = build_calendar_items(
+        db.list_calendar_drafts(paths, limit=1000), approvals, today=today_key
+    )
     visible_calendar = calendar_items[:calendar_limit]
 
     task_counts = Counter(str(task.get("status") or "new") for task in all_tasks)

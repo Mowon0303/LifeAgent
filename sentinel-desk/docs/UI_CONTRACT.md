@@ -11,7 +11,39 @@ Regression tests for every shape below live in `tests/test_ui_contract.py`. Samp
 - `fixtures/ui/daily_summary.sample.json`
 - `fixtures/ui/ask_answer.sample.json`
 
-Regenerate samples by re-running the ingest + endpoint functions over `sample_emails.json` (see `tests/test_ui_contract.py::UiFixtureSampleTests` which verifies the committed samples still match the live shapes).
+Regenerate the samples with:
+
+```bash
+python -B scripts/regenerate_ui_samples.py
+```
+
+`tests/test_ui_contract.py::UiFixtureSampleTests` verifies the committed samples still
+match the live shapes. Note what is and is not contractual here: **field names, types, and
+nesting are the contract; the dates inside the samples are not.** The committed samples are
+a snapshot from the day they were regenerated, and the tests compare shapes, not dates.
+
+### Relative dates in `sample_emails.json`
+
+`sample_emails.json` writes its dates as offsets from today — `{{today-6}}`,
+`{{today+8|%m/%d/%Y}}`, `{{today+52|%B %d, %Y}}` — so the synthetic inbox always contains
+live, actionable deadlines instead of a pile of expired ones.
+
+**That substitution is opt-in and applies to fixtures only.** Loading any local JSON export
+is verbatim by default, because imported mail is evidence: a real message containing the
+literal text `{{today+8}}` must still contain it after import. The switch is always the
+caller's, never the file's name, directory, or contents:
+
+| Caller | Behaviour |
+| --- | --- |
+| `load_email_json(path)` | verbatim — the default for every user import |
+| `load_fixture_email_json(path)` | materializes tokens; used by the demo, acceptance, and the sample regenerator |
+| `LocalJsonEmailConnector(path, materialize_date_tokens=True)` | same, at the connector level |
+| `daily run --email-json X --fixture-dates` | opt in from the CLI (also on `email scan`) |
+| `acceptance first-run` | opts in for its own built-in fixture; a user-supplied `--email-json` is verbatim unless `--fixture-dates` is passed |
+
+Only the `received_at`/`date`, `subject`, `body_text`/`body`, and `attachment_texts` fields
+are eligible; ids, senders, and thread keys are always carried through untouched. Both
+directions are pinned by `tests/test_email_import_verbatim.py`.
 
 ## Endpoints
 

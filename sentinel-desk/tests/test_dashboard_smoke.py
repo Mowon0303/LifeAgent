@@ -13,6 +13,15 @@ from sentineldesk.email.models import EmailMessage
 from sentineldesk.scenarios import apply_scenario
 from sentineldesk.server import Handler
 
+from tests.dates import iso, long_form, timestamp
+
+# Offsets, not literals: a fixed deadline here becomes an expired one, and the
+# calendar board correctly stops showing expired drafts.
+NOTICE_DEADLINE_OFFSET = 22
+NOTICE_DEADLINE_TEXT = long_form(NOTICE_DEADLINE_OFFSET)
+NOTICE_DEADLINE_KEY = iso(NOTICE_DEADLINE_OFFSET)
+EDITED_DEADLINE_KEY = iso(NOTICE_DEADLINE_OFFSET + 1)
+
 
 class FakeSocket:
     def __init__(self, request: bytes) -> None:
@@ -119,11 +128,11 @@ class DashboardSmokeTests(unittest.TestCase):
                     thread_id="t-dashboard",
                     sender="leasing@example.com",
                     subject="Move-out Notice Reminder",
-                    received_at="2026-06-10",
-                    body_text="Please submit written notice by July 2, 2026.",
+                    received_at=timestamp(-3),
+                    body_text=f"Please submit written notice by {NOTICE_DEADLINE_TEXT}.",
                 )
             ],
-            ingested_at="2026-06-10T12:00:00Z",
+            ingested_at=timestamp(-3, time_of_day="12:00:00"),
         )
 
         facts_status, _, facts = self.json_request("GET", "/api/email/facts?kind=deadline")
@@ -138,7 +147,7 @@ class DashboardSmokeTests(unittest.TestCase):
         self.assertEqual(drafts[0]["source_ids"], ["email:m-dashboard"])
         self.assertEqual(drafts[0]["status"], "draft")
         self.assertEqual(drafts[0]["sync_state"], "local_draft")
-        self.assertEqual(events[0]["date_key"], "2026-07-02")
+        self.assertEqual(events[0]["date_key"], NOTICE_DEADLINE_KEY)
         self.assertEqual(events[0]["approval_state"], "draft")
         self.assertEqual(events[0]["source_trust"], "email_evidence")
         self.assertEqual(events[0]["source_count"], 1)
@@ -153,11 +162,11 @@ class DashboardSmokeTests(unittest.TestCase):
                     thread_id="t-task-api",
                     sender="leasing@example.com",
                     subject="Move-out Notice Reminder",
-                    received_at="2026-06-10",
-                    body_text="Please submit written notice by July 2, 2026. Current balance due is $25.00.",
+                    received_at=timestamp(-3),
+                    body_text=f"Please submit written notice by {NOTICE_DEADLINE_TEXT}. Current balance due is $25.00.",
                 )
             ],
-            ingested_at="2026-06-10T12:00:00Z",
+            ingested_at=timestamp(-3, time_of_day="12:00:00"),
         )
 
         status, _, tasks = self.json_request("GET", "/api/tasks")
@@ -194,11 +203,11 @@ class DashboardSmokeTests(unittest.TestCase):
                     thread_id="t-multi",
                     sender="finance@example.com",
                     subject="30th Notice: settle your balance",
-                    received_at="2026-06-10",
+                    received_at=timestamp(-3),
                     body_text="You owe a balance of $31.05. Please update your payment details ASAP.",
                 )
             ],
-            ingested_at="2026-06-10T12:00:00Z",
+            ingested_at=timestamp(-3, time_of_day="12:00:00"),
         )
 
         _, _, tasks = self.json_request("GET", "/api/tasks")
@@ -227,11 +236,11 @@ class DashboardSmokeTests(unittest.TestCase):
                     thread_id="t-sync",
                     sender="leasing@example.com",
                     subject="Move-out Notice Reminder",
-                    received_at="2026-06-10",
-                    body_text="Please submit written notice by July 2, 2026.",
+                    received_at=timestamp(-3),
+                    body_text=f"Please submit written notice by {NOTICE_DEADLINE_TEXT}.",
                 )
             ],
-            ingested_at="2026-06-10T12:00:00Z",
+            ingested_at=timestamp(-3, time_of_day="12:00:00"),
         )
         drafts = db.list_calendar_drafts(self.paths)
         event_id = drafts[0]["event_id"]
@@ -271,11 +280,11 @@ class DashboardSmokeTests(unittest.TestCase):
                     thread_id="t-edit",
                     sender="leasing@example.com",
                     subject="Move-out Notice Reminder",
-                    received_at="2026-06-10",
-                    body_text="Please submit written notice by July 2, 2026.",
+                    received_at=timestamp(-3),
+                    body_text=f"Please submit written notice by {NOTICE_DEADLINE_TEXT}.",
                 )
             ],
-            ingested_at="2026-06-10T12:00:00Z",
+            ingested_at=timestamp(-3, time_of_day="12:00:00"),
         )
         event_id = db.list_calendar_drafts(self.paths)[0]["event_id"]
         db.update_calendar_draft_sync_state(
@@ -283,23 +292,23 @@ class DashboardSmokeTests(unittest.TestCase):
             event_id=event_id,
             sync_state="ics_exported",
             status="synced",
-            updated_at="2026-06-10T12:05:00Z",
+            updated_at=timestamp(-3, time_of_day="12:05:00"),
         )
 
         status, _, payload = self.json_request(
             "POST",
-            f"/api/calendar/drafts/update?event_id={event_id}&date=2026-07-03",
+            f"/api/calendar/drafts/update?event_id={event_id}&date={EDITED_DEADLINE_KEY}",
         )
 
         self.assertEqual(status, 200)
         self.assertFalse(payload["external_write"])
-        self.assertEqual(payload["updated"]["date_text"], "2026-07-03")
+        self.assertEqual(payload["updated"]["date_text"], EDITED_DEADLINE_KEY)
         self.assertEqual(payload["updated"]["status"], "draft")
         self.assertEqual(payload["updated"]["sync_state"], "local_draft")
         self.assertEqual(db.list_approval_records(self.paths), [])
         events_status, _, events = self.json_request("GET", "/api/calendar/events")
         self.assertEqual(events_status, 200)
-        self.assertEqual(events[0]["date_key"], "2026-07-03")
+        self.assertEqual(events[0]["date_key"], EDITED_DEADLINE_KEY)
         self.assertEqual(events[0]["approval_state"], "draft")
         self.assertEqual(events[0]["sync_state"], "local_draft")
         audit = db.list_audit_events(self.paths)[0]
@@ -353,7 +362,7 @@ class DashboardSmokeTests(unittest.TestCase):
             cursor="history-123",
             scopes=["https://www.googleapis.com/auth/gmail.readonly"],
             metadata={"trust_label": "email_provider_api"},
-            updated_at="2026-06-10T12:00:00Z",
+            updated_at=timestamp(-3, time_of_day="12:00:00"),
         )
         status, _, states = self.json_request("GET", "/api/connectors/state")
         self.assertEqual(status, 200)

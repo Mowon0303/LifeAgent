@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import re
 import tempfile
 import unittest
 from unittest import mock
@@ -12,11 +13,21 @@ from sentineldesk.agent.model import load_model_provider
 from sentineldesk.agent.tools import default_tool_registry
 from sentineldesk.agent.workflow import answer_with_workflow
 from sentineldesk.config import ensure_config, ensure_dirs, get_paths, project_root
-from sentineldesk.email.ingest import ingest_messages, load_email_json
+from sentineldesk.email.ingest import ingest_messages, load_fixture_email_json
 from sentineldesk.server import Handler
 
 SAMPLE_EMAILS = project_root() / "fixtures" / "ui" / "sample_emails.json"
 FIXTURES_UI = project_root() / "fixtures" / "ui"
+
+
+def rent_due_date_text(messages: list) -> str:
+    """The rent fixture's due date, read back out of the fixture itself.
+
+    The sample inbox writes its dates as offsets from today, so restating one as
+    a literal here would just move the rot into the test.
+    """
+    message = next(item for item in messages if item.message_id == "ui-sample-rent-001")
+    return re.search(r"due by (\S+?)\.", message.body_text).group(1)
 
 CALENDAR_ITEM_FIELDS = {
     "event_id",
@@ -247,7 +258,8 @@ class UiContractBase(unittest.TestCase):
         ensure_dirs(self.paths)
         ensure_config(self.paths)
         db.init_db(self.paths)
-        self.messages = load_email_json(SAMPLE_EMAILS)
+        # The synthetic fixture opts into relative dates; a real import would not.
+        self.messages = load_fixture_email_json(SAMPLE_EMAILS)
         ingest_messages(self.paths, self.messages, ingested_at="2026-06-25T10:00:00+00:00")
 
     def tearDown(self) -> None:
@@ -848,7 +860,7 @@ class AskContractTests(UiContractBase):
             answer = json.loads(response.decode("utf-8"))
         self.assertEqual(status, 200)
         self.assertFalse(answer["uncertain"])
-        self.assertIn("07/01/2026", answer["answer"])
+        self.assertIn(rent_due_date_text(self.messages), answer["answer"])
         self.assertTrue(answer["citations"])
 
     def test_citation_payload_shape_with_email_evidence(self) -> None:

@@ -8,7 +8,8 @@ from pathlib import Path
 
 from .. import db
 from ..config import ensure_config, ensure_dirs, project_root, seed_demo_fixtures
-from ..email.ingest import ingest_messages, load_email_json
+from ..email.ingest import ingest_messages, load_fixture_email_json
+from ..extract import utc_now
 from ..monitor import run_all
 from ..reports import package_path_for, write_evidence_package
 from ..scenarios import apply_scenario, list_scenarios
@@ -64,8 +65,9 @@ def cmd_demo_record_prep(args: argparse.Namespace) -> int:
     uncertain_run = run_all(paths, name=uncertain_target["name"])[0]
     email_summary = ingest_messages(
         paths,
-        load_email_json(sample_emails_path),
-        ingested_at="2026-06-25T12:00:00+00:00",
+        # The demo owns this fixture, so it opts into the relative-date tokens.
+        load_fixture_email_json(sample_emails_path),
+        ingested_at=utc_now(),
     )
     calendar_drafts = db.list_calendar_drafts(paths, limit=100)
     tasks = list_tasks(paths, limit=100)

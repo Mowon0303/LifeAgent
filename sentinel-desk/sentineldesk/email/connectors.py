@@ -47,13 +47,17 @@ class LocalJsonEmailConnector:
     source_type = "email"
     trust_label = "email_imported"
 
-    def __init__(self, path: str | Path) -> None:
+    def __init__(self, path: str | Path, *, materialize_date_tokens: bool = False) -> None:
         self.path = Path(path)
+        # Off by default: an imported export is evidence and is loaded verbatim.
+        # Only a caller that knows it is pointing at a synthetic fixture turns
+        # this on. See load_email_json.
+        self.materialize_date_tokens = materialize_date_tokens
 
     def search(self, request: EmailSyncRequest) -> EmailSyncResult:
         messages = [
             _with_connector_labels(message, source_type=self.source_type, trust_label=self.trust_label)
-            for message in load_email_json(self.path)
+            for message in load_email_json(self.path, materialize_date_tokens=self.materialize_date_tokens)
         ]
         if request.query:
             messages = find_messages(messages, request.query, limit=request.limit)
