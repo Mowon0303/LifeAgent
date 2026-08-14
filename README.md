@@ -81,7 +81,12 @@ or re-run the gates yourself with the Quickstart below.
   detects an unredacted one instead of reporting clean.
 - OAuth token files are written with verified owner-only access — `0o600` on POSIX, an
   owner-only DACL on Windows — and the write fails closed (the file is deleted) if that
-  cannot be applied and re-verified.
+  cannot be applied and re-verified. "Owner only" is stated precisely rather than
+  overclaimed: on Windows, LocalSystem and Administrators retain access and cannot be
+  excluded, exactly as root cannot be excluded by `0o600`. What is enforced is that no
+  *other* principal (Authenticated Users, Users, Everyone, another account) can reach
+  the file; inherited **and** explicit foreign entries are stripped, and verification
+  reads the DACL back as SDDL so it does not depend on the OS display language.
 - One-command first-run acceptance prepares the synthetic local MVP and verifies email ingest, task review, calendar draft visibility, tool-first cited ask behavior, Gmail readiness, UI wiring, audit logging, and no external network/write side effects.
 
 ### What is *not* verified
