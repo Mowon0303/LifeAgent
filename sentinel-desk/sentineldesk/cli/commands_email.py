@@ -51,7 +51,7 @@ def cmd_ask(args: argparse.Namespace) -> int:
 def cmd_email_scan(args: argparse.Namespace) -> int:
     paths = paths_from_args(args)
     ensure_dirs(paths)
-    connector = LocalJsonEmailConnector(args.json)
+    connector = LocalJsonEmailConnector(args.json, materialize_date_tokens=bool(getattr(args, "fixture_dates", False)))
     messages = list(connector.search(EmailSyncRequest(query=args.query or "", limit=args.limit)).messages)
     print_json(ingest_messages(paths, messages))
     return 0
@@ -115,7 +115,8 @@ def cmd_daily_run(args: argparse.Namespace) -> int:
         return 1
     sync_summary: dict[str, object] | None = None
     if args.email_json:
-        connector = LocalJsonEmailConnector(args.email_json)
+        fixture_dates = bool(getattr(args, "fixture_dates", False))
+        connector = LocalJsonEmailConnector(args.email_json, materialize_date_tokens=fixture_dates)
         messages = list(connector.search(EmailSyncRequest(query=args.query or "", limit=args.limit)).messages)
         ingest_summary = ingest_messages(paths, messages)
         sync_summary = {
@@ -123,6 +124,9 @@ def cmd_daily_run(args: argparse.Namespace) -> int:
             "external_network": False,
             "source": str(args.email_json),
             "query": args.query or "",
+            # Recorded so a reader of the summary can tell whether message text was
+            # taken verbatim or had fixture date tokens materialized.
+            "fixture_dates_materialized": fixture_dates,
             **ingest_summary,
         }
     elif args.sync_gmail:

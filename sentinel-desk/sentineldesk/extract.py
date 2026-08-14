@@ -4,9 +4,11 @@ import hashlib
 import html
 import re
 from dataclasses import dataclass
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta
 from html.parser import HTMLParser
 from typing import Any
+
+from .clock import utc_now as clock_utc_now
 
 
 MONTH_PATTERN = r"(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z]*\.?"
@@ -160,7 +162,9 @@ SESSION_PATTERNS = [
 
 
 def utc_now() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    # Kept here as the historical import site; the single source of "now" is
+    # sentineldesk.clock, so calendar/tasks/daily/assistant cannot disagree.
+    return clock_utc_now()
 
 
 def normalize_text(text: str) -> str:

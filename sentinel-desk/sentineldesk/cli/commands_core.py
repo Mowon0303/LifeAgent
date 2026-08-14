@@ -42,6 +42,7 @@ def cmd_acceptance_first_run(args: argparse.Namespace) -> int:
     result = run_first_run_acceptance(
         paths_from_args(args),
         sample_email_json=args.email_json,
+        fixture_dates=True if getattr(args, "fixture_dates", False) else None,
         port=args.port,
     )
     print_json(result)

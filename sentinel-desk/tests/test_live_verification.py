@@ -9,6 +9,7 @@ import sys
 import tempfile
 import unittest
 import zipfile
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import patch
 
@@ -18,7 +19,12 @@ from sentineldesk.config import ensure_config, ensure_dirs, get_paths
 from sentineldesk.email.connectors import EmailSyncRequest, GmailApiEmailConnector
 from sentineldesk.email.ingest import sync_connector
 from sentineldesk.integrations.google_workspace import GMAIL_READONLY_SCOPE
-from sentineldesk.integrations.live_verification import build_completion_audit, run_verification
+from sentineldesk.integrations.live_verification import (
+    PreflightConfig,
+    build_completion_audit,
+    run_preflight,
+    run_verification,
+)
 from sentineldesk.server import Handler
 
 
@@ -838,6 +844,7 @@ class LiveVerificationTests(unittest.TestCase):
         self.assertTrue(any("privacy release-audit" in command for command in payload["verification_commands"]))
 
     def test_live_verification_preflight_dry_run_redacts_secret_values(self) -> None:
+        """The preflight runs on any platform: it is a Python module, not a Bash script."""
         root = Path(__file__).resolve().parents[1]
         with tempfile.TemporaryDirectory() as tmp:
             env = os.environ.copy()
@@ -849,7 +856,7 @@ class LiveVerificationTests(unittest.TestCase):
             env["SENTINEL_GOOGLE_TOKEN_JSON"] = '{"access_token":"dry-run-secret-token"}'
 
             result = subprocess.run(
-                ["bash", str(root / "scripts" / "live_verification_preflight.sh")],
+                [sys.executable, "-B", "-m", "sentineldesk", "integrations", "preflight"],
                 cwd=root,
                 env=env,
                 check=False,
@@ -870,6 +877,68 @@ class LiveVerificationTests(unittest.TestCase):
         self.assertIn("Skipping Gmail sync", combined)
         self.assertIn("Skipping external calendar writes", combined)
         self.assertNotIn("dry-run-secret-token", combined)
+
+    def test_live_verification_preflight_dry_run_via_cli_needs_no_shell(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = replace(
+                PreflightConfig.from_environment(),
+                home=Path(tmp) / "home",
+                account="sandbox@example.com",
+                dry_run=True,
+                seed_calendar_draft=True,
+            )
+            stream = io.StringIO()
+            ran: list[list[str]] = []
+            code = run_preflight(config, stream=stream, runner=lambda argv: ran.append(list(argv)) or 0)
+
+        transcript = stream.getvalue()
+        self.assertEqual(code, 0)
+        self.assertEqual(ran, [], "dry run must not execute anything")
+        self.assertIn("integrations env-template", transcript)
+        self.assertIn("Skipping external calendar writes", transcript)
+
+    def test_live_verification_preflight_refuses_unapproved_calendar_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            config = replace(
+                PreflightConfig.from_environment(),
+                home=Path(tmp) / "home",
+                dry_run=True,
+                run_calendar_writes=True,
+                approved=False,
+            )
+            stream = io.StringIO()
+            code = run_preflight(config, stream=stream, runner=lambda argv: 0)
+
+        transcript = stream.getvalue()
+        self.assertEqual(code, 2, transcript)
+        self.assertIn("Refusing external calendar writes", transcript)
+        self.assertNotIn("calendar sync --destination google", transcript.replace("  ", " "))
+
+    def test_live_verification_preflight_redacts_local_paths_and_secrets(self) -> None:
+        secret = "preflight-secret-token-value"
+        old = os.environ.get("SENTINEL_GOOGLE_TOKEN_JSON")
+        os.environ["SENTINEL_GOOGLE_TOKEN_JSON"] = f'{{"access_token":"{secret}"}}'
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                home = Path(tmp) / "home"
+                config = replace(
+                    PreflightConfig.from_environment(),
+                    home=home,
+                    dry_run=True,
+                )
+                stream = io.StringIO()
+                code = run_preflight(config, stream=stream, runner=lambda argv: 0)
+        finally:
+            if old is None:
+                os.environ.pop("SENTINEL_GOOGLE_TOKEN_JSON", None)
+            else:
+                os.environ["SENTINEL_GOOGLE_TOKEN_JSON"] = old
+
+        transcript = stream.getvalue()
+        self.assertEqual(code, 0)
+        self.assertNotIn(secret, transcript)
+        self.assertNotIn(str(home), transcript)
+        self.assertIn("[REDACTED_PATH]", transcript)
 
     def test_sandbox_verification_exercises_connectors_calendar_and_approvals(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -13,6 +13,7 @@ from __future__ import annotations
 from .completion import build_completion_audit, format_handoff_checklist
 from .env import build_env_template
 from .models import DEFAULT_SOURCE_RELEASE_PATH, VerificationCheck, VerificationReport
+from .preflight import PreflightConfig, run_preflight
 from .runner import run_verification
 
 __all__ = [
@@ -20,6 +21,8 @@ __all__ = [
     "build_completion_audit",
     "format_handoff_checklist",
     "build_env_template",
+    "PreflightConfig",
+    "run_preflight",
     "VerificationCheck",
     "VerificationReport",
     "DEFAULT_SOURCE_RELEASE_PATH",

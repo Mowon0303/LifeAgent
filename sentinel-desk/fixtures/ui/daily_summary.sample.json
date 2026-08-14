@@ -1,6 +1,6 @@
 {
   "status": "ready",
-  "generated_at": "2026-06-25T10:00:00+00:00",
+  "generated_at": "2026-08-14T04:32:47+00:00",
   "mode": "daily_landing",
   "sync": {
     "mode": "stored_only",
@@ -11,7 +11,7 @@
   },
   "email": {
     "stored_message_count": 4,
-    "latest_received_at": "2026-06-25T09:00:00+00:00",
+    "latest_received_at": "2026-08-12T08:00:00+00:00",
     "fact_counts": {
       "action": 2,
       "amount": 3,
@@ -35,7 +35,7 @@
   "connectors": [],
   "gmail_readiness": {
     "status": "needs_oauth",
-    "generated_at": "2026-06-25T10:00:00+00:00",
+    "generated_at": "2026-08-14T04:32:47+00:00",
     "mode": "gmail_first_readiness",
     "account_id": "default",
     "credentials_env": "SENTINEL_GOOGLE_CREDENTIALS_JSON",
@@ -48,7 +48,7 @@
         "metadata": {
           "env": "SENTINEL_GOOGLE_CREDENTIALS_JSON",
           "available": false,
-          "secret": "[REDACTED_SECRET_REF]"
+          "secret": "env:SENTINEL_GOOGLE_CREDENTIALS_JSON:***"
         }
       },
       {
@@ -57,7 +57,7 @@
         "detail": "Google OAuth client JSON is not available.",
         "metadata": {
           "env": "SENTINEL_GOOGLE_CREDENTIALS_JSON",
-          "secret": "[REDACTED_SECRET_REF]",
+          "secret": "env:SENTINEL_GOOGLE_CREDENTIALS_JSON:***",
           "json_parseable": false
         }
       },
@@ -68,7 +68,7 @@
         "metadata": {
           "env": "SENTINEL_GOOGLE_TOKEN_JSON",
           "available": false,
-          "secret": "[REDACTED_SECRET_REF]"
+          "secret": "env:SENTINEL_GOOGLE_TOKEN_JSON:***"
         }
       },
       {
@@ -77,7 +77,7 @@
         "detail": "Google token JSON is not available.",
         "metadata": {
           "env": "SENTINEL_GOOGLE_TOKEN_JSON",
-          "secret": "[REDACTED_SECRET_REF]",
+          "secret": "env:SENTINEL_GOOGLE_TOKEN_JSON:***",
           "json_parseable": false
         }
       },
@@ -87,7 +87,7 @@
         "detail": "Google token scopes are not available.",
         "metadata": {
           "env": "SENTINEL_GOOGLE_TOKEN_JSON",
-          "secret": "[REDACTED_SECRET_REF]",
+          "secret": "env:SENTINEL_GOOGLE_TOKEN_JSON:***",
           "required_scopes": [
             "https://www.googleapis.com/auth/gmail.readonly"
           ],
@@ -131,7 +131,7 @@
         "detail": "Stored local email evidence is available.",
         "metadata": {
           "stored_message_count": 4,
-          "latest_received_at": "2026-06-25T09:00:00+00:00"
+          "latest_received_at": "2026-08-12T08:00:00+00:00"
         }
       }
     ],
@@ -139,7 +139,7 @@
     "has_local_evidence": true,
     "has_cursor": false,
     "stored_message_count": 4,
-    "latest_received_at": "2026-06-25T09:00:00+00:00",
+    "latest_received_at": "2026-08-12T08:00:00+00:00",
     "connector": {
       "connector": "gmail_api",
       "account_id": "",
@@ -158,9 +158,9 @@
   },
   "gmail_sync_diagnostics": {
     "status": "no_attempt",
-    "generated_at": "2026-06-25T10:00:00+00:00",
+    "generated_at": "2026-08-14T04:32:47+00:00",
     "mode": "gmail_sync_diagnostics",
-    "account_id": "default",
+    "account_id": "",
     "latest_failure": null,
     "latest_success": null,
     "recent_failure_count": 0,
@@ -176,7 +176,7 @@
   },
   "review_receipt": {
     "status": "ready",
-    "generated_at": "2026-06-25T10:00:00+00:00",
+    "generated_at": "2026-08-14T04:32:47+00:00",
     "mode": "local_review_receipt",
     "history_limit": 50,
     "review_event_count": 0,
@@ -208,7 +208,7 @@
     {
       "kind": "review_tasks",
       "label": "Review extracted tasks",
-      "command": "sentineldesk tasks list --status new",
+      "command": "sentineldesk tasks list --view all --sort priority --status new",
       "side_effect": "local_read"
     },
     {

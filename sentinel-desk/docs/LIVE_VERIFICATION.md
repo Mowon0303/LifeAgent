@@ -11,11 +11,25 @@ python3 -B -m venv .agent-venv
 .agent-venv/bin/python -m pip install -e '.[integrations]'
 ```
 
+On Windows (PowerShell):
+
+```powershell
+python -m venv .agent-venv
+.\.agent-venv\Scripts\python.exe -m pip install -e ".[integrations]"
+```
+
 To exercise both live connector dependencies and the optional LangGraph path in the same environment:
 
 ```bash
 .agent-venv/bin/python -m pip install -e '.[agent,integrations]'
 ```
+
+```powershell
+.\.agent-venv\Scripts\python.exe -m pip install -e ".[agent,integrations]"
+```
+
+Everything below writes `.agent-venv/bin/python` for brevity; on Windows the equivalent
+is `.\.agent-venv\Scripts\python.exe`.
 
 Print the redacted live setup template before adding credentials:
 
@@ -25,26 +39,48 @@ Print the redacted live setup template before adding credentials:
 
 This reports which env refs are available, which checks to run next, which OAuth command can create the Google token file, and which sync commands create live evidence. It never prints secret values.
 
-For the Gmail-first real-account handoff, use the readiness commands below directly or use the preflight script with only Gmail sync enabled. By default the script prints the live setup template, writes redacted readiness packages, runs completion audit, scans redacted outputs with `privacy audit`, writes a clean source release ZIP, and audits the extracted release tree without Gmail sync or calendar writes:
+For the Gmail-first real-account handoff, use the readiness commands below directly or use
+the preflight with only Gmail sync enabled. By default the preflight prints the live setup
+template, writes redacted readiness packages, runs completion audit, scans redacted outputs
+with `privacy audit`, writes a clean source release ZIP, and audits the extracted release
+tree without Gmail sync or calendar writes.
+
+The preflight is a Python command, so it runs the same on every platform:
 
 ```bash
 .agent-venv/bin/python -B -m sentineldesk --home .demo integrations handoff --account user@example.com --output .demo/live-verification-handoff.md
-bash scripts/live_verification_preflight.sh
-SENTINEL_LIVE_DRY_RUN=1 bash scripts/live_verification_preflight.sh
+.agent-venv/bin/python -B -m sentineldesk integrations preflight
+.agent-venv/bin/python -B -m sentineldesk integrations preflight --dry-run
+```
+
+The shell wrappers do nothing but locate a Python runtime and call that command —
+`scripts/live_verification_preflight.sh` for POSIX,
+`scripts/live_verification_preflight.ps1` for Windows PowerShell. **Windows does not need
+Bash for any part of live verification.**
+
+```powershell
+$env:SENTINEL_LIVE_DRY_RUN = "1"
+.\scripts\live_verification_preflight.ps1
 ```
 
 The handoff checklist is Markdown for human execution. It lists completion gates, commands, side-effect labels such as `external_read` and `external_calendar_write`, approval requirements, and the final source release audit commands without printing secret values.
 
-The script only performs sensitive steps when explicitly enabled:
+The preflight only performs sensitive steps when explicitly enabled. External calendar
+writes additionally require `SENTINEL_LIVE_APPROVED=1`; without it the run stops with exit
+code `2` rather than writing anything, in dry-run mode too:
 
 ```bash
-SENTINEL_LIVE_RUN_GOOGLE_TOKEN=1 bash scripts/live_verification_preflight.sh
-SENTINEL_LIVE_RUN_GMAIL_SYNC=1 bash scripts/live_verification_preflight.sh
-SENTINEL_LIVE_SEED_CALENDAR_DRAFT=1 bash scripts/live_verification_preflight.sh
-SENTINEL_LIVE_RUN_CALENDAR_WRITES=1 SENTINEL_LIVE_APPROVED=1 bash scripts/live_verification_preflight.sh
-SENTINEL_LIVE_REQUIRE_READY=1 bash scripts/live_verification_preflight.sh
-SENTINEL_LIVE_RUN_RELEASE_PACKAGE=0 bash scripts/live_verification_preflight.sh
+SENTINEL_LIVE_RUN_GOOGLE_TOKEN=1 .agent-venv/bin/python -B -m sentineldesk integrations preflight
+SENTINEL_LIVE_RUN_GMAIL_SYNC=1 .agent-venv/bin/python -B -m sentineldesk integrations preflight
+SENTINEL_LIVE_SEED_CALENDAR_DRAFT=1 .agent-venv/bin/python -B -m sentineldesk integrations preflight
+SENTINEL_LIVE_RUN_CALENDAR_WRITES=1 SENTINEL_LIVE_APPROVED=1 .agent-venv/bin/python -B -m sentineldesk integrations preflight
+SENTINEL_LIVE_REQUIRE_READY=1 .agent-venv/bin/python -B -m sentineldesk integrations preflight
+SENTINEL_LIVE_RUN_RELEASE_PACKAGE=0 .agent-venv/bin/python -B -m sentineldesk integrations preflight
 ```
+
+Every line the preflight prints is redacted before it reaches stdout: secret-shaped
+environment values are replaced with `[REDACTED_SECRET]` and local filesystem paths —
+including Windows drive and UNC paths — with `[REDACTED_PATH]`.
 
 Use Gmail as the first live source. Calendar live writes are a later action-layer milestone, not the current Gmail-first completion gate. If that milestone is resumed and the Gmail query does not produce a safe test draft, seed one local verification draft before calendar sync:
 
@@ -52,7 +88,7 @@ Use Gmail as the first live source. Calendar live writes are a later action-laye
 .agent-venv/bin/python -B -m sentineldesk --home .demo integrations seed-calendar-draft
 ```
 
-This creates only a local draft and audit event. It does not write to external calendars. The current Gmail-first release gate is a real readonly Gmail sync, `integrations check --suite gmail --require-ready --package`, `privacy audit --require-clean`, and a clean source release-package plus release-audit. The later full Calendar gate is `SENTINEL_LIVE_RUN_GMAIL_SYNC=1 SENTINEL_LIVE_SEED_CALENDAR_DRAFT=1 SENTINEL_LIVE_RUN_CALENDAR_WRITES=1 SENTINEL_LIVE_APPROVED=1 SENTINEL_LIVE_REQUIRE_READY=1 bash scripts/live_verification_preflight.sh`, which also requires the final redacted-output privacy audit and clean source release-package plus release-audit to pass.
+This creates only a local draft and audit event. It does not write to external calendars. The current Gmail-first release gate is a real readonly Gmail sync, `integrations check --suite gmail --require-ready --package`, `privacy audit --require-clean`, and a clean source release-package plus release-audit. The later full Calendar gate is `SENTINEL_LIVE_RUN_GMAIL_SYNC=1 SENTINEL_LIVE_SEED_CALENDAR_DRAFT=1 SENTINEL_LIVE_RUN_CALENDAR_WRITES=1 SENTINEL_LIVE_APPROVED=1 SENTINEL_LIVE_REQUIRE_READY=1 python -B -m sentineldesk integrations preflight`, which also requires the final redacted-output privacy audit and clean source release-package plus release-audit to pass.
 
 ## Gmail OAuth Readiness
 
@@ -72,7 +108,7 @@ Generate the token JSON locally without printing the token to the terminal:
 export SENTINEL_GOOGLE_TOKEN_JSON="$(cat .demo/secrets/google-token.json)"
 ```
 
-The token command runs a local Google OAuth browser flow, writes `.demo/secrets/google-token.json` with owner-only `0600` permissions, and prints only redacted metadata plus the export hint. By default it requests both Gmail readonly and Google Calendar events scopes. If you override scopes with `--scope`, repeat it for every required scope:
+The token command runs a local Google OAuth browser flow, writes `.demo/secrets/google-token.json` with verified owner-only access (`0600` on POSIX, an owner-only DACL on Windows), deleting the file and failing rather than leaving it readable if that cannot be applied, and prints only redacted metadata plus the export hint. By default it requests both Gmail readonly and Google Calendar events scopes. If you override scopes with `--scope`, repeat it for every required scope:
 
 ```bash
 .agent-venv/bin/python -B -m sentineldesk --home .demo integrations google-token \

@@ -20,6 +20,17 @@ from sentineldesk.tasks import (
     undo_task_review,
 )
 
+from tests.dates import each_baseline, long_form, pinned, timestamp
+
+
+# Offsets, not literals: a deadline written as a fixed date turns this whole
+# file into a test about expired deadlines once real time passes it.
+TASK_DEADLINE_OFFSET = 22
+
+
+def task_deadline() -> str:
+    return long_form(TASK_DEADLINE_OFFSET)
+
 
 def task_message() -> EmailMessage:
     return EmailMessage(
@@ -27,31 +38,32 @@ def task_message() -> EmailMessage:
         thread_id="t-task",
         sender="leasing@example.com",
         subject="Move-out Notice Reminder",
-        received_at="2026-06-10T09:00:00Z",
-        body_text="Please submit written notice by July 2, 2026. Current balance due is $25.00.",
+        received_at=timestamp(-3),
+        body_text=f"Please submit written notice by {task_deadline()}. Current balance due is $25.00.",
     )
 
 
 class TaskReviewTests(unittest.TestCase):
     def test_list_tasks_merges_deadline_calendar_draft_and_email_facts(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            paths = get_paths(tmp)
-            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+        for label, day in each_baseline():
+            with self.subTest(baseline=label), pinned(day), tempfile.TemporaryDirectory() as tmp:
+                paths = get_paths(tmp)
+                ingest_messages(paths, [task_message()], ingested_at=timestamp(-3, time_of_day="12:00:00"))
 
-            tasks = list_tasks(paths)
-            kinds = [task["kind"] for task in tasks]
+                tasks = list_tasks(paths)
+                kinds = [task["kind"] for task in tasks]
 
-            self.assertEqual(kinds.count("deadline"), 1)
-            self.assertIn("amount", kinds)
-            self.assertIn("action", kinds)
-            deadline = next(task for task in tasks if task["kind"] == "deadline")
-            self.assertTrue(deadline["task_id"].startswith("calendar:"))
-            self.assertEqual(deadline["status"], "new")
-            self.assertEqual(deadline["source_refs"], ["email:m-task"])
-            self.assertEqual(deadline["due_date"], "July 2, 2026")
-            self.assertIsInstance(deadline["priority_score"], int)
-            self.assertIn(deadline["priority_band"], {"high", "medium", "low", "closed"})
-            self.assertIn("deadline", deadline["priority_reasons"])
+                self.assertEqual(kinds.count("deadline"), 1)
+                self.assertIn("amount", kinds)
+                self.assertIn("action", kinds)
+                deadline = next(task for task in tasks if task["kind"] == "deadline")
+                self.assertTrue(deadline["task_id"].startswith("calendar:"))
+                self.assertEqual(deadline["status"], "new")
+                self.assertEqual(deadline["source_refs"], ["email:m-task"])
+                self.assertEqual(deadline["due_date"], task_deadline())
+                self.assertIsInstance(deadline["priority_score"], int)
+                self.assertIn(deadline["priority_band"], {"high", "medium", "low", "closed"})
+                self.assertIn("deadline", deadline["priority_reasons"])
 
     def test_list_tasks_groups_same_message_facts_by_kind(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -61,10 +73,10 @@ class TaskReviewTests(unittest.TestCase):
                 thread_id="t-grouped",
                 sender="billing@example.com",
                 subject="Two balances due",
-                received_at="2026-06-10T09:00:00Z",
+                received_at=timestamp(-3),
                 body_text="Please pay $25.00 today. A separate service fee of $30.00 is also due.",
             )
-            ingest_messages(paths, [message], ingested_at="2026-06-10T12:00:00Z")
+            ingest_messages(paths, [message], ingested_at=timestamp(-3, time_of_day="12:00:00"))
 
             tasks = list_tasks(paths)
             amount_tasks = [task for task in tasks if task["kind"] == "amount"]
@@ -77,7 +89,7 @@ class TaskReviewTests(unittest.TestCase):
     def test_priority_sort_surfaces_verification_work_first(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             paths = get_paths(tmp)
-            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+            ingest_messages(paths, [task_message()], ingested_at=timestamp(-3, time_of_day="12:00:00"))
             amount_id = list_tasks(paths, kind="amount")[0]["task_id"]
             review_task(
                 paths,
@@ -85,7 +97,7 @@ class TaskReviewTests(unittest.TestCase):
                 status="needs_verification",
                 note="Check the bill.",
                 actor="tester",
-                updated_at="2026-06-10T12:05:00Z",
+                updated_at=timestamp(-3, time_of_day="12:05:00"),
             )
 
             tasks = list_tasks(paths, sort="priority")
@@ -107,7 +119,7 @@ class TaskReviewTests(unittest.TestCase):
                 thread_id="t-promo",
                 sender="offers@shop.example.com",
                 subject="Enjoy 20% off — redeem your reward",
-                received_at="2026-06-10T09:00:00Z",
+                received_at=timestamp(-3),
                 body_text="Redeem your points and enjoy the offer.",
             )
             db.upsert_email_message(
@@ -122,13 +134,13 @@ class TaskReviewTests(unittest.TestCase):
                         "trust_label": "email_unverified",
                         "evidence": "Redeem your points and enjoy the offer.",
                         "confidence": "unknown",
-                        "received_at": "2026-06-10T09:00:00Z",
+                        "received_at": timestamp(-3),
                         "metadata": {},
                     }
                 ],
-                ingested_at="2026-06-10T12:00:00Z",
+                ingested_at=timestamp(-3, time_of_day="12:00:00"),
             )
-            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+            ingest_messages(paths, [task_message()], ingested_at=timestamp(-3, time_of_day="12:00:00"))
 
             tasks = list_tasks(paths)
             promo_task = next(
@@ -154,30 +166,30 @@ class TaskReviewTests(unittest.TestCase):
                     thread_id="t-late",
                     sender="leasing@example.com",
                     subject="Late notice",
-                    received_at="2026-06-10T09:00:00Z",
-                    body_text="Please submit renewal paperwork by July 20, 2026.",
+                    received_at=timestamp(-3),
+                    body_text=f"Please submit renewal paperwork by {long_form(+41)}.",
                 ),
                 EmailMessage(
                     message_id="m-early",
                     thread_id="t-early",
                     sender="school@example.com",
                     subject="Early deadline",
-                    received_at="2026-06-10T10:00:00Z",
-                    body_text="Please submit the form by July 1, 2026.",
+                    received_at=timestamp(-3, time_of_day="10:00:00"),
+                    body_text=f"Please submit the form by {long_form(+22)}.",
                 ),
             ]
-            ingest_messages(paths, messages, ingested_at="2026-06-10T12:00:00Z")
+            ingest_messages(paths, messages, ingested_at=timestamp(-3, time_of_day="12:00:00"))
 
             deadlines = list_tasks(paths, kind="deadline", sort="due_date")
 
             self.assertGreaterEqual(len(deadlines), 2)
-            self.assertEqual(deadlines[0]["due_date"], "July 1, 2026")
-            self.assertEqual(deadlines[1]["due_date"], "July 20, 2026")
+            self.assertEqual(deadlines[0]["due_date"], long_form(+22))
+            self.assertEqual(deadlines[1]["due_date"], long_form(+41))
 
     def test_saved_task_views_filter_repeat_review_slices(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             paths = get_paths(tmp)
-            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+            ingest_messages(paths, [task_message()], ingested_at=timestamp(-3, time_of_day="12:00:00"))
 
             verification = list_tasks(paths, view="needs_verification")
             payments = list_tasks(paths, view="payments")
@@ -201,7 +213,7 @@ class TaskReviewTests(unittest.TestCase):
                 thread_id="t-bad-confidence",
                 sender="admin@example.com",
                 subject="Portal action",
-                received_at="2026-06-10T09:00:00Z",
+                received_at=timestamp(-3),
                 body_text="Please upload the form.",
             )
             db.upsert_email_message(
@@ -216,11 +228,11 @@ class TaskReviewTests(unittest.TestCase):
                         "trust_label": "email_unverified",
                         "evidence": "Please upload the form.",
                         "confidence": "unknown",
-                        "received_at": "2026-06-10T09:00:00Z",
+                        "received_at": timestamp(-3),
                         "metadata": {},
                     }
                 ],
-                ingested_at="2026-06-10T12:00:00Z",
+                ingested_at=timestamp(-3, time_of_day="12:00:00"),
             )
 
             tasks = list_tasks(paths, view="needs_verification")
@@ -233,7 +245,7 @@ class TaskReviewTests(unittest.TestCase):
     def test_review_task_persists_status_and_audit_event(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             paths = get_paths(tmp)
-            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+            ingest_messages(paths, [task_message()], ingested_at=timestamp(-3, time_of_day="12:00:00"))
             task_id = list_tasks(paths)[0]["task_id"]
 
             result = review_task(
@@ -242,7 +254,7 @@ class TaskReviewTests(unittest.TestCase):
                 status="needs_verification",
                 note="Check portal before acting.",
                 actor="tester",
-                updated_at="2026-06-10T12:05:00Z",
+                updated_at=timestamp(-3, time_of_day="12:05:00"),
             )
 
             self.assertEqual(result.status, "needs_verification")
@@ -260,7 +272,7 @@ class TaskReviewTests(unittest.TestCase):
     def test_review_history_and_undo_restore_unreviewed_task(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             paths = get_paths(tmp)
-            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+            ingest_messages(paths, [task_message()], ingested_at=timestamp(-3, time_of_day="12:00:00"))
             task_id = list_tasks(paths, kind="amount")[0]["task_id"]
             review_task(
                 paths,
@@ -268,7 +280,7 @@ class TaskReviewTests(unittest.TestCase):
                 status="done",
                 note="Handled.",
                 actor="tester",
-                updated_at="2026-06-10T12:05:00Z",
+                updated_at=timestamp(-3, time_of_day="12:05:00"),
             )
             audit_id = db.list_audit_events(paths)[0]["id"]
 
@@ -282,7 +294,7 @@ class TaskReviewTests(unittest.TestCase):
                 audit_id=audit_id,
                 actor="tester",
                 confirmed=False,
-                updated_at="2026-06-10T12:06:00Z",
+                updated_at=timestamp(-3, time_of_day="12:06:00"),
             )
             self.assertFalse(blocked.allowed)
             self.assertEqual(blocked.reason, "confirmation_required")
@@ -294,7 +306,7 @@ class TaskReviewTests(unittest.TestCase):
                 actor="tester",
                 confirmed=True,
                 confirmation_id="undo-single-1",
-                updated_at="2026-06-10T12:07:00Z",
+                updated_at=timestamp(-3, time_of_day="12:07:00"),
             )
             self.assertTrue(restored.allowed)
             self.assertEqual(restored.restored_count, 1)
@@ -312,7 +324,7 @@ class TaskReviewTests(unittest.TestCase):
                 actor="tester",
                 confirmed=True,
                 confirmation_id="undo-single-2",
-                updated_at="2026-06-10T12:08:00Z",
+                updated_at=timestamp(-3, time_of_day="12:08:00"),
             )
             self.assertFalse(replay.allowed)
             self.assertEqual(replay.reason, "source_audit_already_undone")
@@ -320,21 +332,21 @@ class TaskReviewTests(unittest.TestCase):
     def test_review_receipt_summary_counts_net_effective_changes(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             paths = get_paths(tmp)
-            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+            ingest_messages(paths, [task_message()], ingested_at=timestamp(-3, time_of_day="12:00:00"))
             task_ids = [task["task_id"] for task in list_tasks(paths) if task["kind"] in {"amount", "action"}]
             review_task(
                 paths,
                 task_id=task_ids[0],
                 status="done",
                 actor="tester",
-                updated_at="2026-06-10T12:05:00Z",
+                updated_at=timestamp(-3, time_of_day="12:05:00"),
             )
             review_task(
                 paths,
                 task_id=task_ids[1],
                 status="needs_verification",
                 actor="tester",
-                updated_at="2026-06-10T12:06:00Z",
+                updated_at=timestamp(-3, time_of_day="12:06:00"),
             )
             first_audit_id = db.list_audit_events(paths, limit=10)[1]["id"]
             undo_task_review(
@@ -343,7 +355,7 @@ class TaskReviewTests(unittest.TestCase):
                 actor="tester",
                 confirmed=True,
                 confirmation_id="receipt-undo-1",
-                updated_at="2026-06-10T12:07:00Z",
+                updated_at=timestamp(-3, time_of_day="12:07:00"),
             )
 
             summary = build_review_receipt_summary(paths, limit=10, recent_limit=2)
@@ -362,7 +374,7 @@ class TaskReviewTests(unittest.TestCase):
     def test_cli_tasks_list_and_review(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             paths = get_paths(tmp)
-            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+            ingest_messages(paths, [task_message()], ingested_at=timestamp(-3, time_of_day="12:00:00"))
             task_id = list_tasks(paths)[0]["task_id"]
 
             output = io.StringIO()
@@ -413,7 +425,7 @@ class TaskReviewTests(unittest.TestCase):
     def test_bulk_review_requires_confirmation_and_blocks_replay(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             paths = get_paths(tmp)
-            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+            ingest_messages(paths, [task_message()], ingested_at=timestamp(-3, time_of_day="12:00:00"))
 
             blocked = bulk_review_tasks(
                 paths,
@@ -422,7 +434,7 @@ class TaskReviewTests(unittest.TestCase):
                 status="done",
                 actor="tester",
                 confirmed=False,
-                updated_at="2026-06-10T12:10:00Z",
+                updated_at=timestamp(-3, time_of_day="12:10:00"),
             )
 
             self.assertFalse(blocked.allowed)
@@ -438,7 +450,7 @@ class TaskReviewTests(unittest.TestCase):
                 actor="tester",
                 confirmed=True,
                 confirmation_id="bulk-test-1",
-                updated_at="2026-06-10T12:15:00Z",
+                updated_at=timestamp(-3, time_of_day="12:15:00"),
             )
 
             self.assertTrue(confirmed.allowed)
@@ -454,7 +466,7 @@ class TaskReviewTests(unittest.TestCase):
                 actor="tester",
                 confirmed=True,
                 confirmation_id="bulk-test-1",
-                updated_at="2026-06-10T12:20:00Z",
+                updated_at=timestamp(-3, time_of_day="12:20:00"),
             )
 
             self.assertFalse(replay.allowed)
@@ -467,7 +479,7 @@ class TaskReviewTests(unittest.TestCase):
     def test_bulk_review_history_and_undo_restore_mixed_previous_states(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             paths = get_paths(tmp)
-            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+            ingest_messages(paths, [task_message()], ingested_at=timestamp(-3, time_of_day="12:00:00"))
             task_ids = [task["task_id"] for task in list_tasks(paths) if task["kind"] in {"amount", "action"}]
             self.assertGreaterEqual(len(task_ids), 2)
             review_task(
@@ -476,7 +488,7 @@ class TaskReviewTests(unittest.TestCase):
                 status="needs_verification",
                 note="Check first.",
                 actor="tester",
-                updated_at="2026-06-10T12:09:00Z",
+                updated_at=timestamp(-3, time_of_day="12:09:00"),
             )
 
             confirmed = bulk_review_tasks(
@@ -486,7 +498,7 @@ class TaskReviewTests(unittest.TestCase):
                 actor="tester",
                 confirmed=True,
                 confirmation_id="bulk-undo-1",
-                updated_at="2026-06-10T12:10:00Z",
+                updated_at=timestamp(-3, time_of_day="12:10:00"),
             )
             self.assertTrue(confirmed.allowed)
             self.assertEqual(confirmed.reviewed_count, 2)
@@ -499,7 +511,7 @@ class TaskReviewTests(unittest.TestCase):
                 actor="tester",
                 confirmed=True,
                 confirmation_id="bulk-undo-restore-1",
-                updated_at="2026-06-10T12:11:00Z",
+                updated_at=timestamp(-3, time_of_day="12:11:00"),
             )
 
             self.assertTrue(restored.allowed)
@@ -515,7 +527,7 @@ class TaskReviewTests(unittest.TestCase):
     def test_cli_tasks_bulk_review(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             paths = get_paths(tmp)
-            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+            ingest_messages(paths, [task_message()], ingested_at=timestamp(-3, time_of_day="12:00:00"))
 
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
@@ -546,7 +558,7 @@ class TaskReviewTests(unittest.TestCase):
     def test_cli_tasks_history_and_undo(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             paths = get_paths(tmp)
-            ingest_messages(paths, [task_message()], ingested_at="2026-06-10T12:00:00Z")
+            ingest_messages(paths, [task_message()], ingested_at=timestamp(-3, time_of_day="12:00:00"))
             task_id = list_tasks(paths, kind="action")[0]["task_id"]
             review_task(paths, task_id=task_id, status="done", actor="tester")
             audit_id = db.list_audit_events(paths)[0]["id"]

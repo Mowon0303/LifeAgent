@@ -38,8 +38,23 @@ Agent layer:
 
 ## Current Evidence
 
-- `309` unittest cases pass.
-- Golden extraction eval: raw deadline, amount, and action are all `P=1.000 / R=1.000 / F1=1.000` on the current synthetic set.
+**Everything below was verified on 2026-08-14 by running it locally on Windows 11
+(Python 3.11.9). Linux has not been verified.** The CI workflow covers
+`ubuntu-latest` as well, but it has not run yet — a workflow file that exists is
+not a workflow that passed. Check the
+[Actions tab](https://github.com/Mowon0303/LifeAgent/actions) for the real state,
+or re-run the gates yourself with the Quickstart below.
+
+- `486` unittest cases pass, with `0` failures and `0` errors, on Windows.
+- The suite is date-independent: it also passes with the product clock pinned to
+  `2026-05-15`, `2026-12-29`, `2027-03-02`, `2028-02-29`, and `2031-11-07`. CI re-runs it
+  daily and at ±1 and +5 years, so an expiring fixture fails a build instead of rotting quietly.
+- Imported mail is loaded verbatim: the `{{today+N}}` tokens that keep the *synthetic*
+  demo inbox from expiring are opt-in per call (`--fixture-dates`), so a real message
+  containing that literal text still contains it after import.
+- `acceptance first-run` returns `status: "passed"` at the current real date, reporting
+  `external_network: false` and `external_writes_performed: false`.
+- Golden extraction eval: 144 cases, `0` failures; raw deadline, amount, and action are all `P=1.000 / R=1.000 / F1=1.000` on the current synthetic set.
 - High-confidence eval: deadline and amount are both `P=1.000 / R=1.000 / F1=1.000`; action confidence is intentionally flat until ranking needs action-specific tiers.
 - Redacted Gmail-first readiness package shape is regression-tested.
 - The local assistant exposes an explicit Gmail readonly sync/retry control with external-read labeling and redacted failure diagnostics.
@@ -59,7 +74,26 @@ Agent layer:
 - Filtered task queues can be bulk-marked through a confirmation-gated local review API with single-use confirmation IDs and replay protection.
 - Recent single/bulk task review actions have local history and confirmation-gated undo controls, so review mistakes can be recovered without external writes.
 - Source release packaging and release audit pass with runtime artifacts excluded.
+- Redacted artifacts contain no local filesystem paths: Windows drive paths
+  (`C:\...`, `C:/...`, `D:\...`), UNC paths, their JSON-escaped spellings, POSIX
+  home/temp paths, and **paths containing spaces** (`C:\Users\Jane Doe\...`) are all
+  replaced with `[REDACTED_PATH]` with no fragment left behind, and the privacy audit
+  detects an unredacted one instead of reporting clean.
+- OAuth token files are written with verified owner-only access — `0o600` on POSIX, an
+  owner-only DACL on Windows — and the write fails closed (the file is deleted) if that
+  cannot be applied and re-verified.
 - One-command first-run acceptance prepares the synthetic local MVP and verifies email ingest, task review, calendar draft visibility, tool-first cited ask behavior, Gmail readiness, UI wiring, audit logging, and no external network/write side effects.
+
+### What is *not* verified
+
+- **Linux / remote CI.** Every result above is from a local Windows run. The
+  `ubuntu-latest` and `windows-latest` workflow is configured but has never executed.
+  Do not read "CI covers it" as "CI passed".
+- No real Gmail account has been connected: Gmail readiness is `needs_oauth`, and every
+  number above comes from synthetic fixtures. See
+  [Verification levels](#verification-levels).
+- No external calendar write has ever been performed.
+- The multi-day product validation (is this worth using daily?) has not started.
 
 ## Portfolio Snapshot
 
@@ -67,15 +101,54 @@ Start with the [case study](sentinel-desk/docs/CASE_STUDY.md) for the product pr
 
 ## Quickstart
 
-The implementation lives in `sentinel-desk/`.
+The implementation lives in `sentinel-desk/`. LifeAgent needs **Python 3.11 or newer**
+and no third-party packages for the core workflow.
+
+### Windows (PowerShell)
+
+```powershell
+cd sentinel-desk
+python -m venv .agent-venv
+.\.agent-venv\Scripts\python.exe -m sentineldesk --home $env:TEMP\lifeagent-first-run acceptance first-run
+.\.agent-venv\Scripts\python.exe -B scripts\run_tests.py
+```
+
+If `python` is not on your PATH, Windows may only have the Microsoft Store stub, which
+opens the Store instead of running anything. Install a real runtime and use it directly:
+
+```powershell
+winget install Python.Python.3.11
+& "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe" -m venv .agent-venv
+```
+
+Windows 11 also ships the Python install manager as `py`, which can fetch a specific
+version and tell you where it landed:
+
+```powershell
+py install 3.11
+py list --format=json
+```
+
+### macOS / Linux
 
 ```bash
 cd sentinel-desk
-python3 -B -m sentineldesk --home /tmp/lifeagent-first-run acceptance first-run
-python3 -B -m unittest discover -s tests -q
+python3 -B -m venv .agent-venv
+.agent-venv/bin/python -m sentineldesk --home /tmp/lifeagent-first-run acceptance first-run
+.agent-venv/bin/python -B scripts/run_tests.py
 ```
 
-If the acceptance output says `status: "passed"`, open the prepared local assistant:
+`scripts/run_tests.py` runs the same suite as `python -B -m unittest discover -s tests`,
+but prints the final test count and fails loudly if a module failed to import or if
+discovery collected less than the whole suite. To prove the suite is not date-dependent,
+pin the clock:
+
+```bash
+python -B scripts/run_tests.py --now 2027-03-02
+```
+
+If the acceptance output says `status: "passed"`, open the prepared local assistant
+(`.agent-venv\Scripts\python.exe` on Windows):
 
 ```bash
 cd sentinel-desk
@@ -91,7 +164,7 @@ Run the repeatable daily landing workflow:
 
 ```bash
 cd sentinel-desk
-python3 -B -m sentineldesk --home .demo daily run --email-json fixtures/ui/sample_emails.json
+python3 -B -m sentineldesk --home .demo daily run --email-json fixtures/ui/sample_emails.json --fixture-dates
 ```
 
 For a real inbox, generate the local Google token first, then explicitly opt into readonly Gmail refresh:
@@ -116,24 +189,46 @@ cd sentinel-desk
 python3 -B -m sentineldesk eval email-extract --golden evals/golden --report-md docs/EVAL_REPORT.md
 ```
 
+## Verification levels
+
+Three different things get called "verified" in this repo. They are not
+interchangeable, and only the first one has actually been done:
+
+| Level | What it proves | Status |
+| --- | --- | --- |
+| **Synthetic verification** | The workflow works end to end over `fixtures/` and `evals/golden/`: extraction, task queue, calendar drafts, cited answers, redaction, packaging. No account, no network. | Green locally on Windows. Linux/remote CI configured but not yet run. |
+| **Real Gmail readonly verification** | The same workflow over a real inbox, using an explicitly approved `gmail.readonly` OAuth scope. Needs the user's own Google credentials. | Not started — needs user authorization. |
+| **External calendar write verification** | Writing a confirmed event to Google/Apple calendar. | Not started, and deliberately last. |
+
 ## CI Gates
 
-GitHub Actions runs:
+GitHub Actions runs the following on **`ubuntu-latest` and `windows-latest`**, both on
+Python 3.11, on every push and pull request, plus **daily on a schedule** so an expiring
+fixture is caught without anyone committing:
 
-- full unittest suite
+- full unittest suite, via `scripts/run_tests.py` (prints the final count; fails if a module did not import)
+- privacy regression tests (path redaction, privacy audit, evidence packages) as their own named step
+- date-boundary regression tests as their own named step
 - `compileall`
-- golden extraction eval in JSON mode
+- golden extraction eval with `--require-clean`, so a failing case fails the build
 - first-run MVP acceptance over synthetic local fixtures
+- live verification preflight dry run (pure Python — the Windows leg needs no Bash)
 - email-first demo dry run
 - redacted-output privacy audit on generated demo artifacts
-- source release package generation
-- extracted source release audit
+- source release package generation and extracted source release audit
+
+A separate **date-rot guard** job is configured to re-run the suite and acceptance on both platforms with
+the product clock pinned to one year back, one year ahead, and five years ahead.
 
 These checks require no real Gmail account, browser cookies, portal credentials, or external calendar writes.
 
 ## Privacy Boundary
 
 Do not commit runtime state, real portal URLs, screenshots, DOM dumps, cookies, traces, OAuth tokens, local databases, or share ZIPs. Public demos use only synthetic fixtures under `sentinel-desk/fixtures/` and `sentinel-desk/evals/golden/`.
+
+Local filesystem paths are redacted on every platform — Windows drive paths, UNC paths,
+their JSON-escaped forms, and POSIX home/temp paths all become `[REDACTED_PATH]` in
+redacted JSON, HTML reports, and share ZIPs.
 
 Before sharing source publicly:
 
@@ -143,6 +238,16 @@ python3 -B -m sentineldesk privacy release-package --source . --output /tmp/sent
 EXTRACT_DIR="$(mktemp -d /tmp/sentineldesk-release-audit.XXXXXX)"
 python3 -B -m zipfile -e /tmp/sentineldesk.release.zip "$EXTRACT_DIR"
 python3 -B -m sentineldesk privacy release-audit --path "$EXTRACT_DIR" --require-clean
+```
+
+On Windows (PowerShell):
+
+```powershell
+cd sentinel-desk
+$Extract = Join-Path $env:TEMP "sentineldesk-release-audit"
+.\.agent-venv\Scripts\python.exe -B -m sentineldesk privacy release-package --source . --output $env:TEMP\sentineldesk.release.zip
+.\.agent-venv\Scripts\python.exe -B -m zipfile -e $env:TEMP\sentineldesk.release.zip $Extract
+.\.agent-venv\Scripts\python.exe -B -m sentineldesk privacy release-audit --path $Extract --require-clean
 ```
 
 ## Key Documents
