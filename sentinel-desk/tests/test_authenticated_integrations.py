@@ -5,6 +5,7 @@ import json
 import os
 import io
 import stat
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -22,7 +23,7 @@ from sentineldesk.integrations.apple_calendar import AppleCalendarConfig
 from sentineldesk.integrations.google_oauth import GoogleTokenWriteResult, write_google_oauth_token
 from sentineldesk.integrations.google_workspace import GMAIL_READONLY_SCOPE, GoogleOAuthConfig
 from sentineldesk.secrets import env_secret, resolve_secret, secret_status
-from sentineldesk.secure_files import FileProtectionError, describe_protection
+from sentineldesk.secure_files import FileProtectionError, describe_protection, write_owner_only_text
 
 
 class AuthenticatedIntegrationTests(unittest.TestCase):
@@ -211,6 +212,52 @@ class AuthenticatedIntegrationTests(unittest.TestCase):
                 os.environ.pop(name, None)
             else:
                 os.environ[name] = old
+
+    @unittest.skipUnless(sys.platform.startswith("win"), "Windows DACL behaviour")
+    def test_windows_token_protection_rejects_group_readable_files(self) -> None:
+        """The check must be about *who can read it*, not about ACE count.
+
+        SYSTEM and Administrators always retain access on Windows, exactly as root
+        does under 0o600, so their presence is not a failure. A grant to
+        Authenticated Users is: that really would let another account read the
+        token, and it has to fail closed.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            token = Path(tmp) / "google-token.json"
+            protection = write_owner_only_text(token, '{"access_token":"x"}')
+            self.assertTrue(protection.owner_only)
+            self.assertEqual(protection.mechanism, "windows_acl")
+
+            # S-1-5-11 is Authenticated Users.
+            subprocess.run(
+                ["icacls", str(token), "/grant", "*S-1-5-11:(M)"],
+                check=True, capture_output=True, text=True,
+            )
+            weakened = describe_protection(token)
+            self.assertFalse(weakened.owner_only, weakened.detail)
+            # SDDL may spell Authenticated Users as the alias "AU" or as the SID.
+            self.assertTrue(
+                "AU" in weakened.detail or "S-1-5-11" in weakened.detail,
+                weakened.detail,
+            )
+
+            # Rewriting must restore the guarantee even from a polluted ACL.
+            self.assertTrue(write_owner_only_text(token, '{"access_token":"y"}').owner_only)
+
+    @unittest.skipUnless(sys.platform.startswith("win"), "Windows DACL behaviour")
+    def test_windows_token_protection_tolerates_privileged_accounts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            token = Path(tmp) / "google-token.json"
+            write_owner_only_text(token, '{"access_token":"x"}')
+            # S-1-5-32-544 is the Administrators group, which cannot be excluded.
+            subprocess.run(
+                ["icacls", str(token), "/grant", "*S-1-5-32-544:(F)"],
+                check=True, capture_output=True, text=True,
+            )
+            still = describe_protection(token)
+
+        self.assertTrue(still.owner_only, still.detail)
+        self.assertIn("privileged", still.detail)
 
     def test_cli_google_token_command_redacts_token_result(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
