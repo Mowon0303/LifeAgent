@@ -317,6 +317,11 @@ class DashboardSmokeTests(unittest.TestCase):
         self.assertEqual(audit["side_effect"], "local_db_write")
 
     def test_retention_api_is_preview_first_and_confirmation_gated(self) -> None:
+        # "Old" has to mean old relative to the pinned day, not to a fixed 2026
+        # date: with the clock behind that date the seeded rows would be *newer*
+        # than the purge audit event and the ordering assertion below would flip.
+        old_day = iso(-400)
+        cutoff = iso(-30)
         ingest_messages(
             self.paths,
             [
@@ -325,16 +330,16 @@ class DashboardSmokeTests(unittest.TestCase):
                     thread_id="t-old",
                     sender="leasing@example.com",
                     subject="Old Notice",
-                    received_at="2026-01-01",
-                    body_text="Please submit written notice by January 15, 2026.",
+                    received_at=old_day,
+                    body_text=f"Please submit written notice by {iso(-380)}.",
                 )
             ],
-            ingested_at="2026-01-01T00:00:00Z",
+            ingested_at=timestamp(-400, time_of_day="00:00:00"),
         )
 
         preview_status, _, preview = self.json_request(
             "POST",
-            "/api/retention/purge?before=2026-02-01&source=email&source=calendar",
+            f"/api/retention/purge?before={cutoff}&source=email&source=calendar",
         )
         self.assertEqual(preview_status, 200)
         self.assertTrue(preview["dry_run"])
@@ -345,7 +350,7 @@ class DashboardSmokeTests(unittest.TestCase):
 
         purge_status, _, purged = self.json_request(
             "POST",
-            "/api/retention/purge?before=2026-02-01&source=email&source=calendar&confirm=1",
+            f"/api/retention/purge?before={cutoff}&source=email&source=calendar&confirm=1",
         )
         self.assertEqual(purge_status, 200)
         self.assertFalse(purged["dry_run"])
