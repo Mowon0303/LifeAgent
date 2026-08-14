@@ -250,13 +250,18 @@ class PrivacyAuditDetectsWindowsPathsTests(unittest.TestCase):
 
 class RealHomePathIsRedactedTests(unittest.TestCase):
     HOME_NAMES = {
-        "plain": "home",
+        "plain": "PlainAardvarkHome",
         # The reported failure: a home whose name contains spaces leaked the part
         # of the path after the first space into the shared package. Distinctive
         # nonsense words, so a hit is a real leak and not an English word that the
         # package text happens to contain.
         "with_spaces": "Zephyr Quokka Vault",
     }
+    # Only the leaf name is searched word by word. The ancestors are whatever the
+    # machine's temp root happens to be, and their components are not always
+    # distinctive enough to search for: GitHub's Windows runners use D:\a\_temp,
+    # so one component is the single letter "a", which occurs in ordinary prose.
+    # The full-path assertions below are what actually catch an ancestor leak.
 
     def _package(self, home: Path) -> tuple[str, Path]:
         output = io.StringIO()
@@ -277,11 +282,14 @@ class RealHomePathIsRedactedTests(unittest.TestCase):
 
                 self.assertNotIn(str(home), combined)
                 self.assertNotIn(str(Path(tmp)), combined)
-                self.assertNotIn(Path.home().name, combined)
-                # No component of the home path may survive either.
-                for component in home.parts[1:]:
-                    for word in component.split():
-                        self.assertNotIn(word, combined, f"{word!r} survived")
+                self.assertNotIn(home.as_posix(), combined)
+                self.assertNotIn(Path(tmp).as_posix(), combined)
+                if len(Path.home().name) >= 5:
+                    self.assertNotIn(Path.home().name, combined)
+                # Every word of the home directory name must be gone, not just the
+                # first — that is the spaced-path regression.
+                for word in name.split():
+                    self.assertNotIn(word, combined, f"{word!r} survived")
 
     def test_privacy_audit_is_clean_for_a_home_with_spaces(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

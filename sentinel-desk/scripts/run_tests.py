@@ -29,6 +29,9 @@ ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_MIN_TESTS = 400
 MAX_SUMMARY_CASES = 20
 MAX_SUMMARY_TRACEBACK_CHARS = 3000
+# GitHub keeps at most 10 annotations per step and truncates long messages.
+MAX_ANNOTATIONS = 10
+MAX_ANNOTATION_CHARS = 1200
 
 
 def _failed_imports(suite: unittest.TestSuite) -> list[str]:
@@ -45,6 +48,23 @@ def _flatten(suite: unittest.TestSuite):
             yield from _flatten(item)
         else:
             yield item
+
+
+def _emit_annotations(result: unittest.TestResult) -> None:
+    """Emit one ``::error::`` per failing test.
+
+    Annotations are readable through the check-runs API without credentials,
+    unlike the raw log and the job summary. That is the difference between a
+    Windows-only failure someone can diagnose from a laptop and one that needs
+    repository access, so the test id and the tail of its traceback go here.
+    """
+    problems = [("FAIL", case, tb) for case, tb in result.failures]
+    problems += [("ERROR", case, tb) for case, tb in result.errors]
+    for kind, case, traceback_text in problems[:MAX_ANNOTATIONS]:
+        tail = traceback_text.strip()[-MAX_ANNOTATION_CHARS:]
+        # Workflow commands are single-line; newlines have to be escaped.
+        encoded = tail.replace("%", "%25").replace("\r", "").replace("\n", "%0A")
+        print(f"::error title={kind}: {case.id()}::{encoded}")
 
 
 def _write_step_summary(result: unittest.TestResult, *, broken: list[str], today: str) -> None:
@@ -131,6 +151,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"product clock:  {clock.today_iso()}")
 
     _write_step_summary(result, broken=broken, today=clock.today_iso())
+    _emit_annotations(result)
 
     if broken:
         return 1
