@@ -38,14 +38,15 @@ Agent layer:
 
 ## Current Evidence
 
-**Everything below was verified on 2026-08-14 by running it locally on Windows 11
-(Python 3.11.9). Linux has not been verified.** The CI workflow covers
-`ubuntu-latest` as well, but it has not run yet — a workflow file that exists is
-not a workflow that passed. Check the
-[Actions tab](https://github.com/Mowon0303/LifeAgent/actions) for the real state,
-or re-run the gates yourself with the Quickstart below.
+Verified on 2026-08-14 both locally on Windows 11 (Python 3.11.9) and in CI on
+`windows-latest` and `ubuntu-latest`
+([run](https://github.com/Mowon0303/LifeAgent/actions/runs/32126171743), all 8
+jobs green). Check the
+[Actions tab](https://github.com/Mowon0303/LifeAgent/actions) for the current
+state rather than trusting this list, or re-run the gates yourself with the
+Quickstart below.
 
-- `486` unittest cases pass, with `0` failures and `0` errors, on Windows.
+- `488` unittest cases pass, with `0` failures and `0` errors, on Windows and Linux.
 - The suite is date-independent: it also passes with the product clock pinned to
   `2026-05-15`, `2026-12-29`, `2027-03-02`, `2028-02-29`, and `2031-11-07`. CI re-runs it
   daily and at ±1 and +5 years, so an expiring fixture fails a build instead of rotting quietly.
@@ -91,9 +92,6 @@ or re-run the gates yourself with the Quickstart below.
 
 ### What is *not* verified
 
-- **Linux / remote CI.** Every result above is from a local Windows run. The
-  `ubuntu-latest` and `windows-latest` workflow is configured but has never executed.
-  Do not read "CI covers it" as "CI passed".
 - No real Gmail account has been connected: Gmail readiness is `needs_oauth`, and every
   number above comes from synthetic fixtures. See
   [Verification levels](#verification-levels).
@@ -201,7 +199,7 @@ interchangeable, and only the first one has actually been done:
 
 | Level | What it proves | Status |
 | --- | --- | --- |
-| **Synthetic verification** | The workflow works end to end over `fixtures/` and `evals/golden/`: extraction, task queue, calendar drafts, cited answers, redaction, packaging. No account, no network. | Green locally on Windows. Linux/remote CI configured but not yet run. |
+| **Synthetic verification** | The workflow works end to end over `fixtures/` and `evals/golden/`: extraction, task queue, calendar drafts, cited answers, redaction, packaging. No account, no network. | Done — green on Windows and Linux, locally and in CI. |
 | **Real Gmail readonly verification** | The same workflow over a real inbox, using an explicitly approved `gmail.readonly` OAuth scope. Needs the user's own Google credentials. | Not started — needs user authorization. |
 | **External calendar write verification** | Writing a confirmed event to Google/Apple calendar. | Not started, and deliberately last. |
 
@@ -222,7 +220,7 @@ fixture is caught without anyone committing:
 - redacted-output privacy audit on generated demo artifacts
 - source release package generation and extracted source release audit
 
-A separate **date-rot guard** job is configured to re-run the suite and acceptance on both platforms with
+A separate **date-rot guard** job re-runs the suite and acceptance on both platforms with
 the product clock pinned to one year back, one year ahead, and five years ahead.
 
 These checks require no real Gmail account, browser cookies, portal credentials, or external calendar writes.
