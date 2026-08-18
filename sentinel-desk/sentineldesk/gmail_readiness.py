@@ -8,8 +8,17 @@ from typing import Any
 from . import db
 from .config import Paths
 from .extract import utc_now
-from .integrations.google_workspace import GMAIL_READONLY_SCOPE
+from .integrations.google_workspace import CALENDAR_EVENTS_SCOPE, GMAIL_READONLY_SCOPE
 from .secrets import env_secret, resolve_secret, secret_status
+
+# Scopes that must never appear on a Gmail-first readonly token.
+FORBIDDEN_GMAIL_FIRST_SCOPES = (
+    CALENDAR_EVENTS_SCOPE,
+    "https://www.googleapis.com/auth/calendar",
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/gmail.send",
+    "https://mail.google.com/",
+)
 
 
 def build_gmail_readiness(
@@ -31,6 +40,7 @@ def build_gmail_readiness(
     credentials_check = _credentials_format_check(credentials_env)
     token_check = _token_format_check(token_env)
     token_scope_check = _token_scope_check(token_env, (GMAIL_READONLY_SCOPE,))
+    scope_boundary_check = _scope_boundary_check(token_env)
     dependency_check = _dependency_check()
     cursor_check = _cursor_check(selected_state, account_id=account_id)
     evidence_check = _local_evidence_check(messages)
@@ -40,13 +50,14 @@ def build_gmail_readiness(
         _env_presence_check("gmail.token_env", token_env),
         token_check,
         token_scope_check,
+        scope_boundary_check,
         dependency_check,
         cursor_check,
         evidence_check,
     ]
     oauth_ready = all(
         check["status"] == "ready"
-        for check in (credentials_check, token_check, token_scope_check)
+        for check in (credentials_check, token_check, token_scope_check, scope_boundary_check)
     )
     has_cursor = cursor_check["status"] == "ready"
     has_local_evidence = evidence_check["status"] == "ready"
@@ -249,6 +260,48 @@ def _token_scope_check(env_name: str, required_scopes: tuple[str, ...]) -> dict[
             "required_scopes": list(required_scopes),
             "scopes_present": scopes,
             "missing_scopes": missing,
+        },
+    }
+
+
+def _scope_boundary_check(env_name: str) -> dict[str, Any]:
+    """Refuse a token that carries calendar *write* access.
+
+    The Gmail-first rollout is readonly by definition, so checking that the read
+    scope is present is only half the guarantee — a token that also carries
+    calendar.events could write to the user's real calendar. Requesting readonly
+    is now the default, but the token is what actually grants access, so the
+    boundary is verified against the token rather than against our intent.
+    """
+    parsed, error = _load_env_json(env_name)
+    if parsed is None:
+        return {
+            "name": "gmail.scope_boundary",
+            "status": "missing" if error == "missing" else "invalid",
+            "detail": "Google token scopes are not available.",
+            "metadata": {
+                "env": env_name,
+                "secret": env_secret(env_name).redacted,
+                "forbidden_scopes": list(FORBIDDEN_GMAIL_FIRST_SCOPES),
+                "scopes_present": [],
+            },
+        }
+    scopes = _extract_token_scopes(parsed)
+    granted_writes = [scope for scope in FORBIDDEN_GMAIL_FIRST_SCOPES if scope in scopes]
+    return {
+        "name": "gmail.scope_boundary",
+        "status": "ready" if not granted_writes else "invalid",
+        "detail": (
+            "Google token carries no calendar write scope."
+            if not granted_writes
+            else "Google token carries a calendar write scope; re-issue it with Gmail readonly only."
+        ),
+        "metadata": {
+            "env": env_name,
+            "secret": env_secret(env_name).redacted,
+            "forbidden_scopes": list(FORBIDDEN_GMAIL_FIRST_SCOPES),
+            "scopes_present": scopes,
+            "granted_write_scopes": granted_writes,
         },
     }
 

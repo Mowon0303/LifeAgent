@@ -14,7 +14,12 @@ from sentineldesk.secure_files import write_owner_only_text
 from sentineldesk.secrets import SecretRef, SecretUnavailable, env_secret, resolve_secret
 
 
-DEFAULT_GOOGLE_SCOPES = (GMAIL_READONLY_SCOPE, CALENDAR_EVENTS_SCOPE)
+# Least privilege by default: a token is only granted Gmail *read* access unless
+# the caller explicitly asks for calendar write. The Gmail-first rollout must not
+# be able to acquire a write scope by omission — once a user consents to
+# calendar.events, taking it back means redoing the whole consent flow.
+DEFAULT_GOOGLE_SCOPES = (GMAIL_READONLY_SCOPE,)
+CALENDAR_WRITE_SCOPES = (CALENDAR_EVENTS_SCOPE,)
 GOOGLE_SCOPE_ALIASES = {
     "gmail.readonly": GMAIL_READONLY_SCOPE,
     "calendar.events": CALENDAR_EVENTS_SCOPE,
