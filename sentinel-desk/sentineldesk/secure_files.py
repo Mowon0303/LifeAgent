@@ -140,10 +140,7 @@ def _verify_windows_acl(path: Path, sid: str) -> FileProtection:
     granted = _granted_trustees(path)
     if not granted:
         raise FileProtectionError("Token file ACL could not be read back for verification.")
-    if sid not in granted:
-        raise FileProtectionError(
-            "Token file does not grant the current account; refusing to treat it as protected."
-        )
+
     outsiders = sorted(granted - {sid} - PRIVILEGED_TRUSTEES)
     if outsiders:
         # Authenticated Users, Users, Everyone, or another account: the token
@@ -152,6 +149,20 @@ def _verify_windows_acl(path: Path, sid: str) -> FileProtection:
             "Token file is still readable by non-privileged principals after hardening: "
             + ", ".join(outsiders)
         )
+
+    # Absence of outsiders is the security property; the owner's own access is
+    # confirmed by reading the file rather than by looking for a SID in the DACL.
+    # SDDL abbreviates well-known accounts to aliases -- a local administrator is
+    # written "LA", not S-1-5-21-...-500 -- so an exact SID match would report a
+    # perfectly protected file as unreadable by its own owner.
+    try:
+        with open(path, "rb"):
+            pass
+    except OSError as exc:
+        raise FileProtectionError(
+            "Token file is not readable by the account that wrote it after hardening."
+        ) from exc
+
     privileged = sorted(granted & PRIVILEGED_TRUSTEES)
     detail = "owner-only DACL (inheritance removed)"
     if privileged:
