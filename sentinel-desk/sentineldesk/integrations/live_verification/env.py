@@ -18,14 +18,14 @@ def build_env_template(
     env_refs = [
         {
             "name": google_credentials_env,
-            "purpose": "Google OAuth client credentials JSON for Gmail and Google Calendar.",
-            "scope": "gmail.readonly + calendar.events",
+            "purpose": "Google OAuth client credentials JSON.",
+            "scope": "gmail.readonly (calendar.events only when external calendar writes are explicitly requested)",
             "status": secret_status(env_secret(google_credentials_env)),
         },
         {
             "name": google_token_env,
-            "purpose": "Google authorized user token JSON for Gmail and Google Calendar.",
-            "scope": "gmail.readonly + calendar.events",
+            "purpose": "Google authorized user token JSON.",
+            "scope": "gmail.readonly (a token carrying calendar write fails the readiness scope boundary)",
             "status": secret_status(env_secret(google_token_env)),
         },
         {
