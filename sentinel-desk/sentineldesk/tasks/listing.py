@@ -58,6 +58,7 @@ def list_tasks(
     # A deadline whose date is already past is not actionable, so drop it from
     # the review queue (dateless / relative deadlines have no due_key and stay).
     tasks = [task for task in tasks if not _deadline_is_past(task, today_key)]
+    _mark_repeated_boilerplate(tasks)
     for task in tasks:
         _apply_priority(task)
     # Learn from the reviewer: senders whose mail has been ignored repeatedly get
@@ -343,11 +344,60 @@ def _deadline_is_past(task: dict[str, Any], today_key: str) -> bool:
     return bool(due_key) and due_key < today_key
 
 
+def _mark_repeated_boilerplate(tasks: list[dict[str, Any]]) -> None:
+    """Flag action text a sender reprints in message after message.
+
+    Enumerating footer phrases does not scale -- every sender invents new ones,
+    and the live review turned up trademark notices, "reply for assistance", and
+    standing safety advice from three different senders. But boilerplate has a
+    shape no phrase list needs: the *same* instruction, from the *same* sender,
+    across *different* messages. A genuine task is about one thing that happened
+    once.
+
+    Flagged rather than dropped: two real rent reminders would look the same, and
+    demoting a repeated real task costs a scroll while deleting it loses work.
+    """
+    seen: dict[tuple[str, str], set[str]] = {}
+    for task in tasks:
+        if str(task.get("kind") or "") != "action":
+            continue
+        key = (
+            _sender_domain(str(task.get("sender") or "")),
+            " ".join(str(task.get("value") or "").lower().split())[:80],
+        )
+        if not key[0] or not key[1]:
+            continue
+        seen.setdefault(key, set()).add(str(task.get("primary_source") or ""))
+
+    repeated = {key for key, sources in seen.items() if len(sources) > 1}
+    for task in tasks:
+        if str(task.get("kind") or "") != "action":
+            continue
+        key = (
+            _sender_domain(str(task.get("sender") or "")),
+            " ".join(str(task.get("value") or "").lower().split())[:80],
+        )
+        if key in repeated:
+            task["boilerplate"] = True
+
+
 def _sender_key(sender: str) -> str:
     """Normalize a 'Name <addr@host>' sender down to its lowercased address."""
     match = re.search(r"<([^>]+)>", sender)
     address = (match.group(1) if match else sender).strip().lower()
     return address if "@" in address else ""
+
+
+def _sender_domain(sender: str) -> str:
+    """The sending domain, which is the part that stays put.
+
+    Transactional senders randomize the local part per message
+    ("no-reply-mvsfpoe6@..." then "no-reply-zmivyvtb@..."), so the full address
+    identifies the message rather than the sender. For "who keeps printing this
+    same line", the domain is the stable identity.
+    """
+    address = _sender_key(sender)
+    return address.rsplit("@", 1)[-1] if "@" in address else ""
 
 
 def _muted_senders(tasks: list[dict[str, Any]]) -> set[str]:

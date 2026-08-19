@@ -93,12 +93,25 @@ def extract_email_facts(message: EmailMessage, *, deadline_gate: DeadlineGate | 
             )
         )
     suppress_promo_actions = _promotional_message_without_user_action(message)
-    for match in ACTION_RE.finditer(text):
+    # The sender address leads the scanned text, and addresses are full of words
+    # that look like verbs -- "no-reply@", "billing@", "support@". A match that
+    # starts inside one is always spurious, and because ACTION_RE spans up to 90
+    # characters past its verb and finditer does not overlap, such a match also
+    # swallows the first real instruction of the message. That is how a genuine
+    # "please update your payment details" disappeared from mail sent by a
+    # no-reply@ address, which is most mail worth extracting from.
+    # Sliced out rather than skipped: ACTION_RE spans up to 90 characters past its
+    # verb and finditer does not overlap, so a spurious match inside the address
+    # consumes the first real instruction of the message before anything gets a
+    # chance to reject it. Ignoring the match after the fact loses the instruction
+    # too -- the text has to never be scanned.
+    action_text = text[_sender_prefix_length(message):].lstrip()
+    for match in ACTION_RE.finditer(action_text):
         if suppress_promo_actions:
             break
         verb = match.group("verb").lower()
         action = normalize_text(match.group(0))
-        if not _action_context_allowed(text, match.start(), verb, action):
+        if not _action_context_allowed(action_text, match.start(), verb, action):
             continue
         facts.append(
             EmailFact(
@@ -107,7 +120,7 @@ def extract_email_facts(message: EmailMessage, *, deadline_gate: DeadlineGate | 
                 source_id=message.source_id,
                 source_type=message.source_type,
                 trust_label=message.trust_label,
-                evidence=_context(text, match.start(), match.end()),
+                evidence=_context(action_text, match.start(), match.end()),
                 confidence=0.68,
                 received_at=message.received_at,
                 metadata=_metadata(message),
@@ -130,6 +143,11 @@ def _dedup_facts(facts: list[EmailFact]) -> list[EmailFact]:
         seen.add(key)
         deduped.append(fact)
     return deduped
+
+
+def _sender_prefix_length(message: EmailMessage) -> int:
+    """How much of the scanned text is the sender address rather than content."""
+    return len(normalize_text(message.sender or ""))
 
 
 def _message_fact_text(message: EmailMessage) -> str:
@@ -415,11 +433,7 @@ def _action_context_allowed(text: str, start: int, verb: str, action: str) -> bo
     lowered = action.lower()
     if _action_noise_context(text, start, verb, lowered):
         return False
-    if (
-        verb == "contact"
-        and "support" in lowered
-        and "if you did not" in text[max(0, start - 90) : start].lower()
-    ):
+    if _instruction_is_not_a_task(text, start, lowered):
         return False
     if verb == "reply" and _looks_like_email_local_part(text, start, verb):
         return False
@@ -444,6 +458,29 @@ def _action_context_allowed(text: str, start: int, verb: str, action: str) -> bo
         return True
     previous = _previous_word(text, start)
     return previous in ACTION_CUE_WORDS
+
+
+def _instruction_is_not_a_task(text: str, start: int, action: str) -> bool:
+    """An imperative verb that the user is not actually being asked to act on.
+
+    Three separate ways an instruction can be present but inert, all of which put
+    items into a real review queue:
+
+    * it is negated -- "please don't reply to this" became a "reply" task, which
+      told the user to do the thing the sender explicitly forbade;
+    * it is conditional on something unverifiable -- "if you didn't make this
+      payment, contact us" is only a task if the payment was fraudulent;
+    * it is boilerplate -- trademark footers, "Remember: always ...", and support
+      offers reprinted in every message from that sender.
+    """
+    before = text[max(0, start - 90) : start]
+    if ACTION_NEGATION_RE.search(before):
+        return True
+    if ACTION_UNVERIFIED_CONDITION_RE.search(before):
+        return True
+    # Boilerplate can sit on either side of the verb: a trademark notice tends to
+    # follow it, while "Remember: always ..." and footer markers precede it.
+    return bool(ACTION_BOILERPLATE_RE.search(action) or ACTION_BOILERPLATE_RE.search(before))
 
 
 def _action_noise_context(text: str, start: int, verb: str, action: str) -> bool:

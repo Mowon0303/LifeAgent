@@ -64,6 +64,13 @@ def _apply_priority(task: dict[str, Any]) -> None:
         reasons.append("relative_or_unparsed_deadline")
         has_obligation = True
 
+    if bool(task.get("boilerplate")):
+        # The same instruction, from the same sender, in message after message.
+        # It is a footer, not a to-do. Demoted rather than hidden, because a
+        # genuinely repeated reminder should still be reachable.
+        score -= 25
+        reasons.append("repeated_boilerplate")
+
     owes_money = _has_payment_context(task)
     if kind == "amount" and _is_settled_amount(task):
         # Money that already moved. A $3,000 transfer that has been sent is not a

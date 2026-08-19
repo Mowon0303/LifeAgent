@@ -281,6 +281,9 @@ __all__ = [
     "SETTLEMENT_OBLIGATION",
     "SETTLEMENT_SETTLED",
     "SETTLEMENT_INFORMATIONAL",
+    "ACTION_NEGATION_RE",
+    "ACTION_UNVERIFIED_CONDITION_RE",
+    "ACTION_BOILERPLATE_RE",
 ]
 
 
@@ -347,3 +350,58 @@ def classify_amount_settlement(context: str) -> str:
     if AMOUNT_SETTLED_RE.search(text):
         return SETTLEMENT_SETTLED
     return SETTLEMENT_INFORMATIONAL
+
+
+# --- action noise: negated, conditional, and boilerplate instructions ---------
+#
+# Real mail is full of imperative verbs that are not tasks. Three kinds showed up
+# in the first live review, and all three had produced review-queue items:
+#
+#   "Please don't reply to this automatically generated service email"
+#       -> extracted as "reply to this ..." -- the negation was dropped, so the
+#          queue told the user to do the exact thing the email forbade.
+#   "If you didn't make this payment, contact us"
+#       -> an instruction conditional on something that did not happen.
+#   "Remember: Always independently confirm transfer instructions ..."
+#       -> standing advice printed in every wire notice, never a specific task.
+
+# Negation immediately governing the verb, allowing a couple of filler words
+# ("do not ever reply"). Anchored at the end because it must precede the verb.
+ACTION_NEGATION_RE = re.compile(
+    r"\b(?:do\s*n[o']?t|don[o']?t|never|no\s+need\s+to|not\s+required\s+to|"
+    r"unable\s+to|cannot|can[o']?t|please\s+do\s+not)\s+(?:\w+\s+){0,2}$",
+    re.IGNORECASE,
+)
+
+# The instruction is conditional on an event that did *not* happen: "if you
+# didn't make this payment, contact us" is a fraud-report path, not a task.
+#
+# Deliberately narrow. "If you believe this charge is incorrect, you must dispute
+# it before August 1" is the same grammatical shape but a real, time-bounded right
+# the user may want to exercise, so opinion conditionals (believe/think/suspect)
+# are NOT suppressed -- only negated events and misdelivery are. A broader version
+# of this pattern swallowed both, and the golden set is what caught it.
+ACTION_UNVERIFIED_CONDITION_RE = re.compile(
+    r"\bif\s+(?:you|this)\s+(?:did\s*n[o']?t|didn[o']?t|do\s*n[o']?t|don[o']?t|"
+    r"was\s*n[o']?t|wasn[o']?t|were\s*n[o']?t|weren[o']?t|"
+    r"is\s+not|are\s+not|received\s+this\s+in\s+error)\b"
+    r"[^.!?]{0,80}$",
+    re.IGNORECASE,
+)
+
+# Legal footers, standing safety advice, and generic support offers.
+ACTION_BOILERPLATE_RE = re.compile(
+    r"\b("
+    r"remember\s*:\s*always|always\s+independently|"
+    r"related\s+marks\s+are|wholly\s+owned\s+by|trademarks?\s+of|"
+    r"automatically\s+generated|"
+    # NB: no "do not reply" / "no-reply" here. The sender address is part of the
+    # text this runs over, so those would poison the opening of every message
+    # from a no-reply@ address -- which is nearly every bill and notice worth
+    # extracting. Negated instructions are handled by ACTION_NEGATION_RE, which
+    # requires the negation to actually govern the verb.
+    r"for\s+assistance\s+from|equal\s+housing|privacy\s+notice|"
+    r"unsubscribe|manage\s+(?:your\s+)?preferences|terms\s+(?:and|&)\s+conditions"
+    r")\b",
+    re.IGNORECASE,
+)
