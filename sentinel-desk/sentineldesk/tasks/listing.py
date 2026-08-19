@@ -10,6 +10,11 @@ from typing import Any
 
 from .. import db
 from ..config import Paths
+from ..email.extract_patterns import (
+    SETTLEMENT_INFORMATIONAL,
+    SETTLEMENT_OBLIGATION,
+    SETTLEMENT_SETTLED,
+)
 from ..extract import utc_now
 from .common import (
     MUTE_IGNORE_THRESHOLD,
@@ -167,11 +172,33 @@ def _email_fact_tasks(
                     "needs_verification": any(
                         _needs_verification([source_id], str(fact.get("confidence") or "")) for fact in facts
                     ),
+                    "settlement": _group_settlement(facts),
                 },
                 review,
             )
         )
     return tasks
+
+
+def _group_settlement(facts: list[dict[str, Any]]) -> str:
+    """Collapse a grouped amount task to one settlement state.
+
+    A single email can both confirm a payment and bill the next one. When its
+    amounts disagree, the obligation wins: under-ranking a real bill costs the
+    user money, while over-ranking a receipt only costs them a glance.
+    """
+    states = {
+        str((fact.get("metadata") or {}).get("settlement") or "")
+        for fact in facts
+        if isinstance(fact.get("metadata"), dict)
+    }
+    states.discard("")
+    if not states:
+        return ""
+    for preferred in (SETTLEMENT_OBLIGATION, SETTLEMENT_INFORMATIONAL, SETTLEMENT_SETTLED):
+        if preferred in states:
+            return preferred
+    return sorted(states)[0]
 
 
 def _apply_review(task: dict[str, Any], review: dict[str, Any]) -> dict[str, Any]:

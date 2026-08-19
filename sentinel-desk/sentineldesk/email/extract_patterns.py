@@ -275,4 +275,75 @@ __all__ = [
     "CONTEXT_SENSITIVE_ACTION_VERBS",
     "CALIBRATED_AMOUNT_CONFIDENCE",
     "HIGH_CUE_AMOUNT_CONFIDENCE",
+    "AMOUNT_SETTLED_RE",
+    "AMOUNT_OBLIGATION_RE",
+    "classify_amount_settlement",
+    "SETTLEMENT_OBLIGATION",
+    "SETTLEMENT_SETTLED",
+    "SETTLEMENT_INFORMATIONAL",
 ]
+
+
+# --- amount settlement -------------------------------------------------------
+#
+# "Payment of $3,122.22 has been sent" and "Payment of $3,122.22 is due" are the
+# same words away from opposite meanings: one is money that already moved, the
+# other is money you still owe. Treating both as a payment obligation is what put
+# completed bank transfers at the top of the review queue, ahead of real bills.
+#
+# The classification is deliberately local -- it reads the context around *this*
+# amount, not the whole email -- because a statement can settle one amount and
+# bill another in the same message.
+
+AMOUNT_SETTLED_RE = re.compile(
+    r"\b("
+    r"has been (?:sent|paid|charged|credited|posted|processed|refunded|deposited|received)|"
+    r"have been (?:sent|paid|charged|credited|posted|processed|refunded)|"
+    r"was (?:sent|paid|charged|credited|posted|processed|refunded|deposited|debited)|"
+    r"were (?:sent|paid|charged|credited|posted|processed|refunded)|"
+    r"we(?:'ve| have)? received your payment|received your payment|payment received|"
+    r"thank you for your payment|thanks for your payment|payment confirmation|"
+    r"you (?:sent|paid|transferred)|successfully (?:sent|paid|processed|charged)|"
+    r"transfer (?:complete|completed|sent)|transaction (?:complete|completed|posted)|"
+    r"your receipt|receipt for|order confirmation|refund(?:ed)? (?:of|to|for)|"
+    r"payment (?:sent|posted|complete|completed)|charged to your"
+    r")\b",
+    re.IGNORECASE,
+)
+
+# Future-tense charges are obligations, not settlements: "will be charged" is
+# money about to leave, which the user may still want to stop.
+AMOUNT_OBLIGATION_RE = re.compile(
+    r"\b("
+    r"amount due|balance due|payment due|total due|past due|now due|"
+    r"due (?:by|on|date)|(?:is|are|remains) due|"
+    r"due\s+(?:\d{1,2}|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)|"
+    r"minimum payment|please pay|pay by|pay before|make a payment|"
+    r"outstanding balance|unpaid|you owe|owed|remains? due|"
+    r"will be (?:charged|billed|debited|due)|autopay|auto-?pay will|"
+    r"invoice|statement balance|rent (?:is )?due|"
+    r"avoid (?:a )?late fee|late fee (?:applies|will)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+SETTLEMENT_OBLIGATION = "obligation"
+SETTLEMENT_SETTLED = "settled"
+SETTLEMENT_INFORMATIONAL = "informational"
+
+
+def classify_amount_settlement(context: str) -> str:
+    """Is this amount money still owed, money already moved, or neither?
+
+    An explicit obligation cue wins over a settlement cue, so "we received your
+    payment; your next payment of $200 is due Sept 1" is not written off as
+    settled. Everything with no cue either way stays ``informational`` -- that is
+    the honest answer for a marketing tier table or a credit limit, and it keeps
+    those out of the obligation ranking without pretending they are receipts.
+    """
+    text = str(context or "")
+    if AMOUNT_OBLIGATION_RE.search(text):
+        return SETTLEMENT_OBLIGATION
+    if AMOUNT_SETTLED_RE.search(text):
+        return SETTLEMENT_SETTLED
+    return SETTLEMENT_INFORMATIONAL

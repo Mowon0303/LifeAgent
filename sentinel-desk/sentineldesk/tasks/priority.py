@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from .common import _confidence_value, _has_payment_context, _task_due_key
+from .common import _confidence_value, _has_payment_context, _is_settled_amount, _task_due_key
 
 
 AMOUNT_RE = re.compile(r"[$€£¥￥]?\s*(\d[\d,]*(?:\.\d{1,2})?)")
@@ -64,17 +64,29 @@ def _apply_priority(task: dict[str, Any]) -> None:
         reasons.append("relative_or_unparsed_deadline")
         has_obligation = True
 
-    if kind == "amount":
+    owes_money = _has_payment_context(task)
+    if kind == "amount" and _is_settled_amount(task):
+        # Money that already moved. A $3,000 transfer that has been sent is not a
+        # bigger to-do than a $30 one that is still owed -- it is not a to-do at
+        # all -- so size earns nothing here and the item sinks below real
+        # obligations. It stays in the queue as evidence, not as work.
+        score -= 20
+        reasons.append("settled_amount")
+    elif kind == "amount":
+        # Size still counts -- a large number is worth a look either way -- but
+        # only a *classified obligation* opens the high lane. A marketing tier
+        # table ("$500,000 | $250,000 | $0") and a credit limit are large numbers
+        # that nobody owes, and letting magnitude alone promote them is what
+        # filled the top of the queue with things the user cannot act on.
         amount = _max_amount(task)
         if amount >= 1000:
             score += 20
             reasons.append("large_amount")
-            has_obligation = True
         elif amount >= 100:
             score += 10
             reasons.append("meaningful_amount")
-            has_obligation = True
-    if _has_payment_context(task):
+        has_obligation = has_obligation or owes_money
+    if owes_money:
         score += 15
         reasons.append("payment_context")
     if _has_action_context(task):

@@ -1,9 +1,9 @@
 [
   {
-    "event_id": "7b8c3becb99ab82c",
+    "event_id": "89bc10c521e98e28",
     "title": "Rent payment reminder",
-    "date_text": "08/22/2026",
-    "date_key": "2026-08-22",
+    "date_text": "08/27/2026",
+    "date_key": "2026-08-27",
     "severity": "critical",
     "confidence": 0.86,
     "status": "draft",
@@ -34,10 +34,10 @@
     "end_time": ""
   },
   {
-    "event_id": "07a23602a71aea03",
+    "event_id": "0d9fd749d61ea8d0",
     "title": "Your monthly statement is ready",
-    "date_text": "08/30/2026",
-    "date_key": "2026-08-30",
+    "date_text": "09/04/2026",
+    "date_key": "2026-09-04",
     "severity": "critical",
     "confidence": 0.86,
     "status": "draft",
@@ -68,10 +68,10 @@
     "end_time": ""
   },
   {
-    "event_id": "29b9019d7f726784",
+    "event_id": "16ab40f0688fad1b",
     "title": "Request for Evidence issued",
-    "date_text": "October 05, 2026",
-    "date_key": "2026-10-05",
+    "date_text": "October 10, 2026",
+    "date_key": "2026-10-10",
     "severity": "critical",
     "confidence": 0.86,
     "status": "draft",

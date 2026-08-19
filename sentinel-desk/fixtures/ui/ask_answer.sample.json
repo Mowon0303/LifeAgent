@@ -1,6 +1,6 @@
 {
   "intent": "latest_deadline",
-  "answer": "Conflicting deadline evidence found: 08/22/2026, 08/30/2026, October 05, 2026. Safest earlier candidate: 08/22/2026. Verify before acting.",
+  "answer": "Conflicting deadline evidence found: 08/27/2026, 09/04/2026, October 10, 2026. Safest earlier candidate: 08/27/2026. Verify before acting.",
   "confidence": "uncertain",
   "uncertain": true,
   "requires_confirmation": false,
@@ -11,20 +11,20 @@
     {
       "source_id": "stored_email:ui-sample-rent-001",
       "source_type": "stored_email",
-      "evidence": "ces.example Rent payment reminder Hello, Your monthly rent payment of $1,850.00 is due by 08/22/2026. Please pay online through the resident portal. Parkview Residences",
-      "captured_at": "2026-08-08T09:00:00+00:00"
+      "evidence": "ces.example Rent payment reminder Hello, Your monthly rent payment of $1,850.00 is due by 08/27/2026. Please pay online through the resident portal. Parkview Residences",
+      "captured_at": "2026-08-13T09:00:00+00:00"
     },
     {
       "source_id": "stored_email:ui-sample-opt-001",
       "source_type": "stored_email",
-      "evidence": "e issued USCIS has issued a Request for Evidence for your Form I-765. You must respond by October 05, 2026. Review the RFE notice and submit the requested documents.",
-      "captured_at": "2026-07-25T15:00:00+00:00"
+      "evidence": "e issued USCIS has issued a Request for Evidence for your Form I-765. You must respond by October 10, 2026. Review the RFE notice and submit the requested documents.",
+      "captured_at": "2026-07-30T15:00:00+00:00"
     },
     {
       "source_id": "stored_email:ui-sample-card-001",
       "source_type": "stored_email",
-      "evidence": "nt is ready. Statement balance: $1,243.87. Minimum payment due: $35.00. Payment due date: 08/30/2026.",
-      "captured_at": "2026-07-25T07:00:00+00:00"
+      "evidence": "nt is ready. Statement balance: $1,243.87. Minimum payment due: $35.00. Payment due date: 09/04/2026.",
+      "captured_at": "2026-07-30T07:00:00+00:00"
     }
   ],
   "metadata": {

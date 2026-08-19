@@ -10,6 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from ..email.extract_patterns import SETTLEMENT_OBLIGATION, SETTLEMENT_SETTLED
+
 from ..calendar.view import parse_deadline_date
 
 
@@ -89,11 +91,26 @@ def _is_active_status(status: str) -> bool:
 
 
 def _has_payment_context(task: dict[str, Any]) -> bool:
+    """Does this task represent money the user still owes?
+
+    Keyword presence is not enough: "payment of $3,122.22 has been sent" contains
+    every one of these terms and is a completed transfer, not a bill. When the
+    extractor has classified the amount, that classification decides; the keyword
+    scan is only the fallback for tasks carrying no settlement state.
+    """
+    settlement = str(task.get("settlement") or "")
+    if settlement:
+        return settlement == SETTLEMENT_OBLIGATION
     text = " ".join(
         str(task.get(key) or "")
         for key in ("title", "subject", "evidence", "due_date", "value")
     ).lower()
     return any(term in text for term in ("payment", "balance", "amount due", "minimum", "pay ", "due"))
+
+
+def _is_settled_amount(task: dict[str, Any]) -> bool:
+    """Money that already moved. Still evidence, but never a to-do."""
+    return str(task.get("settlement") or "") == SETTLEMENT_SETTLED
 
 
 def _validate_status(status: str) -> None:

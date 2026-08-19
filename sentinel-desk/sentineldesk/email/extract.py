@@ -70,7 +70,7 @@ def extract_email_facts(message: EmailMessage, *, deadline_gate: DeadlineGate | 
                 evidence=context,
                 confidence=_amount_confidence(text, match.start()),
                 received_at=message.received_at,
-                metadata=_metadata(message),
+                metadata=_metadata(message, settlement=classify_amount_settlement(context)),
             )
         )
     for match in SPELLED_AMOUNT_RE.finditer(text):
@@ -89,7 +89,7 @@ def extract_email_facts(message: EmailMessage, *, deadline_gate: DeadlineGate | 
                 evidence=context,
                 confidence=HIGH_CUE_AMOUNT_CONFIDENCE,
                 received_at=message.received_at,
-                metadata=_metadata(message),
+                metadata=_metadata(message, settlement=classify_amount_settlement(context)),
             )
         )
     suppress_promo_actions = _promotional_message_without_user_action(message)
@@ -278,14 +278,19 @@ def _commerce_notification_without_user_deadline(message: EmailMessage, context:
     return bool(COMMERCE_DATE_CONTEXT_RE.search(combined) or COMMERCE_NOTIFICATION_RE.search(subject_body))
 
 
-def _metadata(message: EmailMessage) -> dict[str, str]:
-    return {
+def _metadata(message: EmailMessage, *, settlement: str = "") -> dict[str, str]:
+    data = {
         "subject": message.subject,
         "sender": message.sender,
         "source_type": message.source_type,
         "trust_label": message.trust_label,
         "attachment_names": ", ".join(message.attachment_names),
     }
+    if settlement:
+        # Whether this amount is still owed, already moved, or neither. Carried on
+        # the fact so the review queue can rank a bill above a receipt.
+        data["settlement"] = settlement
+    return data
 
 
 def _context(text: str, start: int, end: int, window: int = 90) -> str:

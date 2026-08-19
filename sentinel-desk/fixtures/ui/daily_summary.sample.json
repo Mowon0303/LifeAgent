@@ -1,6 +1,6 @@
 {
   "status": "ready",
-  "generated_at": "2026-08-14T04:32:47+00:00",
+  "generated_at": "2026-08-19T05:53:30+00:00",
   "mode": "daily_landing",
   "sync": {
     "mode": "stored_only",
@@ -11,7 +11,7 @@
   },
   "email": {
     "stored_message_count": 4,
-    "latest_received_at": "2026-08-12T08:00:00+00:00",
+    "latest_received_at": "2026-08-17T08:00:00+00:00",
     "fact_counts": {
       "action": 2,
       "amount": 3,
@@ -35,7 +35,7 @@
   "connectors": [],
   "gmail_readiness": {
     "status": "needs_oauth",
-    "generated_at": "2026-08-14T04:32:47+00:00",
+    "generated_at": "2026-08-19T05:53:31+00:00",
     "mode": "gmail_first_readiness",
     "account_id": "default",
     "credentials_env": "SENTINEL_GOOGLE_CREDENTIALS_JSON",
@@ -98,20 +98,33 @@
         }
       },
       {
-        "name": "gmail.dependencies",
+        "name": "gmail.scope_boundary",
         "status": "missing",
-        "detail": "Install the Gmail optional dependencies before a live sync.",
+        "detail": "Google token scopes are not available.",
+        "metadata": {
+          "env": "SENTINEL_GOOGLE_TOKEN_JSON",
+          "secret": "env:SENTINEL_GOOGLE_TOKEN_JSON:***",
+          "forbidden_scopes": [
+            "https://www.googleapis.com/auth/calendar.events",
+            "https://www.googleapis.com/auth/calendar",
+            "https://www.googleapis.com/auth/gmail.modify",
+            "https://www.googleapis.com/auth/gmail.send",
+            "https://mail.google.com/"
+          ],
+          "scopes_present": []
+        }
+      },
+      {
+        "name": "gmail.dependencies",
+        "status": "ready",
+        "detail": "Gmail optional dependencies are importable.",
         "metadata": {
           "required_modules": [
             "googleapiclient.discovery",
             "google.oauth2.credentials",
             "google_auth_oauthlib.flow"
           ],
-          "missing_modules": [
-            "googleapiclient.discovery",
-            "google.oauth2.credentials",
-            "google_auth_oauthlib.flow"
-          ]
+          "missing_modules": []
         }
       },
       {
@@ -131,7 +144,7 @@
         "detail": "Stored local email evidence is available.",
         "metadata": {
           "stored_message_count": 4,
-          "latest_received_at": "2026-08-12T08:00:00+00:00"
+          "latest_received_at": "2026-08-17T08:00:00+00:00"
         }
       }
     ],
@@ -139,7 +152,7 @@
     "has_local_evidence": true,
     "has_cursor": false,
     "stored_message_count": 4,
-    "latest_received_at": "2026-08-12T08:00:00+00:00",
+    "latest_received_at": "2026-08-17T08:00:00+00:00",
     "connector": {
       "connector": "gmail_api",
       "account_id": "",
@@ -158,7 +171,7 @@
   },
   "gmail_sync_diagnostics": {
     "status": "no_attempt",
-    "generated_at": "2026-08-14T04:32:47+00:00",
+    "generated_at": "2026-08-19T05:53:31+00:00",
     "mode": "gmail_sync_diagnostics",
     "account_id": "",
     "latest_failure": null,
@@ -176,7 +189,7 @@
   },
   "review_receipt": {
     "status": "ready",
-    "generated_at": "2026-08-14T04:32:47+00:00",
+    "generated_at": "2026-08-19T05:53:31+00:00",
     "mode": "local_review_receipt",
     "history_limit": 50,
     "review_event_count": 0,
