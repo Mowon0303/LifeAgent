@@ -66,7 +66,16 @@ def classify_intent(question: str, *, previous_intent: str | None = None) -> Int
         return Intent.POLICY_QUESTION
     if _has_any(text, ["deadline", "due date", "最晚", "截止", "到期", "什么时候"]):
         return Intent.LATEST_DEADLINE
-    if _has_any(text, ["balance", "amount", "bill", "invoice", "rent", "how much", "due", "owed", "多少钱", "金额", "欠费", "账单"]):
+    # "要付的钱" / "要交的钱" are how the question actually gets asked, and they
+    # share no substring with "多少钱" -- a P3 probe found "我最近有哪些要付的钱？"
+    # falling through to GENERAL while "我欠了多少钱？" routed fine.
+    # These are substring matches, not word matches, so bare English stems are a
+    # trap: "owe" hides inside "lowest" and would hijack "the lowest rate offer".
+    # The gap this closes is Chinese phrasing anyway.
+    if _has_any(text, [
+        "balance", "amount", "bill", "invoice", "rent", "how much", "due", "owed",
+        "多少钱", "金额", "欠费", "账单", "要付", "该付", "付款", "要交", "该交", "缴费", "还款", "欠了", "欠多少",
+    ]):
         return Intent.LATEST_AMOUNT
     if _has_any(text, ["why", "alert", "报警", "为什么", "触发"]):
         return Intent.ALERT_EXPLANATION

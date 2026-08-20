@@ -14,7 +14,12 @@ from ..router import classify_intent
 from ..schemas import AgentAnswer, Citation, Intent
 from ..tools import ToolRegistry, default_tool_registry
 from .calendar_action import _calendar_action_answer
-from .facts import _latest_global_answer, _task_overview_answer
+from .facts import (
+    _latest_global_answer,
+    _task_overview_answer,
+    asked_in_chinese,
+    prefer_obligation_amounts,
+)
 from .general import _general_answer
 from .policy import _answer_policy_question
 from .portal import _portal_trigger_citations, _should_verify_portal, _verify_deadline_from_portal
@@ -31,6 +36,7 @@ def answer_question(
     general_mode: str | None = None,
     calendar: list[dict] | None = None,
     chat_client: object | None = None,
+    review_queue_count: int | None = None,
 ) -> AgentAnswer:
     active_registry = registry or default_tool_registry()
     # intent_override carries the workflow's LLM-resolved intent; without it we
@@ -47,6 +53,8 @@ def answer_question(
             for fact in extract_email_facts(message)
             if fact.kind == wanted
         ]
+        if wanted == "amount":
+            keyword_matches = prefer_obligation_amounts(keyword_matches)
         # A narrow, specific query ("when is my rent due") keyword-matches a few
         # emails about the same obligation — keep the conflict-aware path there.
         # A broad query ("latest deadline"), a cross-language one, or a keyword
@@ -61,9 +69,12 @@ def answer_question(
                 for fact in extract_email_facts(message)
                 if fact.kind == wanted
             ]
+            if wanted == "amount":
+                global_matches = prefer_obligation_amounts(global_matches)
             if global_matches:
                 return _latest_global_answer(
-                    global_matches, wanted=wanted, intent=intent, tool_calls=tool_calls
+                    global_matches, wanted=wanted, intent=intent,
+                    tool_calls=tool_calls, question=question,
                 )
             if wanted == "deadline" and _should_verify_portal(messages or []):
                 portal_answer = _verify_deadline_from_portal(
@@ -73,9 +84,15 @@ def answer_question(
                 )
                 if portal_answer is not None:
                     return portal_answer
+            no_evidence = (
+                ("我在现有邮件证据里没有找到截止。" if wanted == "deadline"
+                 else "我在现有邮件证据里没有找到你要付的金额。")
+                if asked_in_chinese(question)
+                else "I cannot verify the latest fact from available email evidence."
+            )
             return AgentAnswer(
                 intent=intent,
-                answer="I cannot verify the latest fact from available email evidence.",
+                answer=no_evidence,
                 confidence="uncertain",
                 tool_calls=tuple(tool_calls),
                 uncertain=True,
@@ -92,10 +109,20 @@ def answer_question(
                 )
                 for fact in conflict.facts
             )
-            safest = f" Safest earlier candidate: {conflict.safest_value}." if conflict.safest_value else ""
+            if asked_in_chinese(question):
+                kind_zh = "截止" if wanted == "deadline" else "金额"
+                safest = f"最保守的取值是 {conflict.safest_value}。" if conflict.safest_value else ""
+                conflict_text = (
+                    f"发现互相冲突的{kind_zh}证据：{'、'.join(conflict.values)}。{safest}行动前请先核实。"
+                )
+            else:
+                safest = f" Safest earlier candidate: {conflict.safest_value}." if conflict.safest_value else ""
+                conflict_text = (
+                    f"Conflicting {wanted} evidence found: {', '.join(conflict.values)}.{safest} Verify before acting."
+                )
             return AgentAnswer(
                 intent=intent,
-                answer=f"Conflicting {wanted} evidence found: {', '.join(conflict.values)}.{safest} Verify before acting.",
+                answer=conflict_text,
                 confidence="uncertain",
                 citations=citations,
                 tool_calls=tuple(tool_calls),
@@ -103,9 +130,13 @@ def answer_question(
                 metadata={"conflict_kind": wanted},
             )
         best = sorted(matches, key=lambda fact: (fact.confidence, fact.received_at), reverse=True)[0]
+        if asked_in_chinese(question):
+            verified_text = f"已核实的{'截止' if wanted == 'deadline' else '金额'}：{best.value}"
+        else:
+            verified_text = f"Verified {wanted}: {best.value}"
         return AgentAnswer(
             intent=intent,
-            answer=f"Verified {wanted}: {best.value}",
+            answer=verified_text,
             confidence="high" if best.confidence >= 0.75 else "medium",
             citations=(
                 Citation(
@@ -120,7 +151,7 @@ def answer_question(
 
     if intent == Intent.TASK_OVERVIEW:
         active_registry.assert_can_call("search_latest_email")
-        return _task_overview_answer(calendar or [])
+        return _task_overview_answer(calendar or [], review_queue_count=review_queue_count)
 
     if intent == Intent.CALENDAR_ACTION:
         active_registry.assert_can_call("draft_calendar_event")

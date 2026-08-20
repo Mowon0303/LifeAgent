@@ -3,46 +3,73 @@ evidence and fall back to a deterministic portal capture when no email fact answ
 
 from __future__ import annotations
 
+# The pipeline's own reader, on purpose: it strips markup and quoted replies,
+# and re-implementing that here is how the two drifted apart in the first place.
+from sentineldesk.email.extract import _subject_body_text
+from sentineldesk.email.extract_patterns import SECURITY_NOTIFICATION_RE, STRONG_DEADLINE_CUE_RE
 from sentineldesk.email.models import EmailMessage
 
 from ..schemas import AgentAnswer, Citation, Intent
 from ..tools import ToolRegistry
 
 
+PORTAL_TERMS = ("log in", "login", "sign in", "portal", "view online", "view your account", "account center")
+
+
+def _message_text(message: EmailMessage) -> str:
+    """Readable text, the same way the extraction pipeline reads a message.
+
+    Joining ``body_text`` raw put ``<!DOCTYPE html><html lang="en" xmlns=...``
+    into citation evidence, so drilling into a cited source showed markup
+    instead of the sentence that justified the citation.
+    """
+    parts = [_subject_body_text(message)]
+    parts.extend(str(item) for item in message.attachment_texts)
+    return " ".join(part for part in parts if part)
+
+
 def _should_verify_portal(messages: list[EmailMessage]) -> bool:
-    terms = ("log in", "login", "sign in", "portal", "view online", "view your account", "account center")
-    for message in messages:
-        text = " ".join([message.subject, message.body_text, *message.attachment_texts]).lower()
-        if any(term in text for term in terms):
-            return True
-    return False
+    return any(_is_portal_trigger(message) for message in messages)
+
+
+def _is_portal_trigger(message: EmailMessage) -> bool:
+    """Does this message actually say "the deadline lives in the portal"?
+
+    Matching "sign in" alone made every security alert a portal trigger. A real
+    mailbox is full of "New sign-in to your OpenAI account", and each one pushed
+    a deadline question onto the portal path and then cited itself -- four
+    citations, none of them containing a deadline. So a trigger now needs both
+    halves: a way in *and* something dated to go in for. Security notifications
+    are excluded outright; they are reporting a sign-in that already happened,
+    not asking for one.
+    """
+    text = _message_text(message)
+    if not any(term in text.lower() for term in PORTAL_TERMS):
+        return False
+    if SECURITY_NOTIFICATION_RE.search(text):
+        return False
+    return bool(STRONG_DEADLINE_CUE_RE.search(text))
 
 
 def _portal_trigger_citations(messages: list[EmailMessage]) -> tuple[Citation, ...]:
-    citations: list[Citation] = []
-    for message in messages:
-        text = " ".join([message.subject, message.body_text, *message.attachment_texts]).lower()
-        if not _contains_portal_trigger(text):
-            continue
-        citations.append(
-            Citation(
-                source_id=message.source_id,
-                source_type=message.source_type,
-                evidence=_portal_trigger_evidence(message),
-                captured_at=message.received_at,
-            )
+    return tuple(
+        Citation(
+            source_id=message.source_id,
+            source_type=message.source_type,
+            evidence=_portal_trigger_evidence(message),
+            captured_at=message.received_at,
         )
-    return tuple(citations)
+        for message in messages
+        if _is_portal_trigger(message)
+    )
 
 
 def _contains_portal_trigger(text: str) -> bool:
-    terms = ("log in", "login", "sign in", "portal", "view online", "view your account", "account center")
-    return any(term in text for term in terms)
+    return any(term in text.lower() for term in PORTAL_TERMS)
 
 
 def _portal_trigger_evidence(message: EmailMessage, *, limit: int = 220) -> str:
-    text = " ".join([message.subject, message.body_text, *message.attachment_texts])
-    cleaned = " ".join(text.split())
+    cleaned = " ".join(_message_text(message).split())
     if len(cleaned) <= limit:
         return cleaned
     return cleaned[: limit - 3].rstrip() + "..."

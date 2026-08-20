@@ -4,10 +4,47 @@ the UI fact-card shape."""
 
 from __future__ import annotations
 
+import re
+
+from sentineldesk.email.extract_patterns import SETTLEMENT_OBLIGATION
+
 from ..schemas import AgentAnswer, Citation, Intent
 
 
-def _task_overview_answer(calendar_items: list[dict]) -> AgentAnswer:
+_CJK_RE = re.compile(r"[一-鿿]")
+
+
+def asked_in_chinese(question: str) -> bool:
+    """A Chinese question deserves a Chinese answer.
+
+    The product's whole surface is Chinese and the user asks in Chinese, but the
+    fact-answer paths returned hardcoded English -- "Conflicting amount evidence
+    found: ..." in reply to "这个月要交多少钱？". Switching on the question keeps
+    every English-language caller (and test) on exactly the string it had.
+    """
+    return bool(_CJK_RE.search(question or ""))
+
+
+def prefer_obligation_amounts(facts: list) -> list:
+    """Among amount facts, money actually owed outranks money merely mentioned.
+
+    Settlement is already stamped on every amount fact, but the assistant layer
+    was not reading it: a wire the user had themself sent ($11,000.00 plus a
+    $45.00 fee, both informational) came back as "conflicting evidence" against
+    the one real debt in the mailbox ($31.05). Those three numbers do not
+    conflict -- two of them are not obligations at all.
+    """
+    obligations = [
+        fact
+        for fact in facts
+        if str((getattr(fact, "metadata", None) or {}).get("settlement") or "") == SETTLEMENT_OBLIGATION
+    ]
+    return obligations or list(facts)
+
+
+def _task_overview_answer(
+    calendar_items: list[dict], *, review_queue_count: int | None = None
+) -> AgentAnswer:
     """Answer "what's on my plate" from the deadlines the user has *accepted* into
     the calendar — those are the established facts. Extraction still runs and feeds
     the review queue with candidates, but a candidate only counts here once the user
@@ -34,19 +71,38 @@ def _task_overview_answer(calendar_items: list[dict]) -> AgentAnswer:
     if not approved:
         # Cold start: don't go silent. Send the user to the review card, where the
         # candidates live, so accepting one is one step away.
+        #
+        # This function only ever sees calendar items -- deadlines. It used to
+        # end an empty calendar with "我也没有待复核的候选", which is a claim about
+        # the email review queue it never looked at. On a real mailbox that
+        # queue held 19 amount/action cards while this sentence said there were
+        # none. Scope the claim to what was actually checked, and state the
+        # queue only when the caller passed its size.
         if pending_count:
             answer = (
                 f"你还没把任何截止加入日历。我找到 {pending_count} 条候选，"
                 "在上面的复核卡里逐条确认后就会算进来。"
             )
+        elif review_queue_count:
+            answer = (
+                "你的日历里还没有截止。不过邮件复核队列里有 "
+                f"{review_queue_count} 条金额/动作待看——那些不是截止，所以不会进日历。"
+            )
+        elif review_queue_count == 0:
+            answer = "你的日历里还没有截止，邮件复核队列也是空的。"
         else:
-            answer = "你的日历里还没有截止，我也没有待复核的候选。"
+            answer = "你的日历里还没有截止。（这里只看日历，邮件复核队列要单独查。）"
         return AgentAnswer(
             intent=Intent.TASK_OVERVIEW,
             answer=answer,
             confidence="medium",
             tool_calls=("search_latest_email",),
-            metadata={"deadline_count": 0, "pending_count": pending_count, "cards": []},
+            metadata={
+                "deadline_count": 0,
+                "pending_count": pending_count,
+                "review_queue_count": review_queue_count,
+                "cards": [],
+            },
         )
 
     # The per-item detail lives in the cards below, so the answer text stays a short
@@ -98,6 +154,7 @@ def _latest_global_answer(
     wanted: str,
     intent: Intent,
     tool_calls: list[str],
+    question: str = "",
 ) -> AgentAnswer:
     """Answer a broad "what's my latest/nearest X" query that spans many
     unrelated emails. The conflict path assumes the facts describe the *same*
@@ -107,11 +164,18 @@ def _latest_global_answer(
     others exist."""
     chosen = _nearest_deadline_fact(matches) if wanted == "deadline" else _most_recent_fact(matches)
     others = len(matches) - 1
-    lead = "Nearest deadline" if wanted == "deadline" else "Latest amount"
-    suffix = f" ({others} other {wanted} item{'s' if others != 1 else ''} on file.)" if others > 0 else ""
+    if asked_in_chinese(question):
+        lead = "最近的截止" if wanted == "deadline" else "最近的金额"
+        kind_zh = "截止" if wanted == "deadline" else "金额"
+        suffix = f"（另有 {others} 条{kind_zh}记录。）" if others > 0 else ""
+        answer_text = f"{lead}：{chosen.value}。{suffix}"
+    else:
+        lead = "Nearest deadline" if wanted == "deadline" else "Latest amount"
+        suffix = f" ({others} other {wanted} item{'s' if others != 1 else ''} on file.)" if others > 0 else ""
+        answer_text = f"{lead}: {chosen.value}.{suffix}"
     return AgentAnswer(
         intent=intent,
-        answer=f"{lead}: {chosen.value}.{suffix}",
+        answer=answer_text,
         confidence="high" if chosen.confidence >= 0.75 else "medium",
         citations=(
             Citation(

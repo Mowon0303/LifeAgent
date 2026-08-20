@@ -52,6 +52,9 @@ def answer_with_workflow(
         "chat_client": resolved_client,  # the route stage uses it for LLM intent fallback
         "memory_block": memory_block,
         "calendar": calendar or [],  # accepted deadlines = the overview's facts
+        # The overview answer must not claim the email review queue is empty
+        # without looking; None means "unknown", which it words honestly.
+        "review_queue_count": _review_queue_count(paths),
     }
     answer: AgentAnswer | None = None
     if runtime.engine == "langgraph":
@@ -182,10 +185,32 @@ def _finalize_stage(state: dict[str, Any]) -> dict[str, Any]:
         general_mode=state.get("general_mode"),
         calendar=list(state.get("calendar") or []),
         chat_client=state.get("chat_client"),  # CALENDAR_ACTION uses it to propose event slots
+        review_queue_count=state.get("review_queue_count"),
     )
     state["answer"] = answer
     _append_trace(state, "finalize", {"confidence": answer.confidence, "uncertain": answer.uncertain})
     return state
+
+
+def _review_queue_count(paths: Paths | None) -> int | None:
+    """How many email-review items are waiting, or None when we cannot know.
+
+    Returning None rather than 0 matters: 0 is a claim, and a caller without
+    a database is not entitled to make it.
+    """
+    if paths is None:
+        return None
+    try:
+        from sentineldesk.tasks import list_tasks
+
+        open_statuses = {"new", "needs_verification", "reviewed"}
+        return sum(
+            1
+            for task in list_tasks(paths, limit=1000)
+            if str(task.get("status") or "new") in open_statuses
+        )
+    except Exception:
+        return None
 
 
 def _append_trace(state: dict[str, Any], stage: str, metadata: dict[str, Any]) -> None:
