@@ -3,8 +3,6 @@ from __future__ import annotations
 import base64
 import importlib
 import json
-import shlex
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -12,6 +10,7 @@ from typing import Any
 from sentineldesk.integrations.google_workspace import CALENDAR_EVENTS_SCOPE, GMAIL_READONLY_SCOPE
 from sentineldesk.secure_files import write_owner_only_text
 from sentineldesk.secrets import SecretRef, SecretUnavailable, env_secret, resolve_secret
+from sentineldesk.shell_hints import env_from_file_hint
 
 
 # Least privilege by default: a token is only granted Gmail *read* access unless
@@ -97,9 +96,7 @@ def write_google_oauth_token(
 
 def _export_hint(token_env: str, output_path: Path) -> str:
     """A shell line the user can actually paste on their own platform."""
-    if sys.platform.startswith("win"):
-        return f'$env:{token_env} = Get-Content -Raw "{output_path}"'
-    return f'export {token_env}="$(cat {shlex.quote(str(output_path))})"'
+    return env_from_file_hint(token_env, output_path)
 
 
 def _credentials_to_json(credentials: Any) -> str:

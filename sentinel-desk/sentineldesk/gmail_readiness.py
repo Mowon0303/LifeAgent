@@ -10,6 +10,7 @@ from .config import Paths
 from .extract import utc_now
 from .integrations.google_workspace import CALENDAR_EVENTS_SCOPE, GMAIL_READONLY_SCOPE
 from .secrets import env_secret, resolve_secret, secret_status
+from .shell_hints import env_from_file_hint
 
 # Scopes that must never appear on a Gmail-first readonly token.
 FORBIDDEN_GMAIL_FIRST_SCOPES = (
@@ -133,7 +134,7 @@ def _next_action(
             return {
                 "kind": "configure_google_credentials",
                 "label": "Configure the Google OAuth client JSON env var",
-                "command": 'export SENTINEL_GOOGLE_CREDENTIALS_JSON="$(cat <oauth-client.json>)"',
+                "command": env_from_file_hint("SENTINEL_GOOGLE_CREDENTIALS_JSON", "<oauth-client.json>"),
                 "side_effect": "local_shell_env_only",
             }
         token_issue = "refresh token" if token_check["status"] != "ready" else "Gmail readonly scope"
