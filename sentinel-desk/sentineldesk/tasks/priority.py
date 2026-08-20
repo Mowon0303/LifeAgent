@@ -80,18 +80,27 @@ def _apply_priority(task: dict[str, Any]) -> None:
         score -= 20
         reasons.append("settled_amount")
     elif kind == "amount":
-        # Size still counts -- a large number is worth a look either way -- but
-        # only a *classified obligation* opens the high lane. A marketing tier
-        # table ("$500,000 | $250,000 | $0") and a credit limit are large numbers
-        # that nobody owes, and letting magnitude alone promote them is what
-        # filled the top of the queue with things the user cannot act on.
+        # Size is a multiplier on a debt, not a signal by itself. Gating the
+        # *band* on obligation was not enough: an unowed amount still collected
+        # the full magnitude bonus, so within the same band a broker's SIPC
+        # coverage disclosure ("$500,000 ... $250,000 ... $0") outscored a real
+        # unpaid balance of $31.05 and took the top of the queue.
+        #
+        # A large unattributed number is still worth a glance, so it keeps a
+        # nudge -- capped below the payment-context bonus, which makes the
+        # ordering an invariant rather than a coincidence: money owed outranks
+        # money nobody owes at any size.
         amount = _max_amount(task)
-        if amount >= 1000:
-            score += 20
-            reasons.append("large_amount")
-        elif amount >= 100:
+        if owes_money:
+            if amount >= 1000:
+                score += 20
+                reasons.append("large_amount")
+            elif amount >= 100:
+                score += 10
+                reasons.append("meaningful_amount")
+        elif amount >= 1000:
             score += 10
-            reasons.append("meaningful_amount")
+            reasons.append("large_unowed_amount")
         has_obligation = has_obligation or owes_money
     if owes_money:
         score += 15

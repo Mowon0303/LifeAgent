@@ -48,6 +48,10 @@ class ClassifierTests(unittest.TestCase):
         "Your card was charged $12.99 on Tuesday",
         "We received your payment of $310.00",
         "Refund of $80.00 has been credited to your account",
+        # A receipt puts the amount and the pay date side by side with no verb
+        # between them, and names an invoice in the same breath.
+        "Receipt from Anthropic, PBC $20.00 Paid August 10, 2026 (invoice illustration)",
+        "Claude Pro Qty 1 $20.00 Total $20.00 Amount paid $20.00",
     ]
     OBLIGATIONS = [
         "Statement balance $1,243.87. Minimum payment due: $35.00",
@@ -77,6 +81,30 @@ class ClassifierTests(unittest.TestCase):
         for text in self.INFORMATIONAL:
             with self.subTest(text=text):
                 self.assertEqual(classify_amount_settlement(text), SETTLEMENT_INFORMATIONAL)
+
+    def test_the_word_invoice_alone_does_not_make_a_debt(self) -> None:
+        """Every paid receipt names an invoice -- number, link, image alt text.
+
+        Reading the bare word as an obligation marked a $20.00 receipt that said
+        "Paid" two words earlier as money still owed, and ranked it accordingly.
+        """
+        for text in [
+            "Receipt #2011-8794-7981 $20.00 Paid (invoice illustration)",
+            "Your invoice number is B9DC34BD-0018 for $20.00",
+            "View invoice for $20.00",
+        ]:
+            with self.subTest(text=text):
+                self.assertNotEqual(classify_amount_settlement(text), SETTLEMENT_OBLIGATION)
+
+    def test_an_unpaid_invoice_is_still_a_debt(self) -> None:
+        """Narrowing the cue must not lose the case it was there for."""
+        for text in [
+            "Your invoice is due on 09/01/2026 for $420.00",
+            "You have an unpaid invoice of $420.00",
+            "Outstanding invoice: $420.00",
+        ]:
+            with self.subTest(text=text):
+                self.assertEqual(classify_amount_settlement(text), SETTLEMENT_OBLIGATION)
 
     def test_an_obligation_beside_a_receipt_still_counts_as_owed(self) -> None:
         # One email can settle one amount and bill the next.
@@ -113,6 +141,7 @@ class PriorityTests(unittest.TestCase):
                 ("m-sent", "Payment sent", "Zelle payment of $3,122.22 to a friend has been sent."),
                 ("m-due", "Rent reminder", "Your rent of $1,850.00 is due by 09/01/2026."),
                 ("m-promo", "Trade with us", "Earn up to $500,000 | $250,000 | $0 across our tiers."),
+                ("m-tiny-due", "Notice", "You still have an outstanding balance of $31.05 on your policy."),
             ]:
                 message = _message(mid, subject, body)
                 db.upsert_email_message(
@@ -144,6 +173,26 @@ class PriorityTests(unittest.TestCase):
         self.assertNotEqual(sent["priority_band"], "high")
         self.assertIn("settled_amount", sent["priority_reasons"])
         self.assertNotIn("payment_context", sent["priority_reasons"])
+
+    def test_money_owed_outranks_money_nobody_owes_at_any_size(self) -> None:
+        """Size is a multiplier on a debt, not a signal by itself.
+
+        Gating the band on obligation was not enough. Inside the same band an
+        unowed amount still collected the full magnitude bonus, so a broker's
+        SIPC coverage disclosure ("$500,000 ... $250,000 ... $0") outscored a
+        real $31.05 balance and took the top of a live queue. The gap is an
+        invariant now: the magnitude nudge for an unowed amount is capped below
+        the payment-context bonus, so no number can buy its way past a debt.
+        """
+        tiny_debt = self._amount_task("m-tiny-due")
+        huge_disclosure = self._amount_task("m-promo")
+        self.assertEqual(tiny_debt["settlement"], SETTLEMENT_OBLIGATION)
+        self.assertEqual(huge_disclosure["settlement"], SETTLEMENT_INFORMATIONAL)
+        self.assertGreater(
+            tiny_debt["priority_score"], huge_disclosure["priority_score"],
+            "$31.05 that is owed must outrank $500,000 that nobody owes",
+        )
+        self.assertNotIn("large_amount", huge_disclosure["priority_reasons"])
 
     def test_a_large_marketing_number_never_reaches_the_high_band(self) -> None:
         promo = self._amount_task("m-promo")

@@ -309,7 +309,13 @@ AMOUNT_SETTLED_RE = re.compile(
     r"you (?:sent|paid|transferred)|successfully (?:sent|paid|processed|charged)|"
     r"transfer (?:complete|completed|sent)|transaction (?:complete|completed|posted)|"
     r"your receipt|receipt for|order confirmation|refund(?:ed)? (?:of|to|for)|"
-    r"payment (?:sent|posted|complete|completed)|charged to your"
+    r"payment (?:sent|posted|complete|completed)|charged to your|"
+    # A receipt states the amount and the day it was paid, with no verb between
+    # them: "$20.00 Paid August 10, 2026", "Amount paid $20.00".
+    r"amount paid|paid in full|"
+    # The trailing [a-z]* runs the month name out to a real word boundary --
+    # without it "aug" ends mid-"August" and the group's closing \b never holds.
+    r"paid\s+(?:on\s+)?(?:\d{1,2}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)"
     r")\b",
     re.IGNORECASE,
 )
@@ -324,7 +330,12 @@ AMOUNT_OBLIGATION_RE = re.compile(
     r"minimum payment|please pay|pay by|pay before|make a payment|"
     r"outstanding balance|unpaid|you owe|owed|remains? due|"
     r"will be (?:charged|billed|debited|due)|autopay|auto-?pay will|"
-    r"invoice|statement balance|rent (?:is )?due|"
+    # NOT a bare "invoice": every paid receipt carries an invoice number, a
+    # "view invoice" link, and (on Stripe receipts) an "invoice illustration"
+    # image. The word marks the document, not the debt -- it was matching the
+    # image alt text of a receipt that said "Paid" two words earlier.
+    r"invoice\s+(?:is\s+)?due|unpaid\s+invoice|outstanding\s+invoice|invoice\s+balance|"
+    r"statement balance|rent (?:is )?due|"
     r"avoid (?:a )?late fee|late fee (?:applies|will)"
     r")\b",
     re.IGNORECASE,
