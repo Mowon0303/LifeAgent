@@ -57,7 +57,10 @@ def _event_lines(event: DeadlineEvent) -> list[str]:
     date_value = _date_to_ics(event.date_text)
     description = "Sources: " + ", ".join(event.source_ids)
     if event.evidence_uri:
-        description += "\\nEvidence: " + event.evidence_uri
+        # A real newline, not a literal backslash-n: _escape does the ICS
+        # encoding. Pre-escaping it here made _escape double the backslash, and
+        # calendar clients rendered "\n" as visible text in the description.
+        description += "\nEvidence: " + event.evidence_uri
     return [
         "BEGIN:VEVENT",
         f"UID:{event.event_id}@lifeagent.local",

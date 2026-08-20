@@ -777,6 +777,11 @@ class EmailCalendarAgentTests(unittest.TestCase):
         self.assertIn("SUMMARY:Deadline: Notice", ics)
         self.assertIn("DTSTART;VALUE=DATE:20260702", ics)
         self.assertIn("Evidence: evidence://x", ics)
+        # RFC 5545 escapes a line break inside DESCRIPTION as \n. Writing the
+        # literal two characters before escaping produced \\n -- an escaped
+        # backslash -- and clients showed "\n" as text in the event body.
+        self.assertIn("DESCRIPTION:Sources: email:m1\\nEvidence: evidence://x", ics)
+        self.assertNotIn("\\\\n", ics)
 
     def test_tool_registry_blocks_external_calendar_write_without_confirmation(self) -> None:
         registry = default_tool_registry()
